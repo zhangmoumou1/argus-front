@@ -1,0 +1,314 @@
+.argux-auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.argux-auth-lang {
+  position: fixed;
+  top: 28px;
+  right: 28px;
+  z-index: 10;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px rgba(40, 48, 86, 0.12);
+}
+
+.argux-auth-shell {
+  width: min(1120px, calc(100vw - 64px));
+  min-height: 600px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: 1.02fr 0.98fr;
+  border-radius: 30px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 30px 80px rgba(48, 53, 98, 0.2);
+  transform-origin: center center;
+  transition: none;
+}
+
+.argux-auth-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 34px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(243, 235, 255, 0.88));
+}
+
+.argux-auth-visual-glow {
+  position: absolute;
+  inset: 16% 14%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(170, 126, 255, 0.18), rgba(255, 255, 255, 0));
+  filter: blur(12px);
+}
+
+.argux-auth-illustration {
+  position: relative;
+  z-index: 1;
+  width: min(380px, 82%);
+  max-height: 430px;
+  object-fit: contain;
+}
+
+.argux-auth-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 58px 62px 54px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.94));
+}
+
+.argux-auth-title {
+  margin: 0;
+  color: #3b3550;
+  font-size: 58px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+}
+
+.argux-auth-subtitle {
+  margin: 18px 0 30px;
+  color: #625d75;
+  font-size: 18px;
+}
+
+.argux-auth-shell.is-leaving {
+  animation: argux-auth-shell-leave 260ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.argux-auth-shell.is-entering {
+  animation: argux-auth-shell-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.argux-auth-stage {
+  transform-origin: top center;
+}
+
+.argux-auth-form-wrap {
+  .ant-pro-form-login-main,
+  .ant-pro-form-login-container {
+    max-width: 100%;
+    min-width: 100%;
+    margin-left: -16px;
+  }
+
+  .ant-pro-form-login-content {
+    margin-top: 0;
+  }
+}
+
+.argux-auth-form {
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  .ant-input-affix-wrapper,
+  .ant-input {
+    border-radius: 12px;
+  }
+
+  .ant-input-affix-wrapper {
+    min-height: 48px;
+    border-color: #dbe2f0;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: none;
+  }
+
+  .ant-input-affix-wrapper:hover,
+  .ant-input-affix-wrapper-focused {
+    border-color: rgba(99, 122, 255, 0.72);
+    box-shadow: 0 0 0 4px rgba(99, 122, 255, 0.08);
+  }
+
+  .ant-btn-primary {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 52px;
+    border: none;
+    border-radius: 10px;
+    background: #5d84f1;
+    box-shadow: 0 12px 24px rgba(78, 115, 235, 0.18);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: #ffffff !important;
+  }
+
+  .ant-btn-primary:hover,
+  .ant-btn-primary:focus {
+    background: #4d73eb !important;
+    color: #ffffff !important;
+  }
+
+  .ant-btn-primary span {
+    color: #ffffff !important;
+  }
+}
+
+.argux-auth-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 2px 0 18px;
+  color: #7b7890;
+  font-size: 13px;
+}
+
+.argux-auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.argux-auth-action-button {
+  min-width: 72px;
+  height: 34px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: #5d84f1;
+  box-shadow: 0 12px 24px rgba(78, 115, 235, 0.18);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.argux-auth-action-button:hover {
+  background: #4d73eb;
+}
+
+.argux-auth-switch-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #7a7592;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.argux-auth-switch-link:hover {
+  color: #4d6ee8;
+}
+
+.argux-auth-hint {
+  color: #8b86a4;
+}
+
+.argux-auth-page .ant-checkbox-wrapper {
+  color: #6c6883;
+}
+
+.argux-auth-page .ant-pro-global-footer {
+  padding-bottom: 18px;
+}
+
+@media (max-width: 960px) {
+  .argux-auth-shell {
+    width: min(640px, calc(100vw - 28px));
+    grid-template-columns: 1fr;
+  }
+
+  .argux-auth-visual {
+    min-height: 240px;
+    padding: 34px 24px 12px;
+  }
+
+  .argux-auth-illustration {
+    width: min(280px, 72%);
+    max-height: 250px;
+  }
+
+  .argux-auth-content {
+    padding: 26px 24px 28px;
+  }
+
+  .argux-auth-title {
+    font-size: 44px;
+  }
+
+  .argux-auth-subtitle {
+    margin: 12px 0 22px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .argux-auth-shell {
+    width: calc(100vw - 20px);
+    min-height: auto;
+    margin: 76px auto 20px;
+    border-radius: 22px;
+  }
+
+  .argux-auth-lang {
+    top: 14px;
+    right: 14px;
+  }
+
+  .argux-auth-visual {
+    min-height: 180px;
+    padding: 24px 20px 8px;
+  }
+
+  .argux-auth-content {
+    padding: 20px 18px 22px;
+  }
+
+  .argux-auth-title {
+    font-size: 36px;
+  }
+
+  .argux-auth-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .argux-auth-actions {
+    gap: 14px;
+  }
+}
+
+@keyframes argux-auth-shell-leave {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+}
+
+@keyframes argux-auth-shell-enter {
+  0% {
+    opacity: 0;
+    transform: scale(1.035);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
