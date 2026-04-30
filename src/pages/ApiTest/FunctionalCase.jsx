@@ -659,6 +659,12 @@ const getNodeText = (title) => {
   return title?.props?.children || '';
 };
 
+const toCountNumber = (value) => Number(value || 0);
+const QUICK_ICON_TYPE_MAP = ICON_GROUPS.reduce((map, group) => {
+  map[group.type] = group;
+  return map;
+}, {});
+
 const formatTreeTime = (value) => {
   if (!value) return '';
   const text = String(value).trim();
@@ -852,6 +858,14 @@ const FunctionalCase = ({ project, dispatch }) => {
     type: 'canvas',
     node: null,
   });
+  const [iconQuickMenu, setIconQuickMenu] = useState({
+    open: false,
+    x: 0,
+    y: 0,
+    node: null,
+    type: '',
+    value: '',
+  });
   const [styleDraft, setStyleDraft] = useState({
     fontSize: 16,
     borderWidth: 1,
@@ -1031,6 +1045,17 @@ const FunctionalCase = ({ project, dispatch }) => {
     setMindContextMenu((prev) => (prev.open ? { ...prev, open: false, node: null } : prev));
   }, []);
 
+  const closeIconQuickMenu = useCallback(() => {
+    setIconQuickMenu((prev) => (prev.open ? {
+      open: false,
+      x: 0,
+      y: 0,
+      node: null,
+      type: '',
+      value: '',
+    } : prev));
+  }, []);
+
   useEffect(() => {
     const hide = () => closeMindContextMenu();
     window.addEventListener('click', hide);
@@ -1040,6 +1065,16 @@ const FunctionalCase = ({ project, dispatch }) => {
       window.removeEventListener('scroll', hide, true);
     };
   }, [closeMindContextMenu]);
+
+  useEffect(() => {
+    const hide = () => closeIconQuickMenu();
+    window.addEventListener('click', hide);
+    window.addEventListener('scroll', hide, true);
+    return () => {
+      window.removeEventListener('click', hide);
+      window.removeEventListener('scroll', hide, true);
+    };
+  }, [closeIconQuickMenu]);
 
   const fetchTree = useCallback(async (keyword = appliedKeyword, targetProjectId = projectId) => {
     if (!targetProjectId) {
@@ -1061,6 +1096,7 @@ const FunctionalCase = ({ project, dispatch }) => {
         const files = (Array.isArray(fileRes.data) ? fileRes.data : []).map((item) => ({
           ...item,
           case_count: Number(item?.case_count ?? item?.case_num ?? 0),
+          pass_count: Number(item?.pass_count ?? 0),
           create_user_name: item?.create_user_name || item?.creator_name || '',
         }));
         setDirectoryTree(directories);
@@ -1097,6 +1133,9 @@ const FunctionalCase = ({ project, dispatch }) => {
         if (mindRef.current.__nodeContextMenuHandler) {
           mindRef.current.off('node_contextmenu', mindRef.current.__nodeContextMenuHandler);
         }
+        if (mindRef.current.__nodeIconClickHandler) {
+          mindRef.current.off('node_icon_click', mindRef.current.__nodeIconClickHandler);
+        }
         if (mindRef.current.__canvasContextMenuHandler) {
           mindRef.current.off('contextmenu', mindRef.current.__canvasContextMenuHandler);
         }
@@ -1117,6 +1156,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       dirtyCheckTimerRef.current = null;
     }
     closeMindContextMenu();
+    closeIconQuickMenu();
     setFormatPainterActive(false);
     setFormatPainterSourceUid(null);
     formatPainterRef.current = {
@@ -1126,7 +1166,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       sourceUid: null,
     };
     ctrlSelectModeRef.current = false;
-  }, [clearRenderFrame, closeMindContextMenu]);
+  }, [clearRenderFrame, closeMindContextMenu, closeIconQuickMenu]);
 
   const getMindData = useCallback(() => {
     if (!mindRef.current) return currentCase?.data;
@@ -1299,6 +1339,19 @@ const FunctionalCase = ({ project, dispatch }) => {
     }
   };
 
+  const applyNodeIconByType = (node, type, currentValue, value = null) => {
+    if (!node || !mindRef.current || !QUICK_ICON_TYPE_MAP[type]) return;
+    const currentIcons = node.getData?.('icon') || getNodeData(node).icon || [];
+    const icons = Array.isArray(currentIcons) ? currentIcons : [currentIcons].filter(Boolean);
+    const filtered = ['priority', 'progress'].includes(type)
+      ? icons.filter((item) => !item.startsWith(`${type}_`))
+      : icons.filter((item) => item !== currentValue);
+    const merged = value ? [...filtered, value] : filtered;
+    const nextIcons = normalizeNodeIcons(Array.from(new Set(merged)));
+    mindRef.current.execCommand('SET_NODE_ICON', node, nextIcons);
+    markCaseDirty();
+  };
+
   const clearNodeIcons = (node = null) => {
     const target = node || getActiveNode();
     if (!target) {
@@ -1438,6 +1491,23 @@ const FunctionalCase = ({ project, dispatch }) => {
         node: null,
       });
     };
+    const handleNodeIconClick = (...args) => {
+      const node = args.find((item) => item && (item.nodeData || typeof item.getData === 'function'));
+      const iconName = args.find((item) => typeof item === 'string');
+      const event = args.find((item) => item && (item.clientX !== undefined || item.event || item.srcEvent || item.detail));
+      if (!node || typeof iconName !== 'string') return;
+      const [type] = iconName.split('_');
+      if (!QUICK_ICON_TYPE_MAP[type]) return;
+      const pos = getEventClientPosition(event);
+      setIconQuickMenu({
+        open: true,
+        x: pos.x,
+        y: pos.y,
+        node,
+        type,
+        value: iconName,
+      });
+    };
     const handleScaleSync = () => {
       requestAnimationFrame(syncScaleFromMind);
     };
@@ -1453,6 +1523,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       }, 180);
     };
     instance.on('node_active', handleNodeActive);
+    instance.on('node_icon_click', handleNodeIconClick);
     instance.on('node_contextmenu', handleNodeContextMenu);
     instance.on('contextmenu', handleCanvasContextMenu);
     ['view_data_change', 'view_change', 'scale', 'translate', 'data_change'].forEach((eventName) => {
@@ -1461,6 +1532,7 @@ const FunctionalCase = ({ project, dispatch }) => {
     instance.on('data_change', handleDirtyChange);
     instance.__formatPainterBound = true;
     instance.__formatPainterHandler = handleNodeActive;
+    instance.__nodeIconClickHandler = handleNodeIconClick;
     instance.__nodeContextMenuHandler = handleNodeContextMenu;
     instance.__canvasContextMenuHandler = handleCanvasContextMenu;
     instance.__scaleSyncHandler = handleScaleSync;
@@ -2871,6 +2943,12 @@ const FunctionalCase = ({ project, dispatch }) => {
   };
 
   const titleRender = (node) => (
+    (() => {
+      const nodeText = getNodeText(node.title) || '未命名';
+      const caseCount = toCountNumber(node.case_count);
+      const passCount = toCountNumber(node.pass_count);
+      const hoverTitle = `${nodeText} 用例数${caseCount}/通过数${passCount}`;
+      return (
     <div
       className={`functional-tree-title ${node.nodeType === 'case' ? 'functional-tree-case' : ''}`}
       onMouseEnter={() => setNodeKey(node.key)}
@@ -2882,9 +2960,13 @@ const FunctionalCase = ({ project, dispatch }) => {
         <FolderCode theme="outline" size="15" className="folder" />
       )}
       <span className="functional-tree-content">
-        <span className="functional-tree-name-line">
+        <span className="functional-tree-name-line" title={hoverTitle}>
           <span className="functional-tree-text">{getNodeText(node.title)}</span>
-          <span className="functional-tree-count">({Number(node.case_count || 0)})</span>
+          <span className="functional-tree-count">
+            <span className="functional-tree-count-total">{toCountNumber(node.case_count)}</span>
+            <span className="functional-tree-count-sep">/</span>
+            <span className="functional-tree-count-pass">{toCountNumber(node.pass_count)}</span>
+          </span>
         </span>
       </span>
       <span className={`suffixButton ${node.nodeType === 'directory' ? 'directory-actions' : 'case-actions'} ${nodeKey === node.key ? 'visible' : ''}`}>
@@ -2941,6 +3023,8 @@ const FunctionalCase = ({ project, dispatch }) => {
         )}
       </span>
     </div>
+      );
+    })()
   );
 
   const disabledDirectoryKeys = new Set(
@@ -3557,6 +3641,42 @@ const FunctionalCase = ({ project, dispatch }) => {
                       <button type="button" onClick={collapseAllNodes}>折叠所有节点</button>
                     </>
                   )}
+                </div>
+              ) : null}
+              {iconQuickMenu.open ? (
+                <div
+                  className="functional-icon-quick-menu"
+                  style={{ left: iconQuickMenu.x, top: iconQuickMenu.y }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="functional-icon-quick-title">
+                    {QUICK_ICON_TYPE_MAP[iconQuickMenu.type]?.label || '图标'}
+                  </div>
+                  <div className="functional-icon-grid quick-menu">
+                    {(QUICK_ICON_TYPE_MAP[iconQuickMenu.type]?.items || []).map((item) => (
+                      <button
+                        type="button"
+                        key={item.value}
+                        className={`functional-icon-item ${iconQuickMenu.value === item.value ? 'active' : ''}`}
+                        onClick={() => {
+                          applyNodeIconByType(iconQuickMenu.node, iconQuickMenu.type, iconQuickMenu.value, item.value);
+                          closeIconQuickMenu();
+                        }}
+                      >
+                        {renderIconPreview(item)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="functional-icon-quick-remove"
+                    onClick={() => {
+                      applyNodeIconByType(iconQuickMenu.node, iconQuickMenu.type, iconQuickMenu.value, null);
+                      closeIconQuickMenu();
+                    }}
+                  >
+                    删除当前图标
+                  </button>
                 </div>
               ) : null}
             </div>
