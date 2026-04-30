@@ -1,251 +1,388 @@
-import React, {useEffect, useState} from 'react';
-import {PageContainer} from "@ant-design/pro-components";
-import {StatisticCard} from '@ant-design/pro-components';
-import {Avatar, Badge, Card, Col, List, Progress, Row, Skeleton} from "antd";
-import {TinyArea} from "@ant-design/charts";
-import {queryStatistics} from "@/services/statistics";
-import auth from "@/utils/auth";
+import React, { useEffect, useMemo, useState } from 'react';
+import { PageContainer } from '@ant-design/pro-components';
+import {
+  Avatar,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Empty,
+  Row,
+  Skeleton,
+  Space,
+  Table,
+  Tabs,
+} from 'antd';
+import {
+  ApiOutlined,
+  BarChartOutlined,
+  CheckCircleOutlined,
+  FileDoneOutlined,
+  FunctionOutlined,
+  LineChartOutlined,
+} from '@ant-design/icons';
+import { Line, TinyArea } from '@ant-design/charts';
+import moment from 'moment';
+import CONFIG from '@/consts/config';
+import { queryStatistics } from '@/services/statistics';
+import auth from '@/utils/auth';
 import './Statistics.less';
-import {ProjectTwoTone} from "@ant-design/icons";
-import {IconFont} from "@/components/Icon/IconFont";
-import {ErrorComputer, Jump, MessageFailed, Plan, Success, User} from "@icon-park/react";
-import {listUsers} from "@/services/user";
-import CONFIG from "@/consts/config";
 
+const { RangePicker } = DatePicker;
+const { TabPane } = Tabs;
 
-const MiniProgress = ({rate}) => {
-  const config = {
-    height: 8,
-    autoFit: false,
-    percent: rate,
-    color: ['rgba(103,123,215,0.69)', '#E8EDF3'],
-  };
-  return <Progress {...config} />;
+const PERIOD_OPTIONS = [
+  { key: 'week', label: '本周', getRange: () => [moment().startOf('isoWeek'), moment()] },
+  { key: 'month', label: '本月', getRange: () => [moment().startOf('month'), moment()] },
+  { key: 'quarter', label: '本季度', getRange: () => [moment().startOf('quarter'), moment()] },
+  { key: 'year', label: '本年', getRange: () => [moment().startOf('year'), moment()] },
+];
+
+const getPresetRange = (period) => {
+  const matched = PERIOD_OPTIONS.find((item) => item.key === period) || PERIOD_OPTIONS[0];
+  return matched.getRange();
 };
 
-const Area = ({data, field, color, fill}) => {
-  const config = {
-    height: 48,
-    autoFit: true,
-    line: {
-      color: color
-    },
-    data: data.map(item => item[field] || 0),
-    smooth: true,
-    areaStyle: {
-      fill: fill || '#d6e3fd',
-    },
-  };
-  return <TinyArea {...config} />;
+const buildTrendSource = (trend = []) => {
+  const result = [];
+  trend.forEach((item) => {
+    result.push({
+      date: item.date,
+      type: '接口用例',
+      count: item.api_case_count || 0,
+    });
+    result.push({
+      date: item.date,
+      type: '功能用例',
+      count: item.functional_case_count || 0,
+    });
+  });
+  return result;
 };
 
+const buildSparkline = (trend = [], field) => (
+  (trend || []).map((item) => Number(item?.[field] || 0))
+);
+
+const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
+
+const RankUser = ({ record }) => (
+  <div className="statistics-rank-user">
+    <Avatar src={record.avatar || CONFIG.AVATAR_URL} size={34} />
+    <div className="statistics-rank-user__meta">
+      <div className="statistics-rank-user__name">{record.name}</div>
+      <div className="statistics-rank-user__email">{record.email || '-'}</div>
+    </div>
+  </div>
+);
 
 export default () => {
-  const [count, setCount] = useState({});
-  const [reportData, setReportData] = useState([]);
-  const [data, setData] = useState([])
-  const [report, setReport] = useState({})
-  const [rank, setRank] = useState([])
-  const [users, setUsers] = useState({})
-  const [clients, setClients] = useState({})
-  const [loading, setLoading] = useState(false)
+  const [period, setPeriod] = useState('week');
+  const [range, setRange] = useState(getPresetRange('week'));
+  const [loading, setLoading] = useState(false);
+  const [statistics, setStatistics] = useState({
+    range: {},
+    overview: {},
+    trend: [],
+    ranking: {
+      api_case: [],
+      functional_case: [],
+    },
+  });
 
-  const fetchUsers = async () => {
-    const res = await listUsers();
-    const temp = {}
-    res.forEach(item => {
-      temp[item.id] = item
-    })
-    setUsers(temp)
+  const fetchStatistics = async (nextPeriod, nextRange) => {
+    if (!nextRange || nextRange.length !== 2) return;
+    setLoading(true);
+    const res = await queryStatistics({
+      period: nextPeriod,
+      start_date: nextRange[0].format('YYYY-MM-DD'),
+      end_date: nextRange[1].format('YYYY-MM-DD'),
+    });
+    setLoading(false);
+    if (auth.response(res)) {
+      setStatistics(res.data || {});
+    }
   };
 
-  const getBonus = (item) => {
-    if (item.rank === 1) {
-      return <span className="rank-item"><IconFont type="icon-jin"/> <span
-        className="rank-content-top">{item.count}</span></span>
-    }
-    if (item.rank === 2) {
-      return <span className="rank-item"><IconFont type="icon-yinpai"/> <span
-        className="rank-content-top">{item.count}</span></span>
-    }
-    if (item.rank === 3) {
-      return <span className="rank-item"><IconFont type="icon-tongpai"/> <span
-        className="rank-content-top">{item.count}</span></span>
-    }
-    return <span className="rank-content">{item.count}</span>
-  }
-
   useEffect(() => {
-    setLoading(true)
-    fetchUsers()
-    queryStatistics().then(res => {
-      setLoading(false)
-      if (auth.response(res)) {
-        setData(res.data.data)
-        setCount(res.data.count)
-        setRank(res.data.rank)
-        setClients(res.data.clients)
-        setReportData(res.data.report.data)
-        setReport(res.data.report)
-      }
+    fetchStatistics(period, range);
+  }, []);
+
+  const trendData = useMemo(() => buildTrendSource(statistics.trend || []), [statistics.trend]);
+
+  const trendConfig = {
+    data: trendData,
+    xField: 'date',
+    yField: 'count',
+    seriesField: 'type',
+    smooth: true,
+    color: ['#246BFD', '#12B886'],
+    animation: false,
+    legend: {
+      position: 'top',
+    },
+    point: {
+      size: 3,
+      shape: 'circle',
+    },
+    tooltip: {
+      formatter: (datum) => ({
+        name: datum.type,
+        value: `${datum.count}`,
+      }),
+    },
+    yAxis: {
+      nice: true,
+    },
+  };
+
+  const rankingColumns = [
+    {
+      title: '排名',
+      dataIndex: 'rank',
+      width: 80,
+      render: (value) => <span className={`statistics-rank-badge rank-${value}`}>{value}</span>,
+    },
+    {
+      title: '测试人员',
+      dataIndex: 'name',
+      render: (_, record) => <RankUser record={record} />,
+    },
+    {
+      title: '新增用例数',
+      dataIndex: 'count',
+      width: 120,
+      align: 'right',
+      render: (value) => <strong>{value || 0}</strong>,
+    },
+  ];
+
+  const overview = statistics.overview || {};
+  const sparkApi = useMemo(() => buildSparkline(statistics.trend, 'api_case_count'), [statistics.trend]);
+  const sparkFunctional = useMemo(() => buildSparkline(statistics.trend, 'functional_case_count'), [statistics.trend]);
+  const sparkCoverage = useMemo(() => (
+    (statistics.trend || []).map((item) => {
+      const apiCount = Number(item?.api_case_count || 0);
+      const functionalCount = Number(item?.functional_case_count || 0);
+      return functionalCount > 0 ? Number((apiCount / functionalCount * 100).toFixed(2)) : 0;
     })
-  }, [])
+  ), [statistics.trend]);
+  const sparkPass = useMemo(() => (
+    (statistics.trend || []).map((item) => {
+      const apiCount = Number(item?.api_case_count || 0);
+      const functionalCount = Number(item?.functional_case_count || 0);
+      return apiCount > 0 ? Number((Math.min(functionalCount, apiCount) / apiCount * 100).toFixed(2)) : 0;
+    })
+  ), [statistics.trend]);
 
+  const renderSparkline = (data, color, fill) => (
+    <TinyArea
+      height={56}
+      autoFit
+      smooth
+      animation={false}
+      data={data && data.length > 0 ? data : [0]}
+      line={{ color, lineWidth: 1.5 }}
+      areaStyle={{ fill }}
+      tooltip={false}
+    />
+  );
 
-  return <PageContainer title="平台数据统计" breadcrumb={null}>
-    <Row gutter={16}>
-      <Col span={6}>
-        <Skeleton loading={loading} active>
-          <StatisticCard className="statistics-card" title="用户总数及近一周新增趋势" statistic={{
-            value: count?.user,
-            prefix: <User theme="outline" size="24" fill="#9013fe" strokeLinecap="square"/>
-          }} chart={
-            <Area data={data} field="user" color="rgb(158, 105, 230)" fill="rgb(227, 212, 248)"/>
-          }/>
-        </Skeleton>
-      </Col>
-      <Col span={6}>
-        <Skeleton loading={loading} active>
-          <StatisticCard className="statistics-card" title="项目总数及近一周新增趋势" statistic={{
-            value: count?.project,
-            prefix: <ProjectTwoTone twoToneColor="#f5a623"/>
-          }} chart={
-            <Area data={data} field="project" color="#f5a623" fill="#ede6da"/>
-          }/>
-        </Skeleton>
-      </Col>
-      <Col span={6}>
-        <Skeleton loading={loading} active>
-          <StatisticCard className="statistics-card" title="测试用例总数及近一周新增趋势" statistic={{
-            value: count?.testcase,
-            prefix: <IconFont type="icon-yongliliebiao"/>
-          }} chart={
-            <Area data={data} field="testcase"/>
-          }/>
-        </Skeleton>
-      </Col>
-      <Col span={6}>
-        <Skeleton loading={loading} active>
-          <StatisticCard className="statistics-card" title="测试计划总数及近一周新增趋势" statistic={{
-            value: count?.testplan,
-            prefix: <Plan theme="outline" size="24" fill="#7ed321" strokeLinecap="square"/>
-          }} chart={
-            <Area data={data} field="testplan" color="#7ed321" fill="rgb(234, 243, 244)"/>
-          }/>
-        </Skeleton>
-      </Col>
-    </Row>
-    <Row style={{marginTop: 16}} gutter={16}>
-      <Col span={16}>
-        <Row gutter={16}>
-          <Col span={12}>
-            <Skeleton loading={loading} active>
-              <StatisticCard className="statistics-card-large" title="近一周用例通过率(%)" statistic={{
-                value: report?.rate,
-                description: <MiniProgress rate={report?.rate}/>
-              }} chart={
-                <Area data={reportData} field="rate"/>
-              }/>
+  const handlePresetClick = (nextPeriod) => {
+    const nextRange = getPresetRange(nextPeriod);
+    setPeriod(nextPeriod);
+    setRange(nextRange);
+    fetchStatistics(nextPeriod, nextRange);
+  };
+
+  const handleApplyCustomRange = () => {
+    if (!range || range.length !== 2) return;
+    setPeriod('custom');
+    fetchStatistics('custom', range);
+  };
+
+  return (
+    <PageContainer title="测试管理看板" breadcrumb={null}>
+      <div className="statistics-board">
+        <Card className="statistics-filter-card" bordered={false}>
+          <div className="statistics-filter-card__content">
+            <div>
+              <div className="statistics-filter-card__eyebrow">测试看板</div>
+              <div className="statistics-filter-card__title">接口与功能用例的新增、覆盖与通过情况</div>
+              <div className="statistics-filter-card__desc">
+                当前区间：{statistics.range?.start_date || '-'} 至 {statistics.range?.end_date || '-'}
+              </div>
+            </div>
+            <Space size={12} wrap className="statistics-filter-toolbar">
+              {PERIOD_OPTIONS.map((item) => (
+                <Button
+                  key={item.key}
+                  type={period === item.key ? 'primary' : 'default'}
+                  onClick={() => handlePresetClick(item.key)}
+                >
+                  {item.label}
+                </Button>
+              ))}
+              <RangePicker
+                value={range}
+                onChange={(value) => {
+                  if (value && value.length === 2) {
+                    setRange(value);
+                  }
+                }}
+                allowClear={false}
+              />
+              <Button onClick={handleApplyCustomRange}>应用时间段</Button>
+            </Space>
+          </div>
+        </Card>
+
+        <Row gutter={[16, 16]} className="statistics-overview-row">
+          <Col xs={24} sm={12} xl={6}>
+            <Skeleton loading={loading} active paragraph={false}>
+              <Card className="statistics-overview-card api" bordered={false}>
+                <div className="statistics-overview-card__head">
+                  <div>
+                    <div className="statistics-overview-card__label">接口用例总数</div>
+                    <div className="statistics-overview-card__value">{overview.api_case_total || 0}</div>
+                    <div className="statistics-overview-card__hint">按所选时间段统计新增接口用例</div>
+                  </div>
+                  <div className="statistics-overview-card__icon api">
+                    <ApiOutlined />
+                  </div>
+                </div>
+                <div className="statistics-overview-card__chart">
+                  {renderSparkline(sparkApi, '#1f9d68', 'l(270) 0:#dff7ec 1:rgba(223,247,236,0.05)')}
+                </div>
+              </Card>
             </Skeleton>
           </Col>
-          <Col span={12}>
-            <Skeleton loading={loading} active>
-              <StatisticCard className="statistics-card-large" title={
-                <span>近一周运行用例个数 </span>
-              } statistic={{
-                value: report?.count,
-              }} chart={
-                <Area data={reportData} field="count"/>
-              }/>
+          <Col xs={24} sm={12} xl={6}>
+            <Skeleton loading={loading} active paragraph={false}>
+              <Card className="statistics-overview-card functional" bordered={false}>
+                <div className="statistics-overview-card__head">
+                  <div>
+                    <div className="statistics-overview-card__label">功能用例总数</div>
+                    <div className="statistics-overview-card__value">{overview.functional_case_total || 0}</div>
+                    <div className="statistics-overview-card__hint">按所选时间段统计新增功能用例</div>
+                  </div>
+                  <div className="statistics-overview-card__icon functional">
+                    <FunctionOutlined />
+                  </div>
+                </div>
+                <div className="statistics-overview-card__chart">
+                  {renderSparkline(sparkFunctional, '#0ea5a6', 'l(270) 0:#def7f4 1:rgba(222,247,244,0.05)')}
+                </div>
+              </Card>
+            </Skeleton>
+          </Col>
+          <Col xs={24} sm={12} xl={6}>
+            <Skeleton loading={loading} active paragraph={false}>
+              <Card className="statistics-overview-card coverage" bordered={false}>
+                <div className="statistics-overview-card__head">
+                  <div>
+                    <div className="statistics-overview-card__label">接口覆盖率</div>
+                    <div className="statistics-overview-card__value">{formatPercent(overview.api_coverage_rate || 0)}</div>
+                    <div className="statistics-overview-card__hint">接口用例总数 / 高优先级功能用例总数</div>
+                  </div>
+                  <div className="statistics-overview-card__icon coverage">
+                    <BarChartOutlined />
+                  </div>
+                </div>
+                <div className="statistics-overview-card__chart">
+                  {renderSparkline(sparkCoverage, '#2f7df4', 'l(270) 0:#deebff 1:rgba(222,235,255,0.05)')}
+                </div>
+              </Card>
+            </Skeleton>
+          </Col>
+          <Col xs={24} sm={12} xl={6}>
+            <Skeleton loading={loading} active paragraph={false}>
+              <Card className="statistics-overview-card pass" bordered={false}>
+                <div className="statistics-overview-card__head">
+                  <div>
+                    <div className="statistics-overview-card__label">接口通过率</div>
+                    <div className="statistics-overview-card__value">{formatPercent(overview.api_pass_rate || 0)}</div>
+                    <div className="statistics-overview-card__hint">按所选时间段统计已完成报告通过率</div>
+                  </div>
+                  <div className="statistics-overview-card__icon pass">
+                    <CheckCircleOutlined />
+                  </div>
+                </div>
+                <div className="statistics-overview-card__chart">
+                  {renderSparkline(sparkPass, '#f59e0b', 'l(270) 0:#fff1d6 1:rgba(255,241,214,0.05)')}
+                </div>
+              </Card>
             </Skeleton>
           </Col>
         </Row>
-        <Row gutter={16} style={{marginTop: 16}}>
-          <Col span={12}>
-            <Skeleton loading={loading} active>
-              <StatisticCard className="statistics-card-large" title={
-                <span>{<MessageFailed theme="outline" size="15" fill="#d0021b"
-                                      strokeLinecap="square"/>} 近一周用例失败个数 </span>
-              } statistic={{
-                value: report?.failed,
-                valueStyle: {color: 'rgb(230, 98, 97)'}
-              }} chart={
-                <Area data={reportData} field="failed" color="rgb(230, 98, 97)" fill="#f1dddd"/>
-              }/>
-            </Skeleton>
-          </Col>
-          <Col span={12}>
-            <Skeleton loading={loading} active>
-              <StatisticCard className="statistics-card-large" title={
-                <span>{<ErrorComputer theme="outline" size="15" fill="#f5a623"
-                                      strokeLinecap="square"/>} 近一周用例错误个数</span>
-              } statistic={{
-                value: report?.error,
-                valueStyle: {color: 'rgb(250, 207, 76)'}
-              }} chart={
-                <Area data={reportData} field="error" fill="#efe5d1" color='rgb(250, 207, 76)'/>
-              }/>
-            </Skeleton>
-          </Col>
-        </Row>
-        <Row gutter={16} style={{marginTop: 16}}>
-          <Col span={12}>
-            <Skeleton loading={loading} active>
-              <StatisticCard className="statistics-card-large" title={
-                <span>{<Success theme="outline" size="15" fill="#7ed321"
-                                strokeLinecap="square"/>} 近一周用例成功个数 </span>
-              } statistic={{
-                value: report?.success,
-                valueStyle: {color: 'rgb(63, 205, 127)'}
-              }} chart={
-                <Area data={reportData} field="success" color="#7ed321" fill="rgb(234, 243, 244)"/>
-              }/>
-            </Skeleton>
-          </Col>
-          <Col span={12}>
-            <Skeleton loading={loading} active>
-              <StatisticCard className="statistics-card-large" title={
-                <span>{<Jump theme="outline" size="15" fill="#4a90e2"
-                             strokeLinecap="square"/>} 近一周用例跳过个数 </span>
-              } statistic={{
-                value: report?.skip,
-                valueStyle: {color: 'rgb(86, 97, 235)'}
-              }} chart={
-                <Area data={reportData} field="skip"/>
-              }/>
-            </Skeleton>
-          </Col>
-        </Row>
 
-      </Col>
-      <Col span={8}>
-        <Skeleton active loading={loading}>
-          <Card title="用例数量排行Top10" className="rank">
-            <List
-              itemLayout="horizontal"
-              dataSource={rank.slice(0, 10)}
-              renderItem={item => (
-                <List.Item actions={[getBonus(item)]}>
-                  <Skeleton active loading={loading}>
-                    <List.Item.Meta
-                      avatar={<Avatar src={users[item.id]?.avatar || CONFIG.AVATAR_URL}/>}
-                      title={
-                        <span>
-                        {users[item.id]?.name
-                        } <Badge style={{marginLeft: 8}} status={clients[item.id] ? "success" : 'default'}
-                                 text={clients[item.id] ? "在线" : '离线'}/>
-                      </span>
-                      }
-                      description={users[item.id]?.email}
+        <Row gutter={[16, 16]} className="statistics-main-row">
+          <Col xs={24} xl={16}>
+            <Skeleton loading={loading} active>
+              <Card
+                className="statistics-panel-card statistics-trend-card"
+                bordered={false}
+                title={(
+                  <div className="statistics-panel-card__header">
+                    <div>
+                      <div className="statistics-panel-card__title">
+                        <LineChartOutlined />
+                        <span>用例数趋势</span>
+                      </div>
+                    </div>
+                    <div className="statistics-panel-card__switch">
+                      <span className="active">接口用例</span>
+                      <span>功能用例</span>
+                      <span>总览</span>
+                    </div>
+                  </div>
+                )}
+              >
+                {trendData.length > 0 ? <Line {...trendConfig} /> : <Empty description="暂无趋势数据" />}
+              </Card>
+            </Skeleton>
+          </Col>
+          <Col xs={24} xl={8}>
+            <Skeleton loading={loading} active>
+              <Card
+                className="statistics-panel-card statistics-ranking-card"
+                bordered={false}
+                title={(
+                  <span className="statistics-panel-card__title">
+                    <FileDoneOutlined />
+                    <span>用例排行榜</span>
+                  </span>
+                )}
+              >
+                <Tabs defaultActiveKey="api">
+                  <TabPane tab="接口用例数" key="api">
+                    <Table
+                      rowKey={(record) => `api-${record.user_id}-${record.rank}`}
+                      columns={rankingColumns}
+                      dataSource={statistics.ranking?.api_case || []}
+                      pagination={false}
+                      locale={{ emptyText: <Empty description="暂无接口用例排行数据" /> }}
                     />
-                  </Skeleton>
+                  </TabPane>
+                  <TabPane tab="功能用例数" key="functional">
+                    <Table
+                      rowKey={(record) => `functional-${record.user_id}-${record.rank}`}
+                      columns={rankingColumns}
+                      dataSource={statistics.ranking?.functional_case || []}
+                      pagination={false}
+                      locale={{ emptyText: <Empty description="暂无功能用例排行数据" /> }}
+                    />
+                  </TabPane>
+                </Tabs>
+              </Card>
+            </Skeleton>
+          </Col>
+        </Row>
 
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Skeleton>
-      </Col>
-    </Row>
-  </PageContainer>
-}
+        <Row gutter={[16, 16]} className="statistics-footnote-row">
+          <Col span={24} />
+        </Row>
+      </div>
+    </PageContainer>
+  );
+};
