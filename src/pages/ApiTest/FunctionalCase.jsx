@@ -64,6 +64,7 @@ import {
 import { FolderCode, Switch } from '@icon-park/react';
 import MindMap from 'simple-mind-map';
 import MindMapAssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine';
+import MindMapDrag from 'simple-mind-map/src/plugins/Drag';
 import MindMapExport from 'simple-mind-map/src/plugins/Export';
 import MindMapExportXMind from 'simple-mind-map/src/plugins/ExportXMind';
 import MindMapFormula from 'simple-mind-map/src/plugins/Formula';
@@ -99,6 +100,7 @@ const registerMindMapPlugin = (flag, plugin) => {
 };
 
 registerMindMapPlugin('functionalCaseSelectPluginRegistered', MindMapSelect);
+registerMindMapPlugin('functionalCaseDragPluginRegistered', MindMapDrag);
 registerMindMapPlugin('functionalCaseExportPluginRegistered', MindMapExport);
 registerMindMapPlugin('functionalCaseExportXMindPluginRegistered', MindMapExportXMind);
 registerMindMapPlugin('functionalCaseFormulaPluginRegistered', MindMapFormula);
@@ -444,6 +446,9 @@ const createSkillRequirementItem = () => ({
 const defaultCaseData = (title) => ({
   data: {
     text: title || '功能用例',
+    case_uid: typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `case_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
   },
   children: [],
 });
@@ -509,6 +514,32 @@ const normalizeMindNodeIcons = (node) => {
   (node.children || []).forEach(normalizeMindNodeIcons);
 };
 
+const generateCaseUid = () => (
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `case_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+);
+
+const ensureNodeCaseUid = (node, used = new Set()) => {
+  if (!node || typeof node !== 'object') return;
+  if (!node.data || typeof node.data !== 'object') {
+    node.data = { case_uid: generateCaseUid() };
+  } else if (!node.data.case_uid) {
+    node.data.case_uid = generateCaseUid();
+  }
+  let uid = String(node.data.case_uid || '').trim();
+  if (!uid) {
+    uid = generateCaseUid();
+    node.data.case_uid = uid;
+  }
+  if (used.has(uid)) {
+    uid = generateCaseUid();
+    node.data.case_uid = uid;
+  }
+  used.add(uid);
+  (node.children || []).forEach((child) => ensureNodeCaseUid(child, used));
+};
+
 const sanitizeMindData = (data, fallbackTitle = '') => {
   if (!data || typeof data !== 'object') return data;
   const cloned = cloneMindData(data);
@@ -516,6 +547,7 @@ const sanitizeMindData = (data, fallbackTitle = '') => {
   if (root?.data) {
     root.data.text = String(root.data.text || fallbackTitle || '功能用例').trim() || fallbackTitle || '功能用例';
   }
+  ensureNodeCaseUid(root);
   normalizeMindNodeIcons(root);
   if (isFullMindData(cloned)) {
     delete cloned.view;
@@ -805,7 +837,8 @@ const FunctionalCase = ({ project, dispatch }) => {
   const importFileRef = useRef(null);
   const formatPainterRef = useRef({ active: false, styles: null, sourceUid: null });
   const nodeContextMenuRef = useRef(false);
-  const ctrlSelectModeRef = useRef(false);
+  const nodeDoubleClickRef = useRef(false);
+  const lastActiveNodeRef = useRef(null);
   const waitingCaseRenderRef = useRef(false);
   const [directoryTree, setDirectoryTree] = useState([]);
   const [caseFiles, setCaseFiles] = useState([]);
@@ -1162,12 +1195,16 @@ const FunctionalCase = ({ project, dispatch }) => {
     }
   }, []);
 
+
   const destroyMindMap = useCallback(() => {
     clearRenderFrame();
       if (mindRef.current) {
       if (typeof mindRef.current.off === 'function') {
         if (mindRef.current.__formatPainterHandler) {
           mindRef.current.off('node_active', mindRef.current.__formatPainterHandler);
+        }
+        if (mindRef.current.__nodeDoubleClickHandler) {
+          mindRef.current.off('node_dblclick', mindRef.current.__nodeDoubleClickHandler);
         }
         if (mindRef.current.__nodeContextMenuHandler) {
           mindRef.current.off('node_contextmenu', mindRef.current.__nodeContextMenuHandler);
@@ -1190,6 +1227,7 @@ const FunctionalCase = ({ project, dispatch }) => {
           mindRef.current.off('node_tree_render_end', mindRef.current.__nodeTreeRenderEndHandler);
         }
       }
+      mindRef.current.svg?.off?.('dblclick', mindRef.current.__canvasDoubleClickHandler);
       mindRef.current.destroy();
       mindRef.current = null;
     }
@@ -1203,7 +1241,6 @@ const FunctionalCase = ({ project, dispatch }) => {
       styles: null,
       sourceUid: null,
     };
-    ctrlSelectModeRef.current = false;
   }, [clearRenderFrame, closeMindContextMenu, closeIconQuickMenu]);
 
   const getMindData = useCallback(() => {
@@ -1486,6 +1523,9 @@ const FunctionalCase = ({ project, dispatch }) => {
       return;
     }
     const handleNodeActive = (node) => {
+      if (node) {
+        lastActiveNodeRef.current = node;
+      }
       const painter = formatPainterRef.current;
       if (!painter.active || !painter.styles) return;
       const activeNode = node || getActiveNode();
@@ -1523,6 +1563,19 @@ const FunctionalCase = ({ project, dispatch }) => {
         node: null,
       });
     };
+    const handleNodeDoubleClick = () => {
+      nodeDoubleClickRef.current = true;
+      window.setTimeout(() => {
+        nodeDoubleClickRef.current = false;
+      }, 0);
+    };
+    const handleCanvasDoubleClick = () => {
+      if (nodeDoubleClickRef.current) return;
+      const targetNode = getActiveNode() || lastActiveNodeRef.current || mindRef.current?.renderer?.root;
+      if (!targetNode || !mindRef.current) return;
+      mindRef.current.execCommand('INSERT_CHILD_NODE', true, [targetNode]);
+      markCaseDirty();
+    };
     const handleNodeIconClick = (...args) => {
       const node = args.find((item) => item && (item.nodeData || typeof item.getData === 'function'));
       const iconName = args.find((item) => typeof item === 'string');
@@ -1559,9 +1612,11 @@ const FunctionalCase = ({ project, dispatch }) => {
       }
     };
     instance.on('node_active', handleNodeActive);
+    instance.on('node_dblclick', handleNodeDoubleClick);
     instance.on('node_icon_click', handleNodeIconClick);
     instance.on('node_contextmenu', handleNodeContextMenu);
     instance.on('contextmenu', handleCanvasContextMenu);
+    instance.svg?.on?.('dblclick', handleCanvasDoubleClick);
     ['view_data_change', 'view_change', 'scale', 'translate'].forEach((eventName) => {
       instance.on(eventName, handleScaleSync);
     });
@@ -1569,13 +1624,15 @@ const FunctionalCase = ({ project, dispatch }) => {
     instance.on('node_tree_render_end', handleNodeTreeRenderEnd);
     instance.__formatPainterBound = true;
     instance.__formatPainterHandler = handleNodeActive;
+    instance.__nodeDoubleClickHandler = handleNodeDoubleClick;
     instance.__nodeIconClickHandler = handleNodeIconClick;
     instance.__nodeContextMenuHandler = handleNodeContextMenu;
     instance.__canvasContextMenuHandler = handleCanvasContextMenu;
+    instance.__canvasDoubleClickHandler = handleCanvasDoubleClick;
     instance.__scaleSyncHandler = handleScaleSync;
     instance.__dirtyChangeHandler = handleDirtyChange;
     instance.__nodeTreeRenderEndHandler = handleNodeTreeRenderEnd;
-  }, [caseDirty, syncScaleFromMind]);
+  }, [caseDirty, markCaseDirty, syncScaleFromMind]);
 
   const renderMindMap = useCallback((data, options = {}) => {
     if (!data) return;
@@ -1625,8 +1682,9 @@ const FunctionalCase = ({ project, dispatch }) => {
           themeConfig: fullData?.theme?.config || {},
           fit: true,
           readonly: false,
+          enableFreeDrag: true,
           enableCtrlKeyNodeSelection: true,
-          useLeftKeySelectionRightKeyDrag: ctrlSelectModeRef.current,
+          useLeftKeySelectionRightKeyDrag: false,
           iconList: MIND_ICON_LIST,
           openPerformance: Boolean(performanceMode),
           performanceConfig: {
@@ -1915,55 +1973,6 @@ const FunctionalCase = ({ project, dispatch }) => {
     el.addEventListener('wheel', handleWheel, { passive: true });
     return () => el.removeEventListener('wheel', handleWheel);
   }, [currentCase?.id, syncScaleFromMind]);
-
-  useEffect(() => {
-    const enableCtrlSelect = () => {
-      if (!mindRef.current || ctrlSelectModeRef.current) return;
-      ctrlSelectModeRef.current = true;
-      mindRef.current.updateConfig?.({
-        enableCtrlKeyNodeSelection: true,
-        useLeftKeySelectionRightKeyDrag: true,
-      });
-    };
-    const disableCtrlSelect = () => {
-      if (!mindRef.current || !ctrlSelectModeRef.current) return;
-      ctrlSelectModeRef.current = false;
-      mindRef.current.updateConfig?.({
-        enableCtrlKeyNodeSelection: true,
-        useLeftKeySelectionRightKeyDrag: false,
-      });
-    };
-
-    const handleKeyDown = (event) => {
-      if (event.ctrlKey || event.metaKey) {
-        enableCtrlSelect();
-      }
-    };
-    const handleKeyUp = (event) => {
-      if (!event.ctrlKey && !event.metaKey) {
-        disableCtrlSelect();
-      }
-    };
-    const handleBlur = () => disableCtrlSelect();
-    const handleMouseDown = (event) => {
-      if (!mindContainerRef.current || !mindRef.current) return;
-      if ((event.ctrlKey || event.metaKey) && mindContainerRef.current.contains(event.target)) {
-        enableCtrlSelect();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('mousedown', handleMouseDown, true);
-    window.addEventListener('blur', handleBlur);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('mousedown', handleMouseDown, true);
-      window.removeEventListener('blur', handleBlur);
-      disableCtrlSelect();
-    };
-  }, []);
 
   useEffect(() => {
     const onFullscreenChange = () => {
