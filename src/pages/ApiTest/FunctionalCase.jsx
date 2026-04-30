@@ -156,6 +156,8 @@ const FORMAT_BRUSH_STYLE_KEYS = [
 
 const PRIORITY_COLORS = ['#f04438', '#f79009', '#2563eb', '#667085', '#667085', '#667085', '#667085', '#667085', '#667085', '#667085'];
 const MAX_NODE_ICONS = 6;
+const LARGE_CASE_NODE_THRESHOLD = 250;
+const HUGE_CASE_NODE_THRESHOLD = 800;
 const XMIND_TASK_MARKERS = ['task-start', 'task-oct', 'task-quarter', 'task-3oct', 'task-half', 'task-5oct', 'task-3quar', 'task-7oct', 'task-done'];
 const UNSAVED_CASE_CLOSE_TEXT = '你有未保存用例，是否关闭窗口';
 
@@ -770,7 +772,6 @@ const FunctionalCase = ({ project, dispatch }) => {
   const editorPanelRef = useRef(null);
   const renderFrameRef = useRef(null);
   const renderRetryRef = useRef(0);
-  const dirtyCheckTimerRef = useRef(null);
   const suppressDirtyCheckRef = useRef(false);
   const savedCaseSnapshotRef = useRef('');
   const routeConfirmingRef = useRef(false);
@@ -780,6 +781,7 @@ const FunctionalCase = ({ project, dispatch }) => {
   const formatPainterRef = useRef({ active: false, styles: null, sourceUid: null });
   const nodeContextMenuRef = useRef(false);
   const ctrlSelectModeRef = useRef(false);
+  const waitingCaseRenderRef = useRef(false);
   const [directoryTree, setDirectoryTree] = useState([]);
   const [caseFiles, setCaseFiles] = useState([]);
   const [currentDirectory, setCurrentDirectory] = useState(null);
@@ -1147,13 +1149,12 @@ const FunctionalCase = ({ project, dispatch }) => {
         if (mindRef.current.__dirtyChangeHandler) {
           mindRef.current.off('data_change', mindRef.current.__dirtyChangeHandler);
         }
+        if (mindRef.current.__nodeTreeRenderEndHandler) {
+          mindRef.current.off('node_tree_render_end', mindRef.current.__nodeTreeRenderEndHandler);
+        }
       }
       mindRef.current.destroy();
       mindRef.current = null;
-    }
-    if (dirtyCheckTimerRef.current) {
-      window.clearTimeout(dirtyCheckTimerRef.current);
-      dirtyCheckTimerRef.current = null;
     }
     closeMindContextMenu();
     closeIconQuickMenu();
@@ -1176,12 +1177,6 @@ const FunctionalCase = ({ project, dispatch }) => {
   const buildCaseSnapshot = useCallback((data, fallbackTitle = '功能用例') => (
     JSON.stringify(sanitizeMindData(data || defaultCaseData(fallbackTitle), fallbackTitle))
   ), []);
-
-  const runDirtyCheck = useCallback(() => {
-    if (!mindRef.current || !currentCase || suppressDirtyCheckRef.current) return;
-    const latestSnapshot = buildCaseSnapshot(getMindData(), currentCase.title || '功能用例');
-    setCaseDirty(latestSnapshot !== (savedCaseSnapshotRef.current || ''));
-  }, [buildCaseSnapshot, currentCase, getMindData]);
 
   const openUnsavedConfirm = useCallback((onOk, onCancel) => {
     Modal.confirm({
@@ -1513,23 +1508,28 @@ const FunctionalCase = ({ project, dispatch }) => {
     };
     const handleDirtyChange = () => {
       if (suppressDirtyCheckRef.current) return;
+      if (caseDirty) return;
       setCaseDirty(true);
-      if (dirtyCheckTimerRef.current) {
-        window.clearTimeout(dirtyCheckTimerRef.current);
+    };
+    const handleNodeTreeRenderEnd = () => {
+      if (!waitingCaseRenderRef.current) return;
+      waitingCaseRenderRef.current = false;
+      suppressDirtyCheckRef.current = false;
+      setLoadingCase(false);
+      if (caseRenderTimerRef.current) {
+        window.clearTimeout(caseRenderTimerRef.current);
+        caseRenderTimerRef.current = null;
       }
-      dirtyCheckTimerRef.current = window.setTimeout(() => {
-        dirtyCheckTimerRef.current = null;
-        runDirtyCheck();
-      }, 180);
     };
     instance.on('node_active', handleNodeActive);
     instance.on('node_icon_click', handleNodeIconClick);
     instance.on('node_contextmenu', handleNodeContextMenu);
     instance.on('contextmenu', handleCanvasContextMenu);
-    ['view_data_change', 'view_change', 'scale', 'translate', 'data_change'].forEach((eventName) => {
+    ['view_data_change', 'view_change', 'scale', 'translate'].forEach((eventName) => {
       instance.on(eventName, handleScaleSync);
     });
     instance.on('data_change', handleDirtyChange);
+    instance.on('node_tree_render_end', handleNodeTreeRenderEnd);
     instance.__formatPainterBound = true;
     instance.__formatPainterHandler = handleNodeActive;
     instance.__nodeIconClickHandler = handleNodeIconClick;
@@ -1537,12 +1537,18 @@ const FunctionalCase = ({ project, dispatch }) => {
     instance.__canvasContextMenuHandler = handleCanvasContextMenu;
     instance.__scaleSyncHandler = handleScaleSync;
     instance.__dirtyChangeHandler = handleDirtyChange;
-  }, [runDirtyCheck, syncScaleFromMind]);
+    instance.__nodeTreeRenderEndHandler = handleNodeTreeRenderEnd;
+  }, [caseDirty, syncScaleFromMind]);
 
   const renderMindMap = useCallback((data, options = {}) => {
     if (!data) return;
-    const { fitOnRender = false, fallbackTitle = '' } = options;
-    const safeData = sanitizeMindData(data, fallbackTitle);
+    const {
+      fitOnRender = false,
+      fallbackTitle = '',
+      skipSanitize = false,
+      performanceMode = false,
+    } = options;
+    const safeData = skipSanitize ? data : sanitizeMindData(data, fallbackTitle);
     const rootData = getMindRootData(safeData);
     const fullData = isFullMindData(safeData) ? safeData : null;
     clearRenderFrame();
@@ -1565,6 +1571,14 @@ const FunctionalCase = ({ project, dispatch }) => {
       }
 
       renderRetryRef.current = 0;
+      if (mindRef.current && Boolean(mindRef.current.__openPerformance) !== Boolean(performanceMode)) {
+        try {
+          mindRef.current.destroy();
+        } catch (error) {
+          // ignore destroy failures and recreate instance
+        }
+        mindRef.current = null;
+      }
       if (!mindRef.current) {
         mindRef.current = new MindMap({
           el,
@@ -1577,7 +1591,14 @@ const FunctionalCase = ({ project, dispatch }) => {
           enableCtrlKeyNodeSelection: true,
           useLeftKeySelectionRightKeyDrag: ctrlSelectModeRef.current,
           iconList: MIND_ICON_LIST,
+          openPerformance: Boolean(performanceMode),
+          performanceConfig: {
+            time: 300,
+            padding: 40,
+            removeNodeWhenOutCanvas: true,
+          },
         });
+        mindRef.current.__openPerformance = Boolean(performanceMode);
         bindMindEvents();
         if (fullData) {
           mindRef.current.setFullData(fullData);
@@ -1610,27 +1631,41 @@ const FunctionalCase = ({ project, dispatch }) => {
     const { force = false } = options;
     if (!projectId) return;
     if (!force && caseDirty && currentCase?.id && record?.id && currentCase.id !== record.id) {
-      openUnsavedConfirm(() => loadCase(record, { force: true }));
+      openUnsavedConfirm(() => {
+        void loadCase(record, { force: true });
+      });
       return;
     }
-    setLoadingCase(true);
+    const isSameCase = Boolean(currentCase?.id && record?.id && currentCase.id === record.id);
+    if (!isSameCase) {
+      setLoadingCase(true);
+      waitingCaseRenderRef.current = true;
+    }
     try {
       const res = await queryFunctionalCaseFile({ id: record.id, project_id: projectId });
       if (res?.code === 0) {
+        const fallbackTitle = res?.data?.title || record?.title || '功能用例';
+        const safeData = sanitizeMindData(res?.data?.data || defaultCaseData(fallbackTitle), fallbackTitle);
+        const nodeCount = Number(countMindData(getMindRootData(safeData))?.nodeCount || 0);
         suppressDirtyCheckRef.current = true;
-        savedCaseSnapshotRef.current = buildCaseSnapshot(res?.data?.data, res?.data?.title || record?.title || '功能用例');
+        savedCaseSnapshotRef.current = buildCaseSnapshot(safeData, fallbackTitle);
         setCaseDirty(false);
         setCurrentCase({
           ...res.data,
+          data: safeData,
+          __dataSanitized: true,
+          __nodeCount: nodeCount,
           case_count: Number(res?.data?.case_count ?? res?.data?.case_num ?? 0),
           create_user_name: res?.data?.create_user_name || res?.data?.creator_name || record?.create_user_name || '',
         });
       } else {
         message.error(res?.msg || '获取功能用例详情失败');
+        waitingCaseRenderRef.current = false;
         setLoadingCase(false);
       }
     } catch (error) {
       message.error(error?.message || '获取功能用例详情失败');
+      waitingCaseRenderRef.current = false;
       setLoadingCase(false);
     }
   };
@@ -1761,41 +1796,53 @@ const FunctionalCase = ({ project, dispatch }) => {
 
   useEffect(() => {
     if (currentCase) {
+      const isLargeCase = Number(currentCase?.__nodeCount || 0) >= LARGE_CASE_NODE_THRESHOLD;
+      const isHugeCase = Number(currentCase?.__nodeCount || 0) >= HUGE_CASE_NODE_THRESHOLD;
       setScale(100);
       suppressDirtyCheckRef.current = true;
       renderMindMap(currentCase.data || defaultCaseData(currentCase.title), {
-        fitOnRender: !mindRef.current,
+        fitOnRender: !mindRef.current && !isLargeCase,
         fallbackTitle: currentCase.title,
+        skipSanitize: Boolean(currentCase.__dataSanitized),
+        performanceMode: isHugeCase,
       });
+      if (caseRenderTimerRef.current) {
+        window.clearTimeout(caseRenderTimerRef.current);
+      }
       caseRenderTimerRef.current = window.setTimeout(() => {
+        waitingCaseRenderRef.current = false;
         suppressDirtyCheckRef.current = false;
         setLoadingCase(false);
         caseRenderTimerRef.current = null;
-      }, 180);
+      }, isLargeCase ? 25000 : 8000);
     } else {
+      waitingCaseRenderRef.current = false;
       suppressDirtyCheckRef.current = false;
       setCaseDirty(false);
       savedCaseSnapshotRef.current = '';
       destroyMindMap();
       setLoadingCase(false);
     }
-  }, [currentCase?.id, destroyMindMap, renderMindMap]);
+  }, [currentCase, destroyMindMap, renderMindMap]);
 
   useEffect(() => {
     if (!currentCase || !mindRef.current) return undefined;
+    const isLargeCase = Number(currentCase?.__nodeCount || 0) >= LARGE_CASE_NODE_THRESHOLD;
     let firstFrame = null;
     let secondFrame = null;
-    const timer = window.setTimeout(() => refreshMindGeometry(true), 260);
+    const timer = isLargeCase ? null : window.setTimeout(() => refreshMindGeometry(true), 260);
     firstFrame = requestAnimationFrame(() => {
       refreshMindGeometry(true);
-      secondFrame = requestAnimationFrame(() => refreshMindGeometry(true));
+      if (!isLargeCase) {
+        secondFrame = requestAnimationFrame(() => refreshMindGeometry(true));
+      }
     });
     return () => {
       if (firstFrame) cancelAnimationFrame(firstFrame);
       if (secondFrame) cancelAnimationFrame(secondFrame);
-      window.clearTimeout(timer);
+      if (timer) window.clearTimeout(timer);
     };
-  }, [treeCollapsed, currentCase?.id, refreshMindGeometry]);
+  }, [treeCollapsed, currentCase, refreshMindGeometry]);
 
   useEffect(() => {
     const el = mindContainerRef.current;
@@ -2011,16 +2058,8 @@ const FunctionalCase = ({ project, dispatch }) => {
       });
       if (res?.code === 0) {
         message.success('保存成功');
-        const detailRes = await queryFunctionalCaseFile({ id: res?.data?.id || currentCase.id, project_id: projectId });
-        if (detailRes?.code === 0) {
-          savedCaseSnapshotRef.current = buildCaseSnapshot(detailRes?.data?.data, detailRes?.data?.title || currentCase.title);
-          setCaseDirty(false);
-          setCurrentCase(detailRes.data);
-        } else {
-          savedCaseSnapshotRef.current = buildCaseSnapshot(latestData, currentCase.title);
-          setCaseDirty(false);
-          setCurrentCase((prev) => ({ ...prev, data: latestData }));
-        }
+        savedCaseSnapshotRef.current = buildCaseSnapshot(latestData, currentCase.title);
+        setCaseDirty(false);
         await refreshTree();
       } else {
         message.error(res?.msg || '保存失败');
