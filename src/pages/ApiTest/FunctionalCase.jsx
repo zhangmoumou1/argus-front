@@ -157,7 +157,7 @@ const FORMAT_BRUSH_STYLE_KEYS = [
 const PRIORITY_COLORS = ['#f04438', '#f79009', '#2563eb', '#667085', '#667085', '#667085', '#667085', '#667085', '#667085', '#667085'];
 const MAX_NODE_ICONS = 6;
 const LARGE_CASE_NODE_THRESHOLD = 250;
-const HUGE_CASE_NODE_THRESHOLD = 800;
+const HUGE_CASE_NODE_THRESHOLD = 500;
 const XMIND_TASK_MARKERS = ['task-start', 'task-oct', 'task-quarter', 'task-3oct', 'task-half', 'task-5oct', 'task-3quar', 'task-7oct', 'task-done'];
 const UNSAVED_CASE_CLOSE_TEXT = '你有未保存用例，是否关闭窗口';
 
@@ -763,6 +763,31 @@ const countMindData = (data) => {
   };
 };
 
+const buildHugeCasePreview = (data, collapseLevel = 2) => {
+  const cloneNode = (node, level) => {
+    if (!node || typeof node !== 'object') return node;
+    const dataPart = node.data && typeof node.data === 'object' ? { ...node.data } : node.data;
+    const children = Array.isArray(node.children) ? node.children.map((child) => cloneNode(child, level + 1)) : [];
+    if (dataPart && level === collapseLevel) {
+      dataPart.expand = false;
+    } else if (dataPart && level > collapseLevel) {
+      dataPart.expand = true;
+    }
+    return {
+      ...node,
+      data: dataPart,
+      children,
+    };
+  };
+  if (data && typeof data === 'object' && data.root && typeof data.root === 'object') {
+    return {
+      ...data,
+      root: cloneNode(data.root, 0),
+    };
+  }
+  return cloneNode(data, 0);
+};
+
 const FunctionalCase = ({ project, dispatch }) => {
   const projects = project?.projects || [];
   const projectId = project?.project_id;
@@ -853,6 +878,7 @@ const FunctionalCase = ({ project, dispatch }) => {
   const [editingProject, setEditingProject] = useState(false);
   const [formatPainterActive, setFormatPainterActive] = useState(false);
   const [formatPainterSourceUid, setFormatPainterSourceUid] = useState(null);
+  const [hugeCaseModeOverride, setHugeCaseModeOverride] = useState(null);
   const [mindContextMenu, setMindContextMenu] = useState({
     open: false,
     x: 0,
@@ -1005,10 +1031,21 @@ const FunctionalCase = ({ project, dispatch }) => {
 
   const outline = useMemo(() => {
     const source = getMindRootData(currentCase?.data) || defaultCaseData(currentCase?.title);
+    const nodeCount = Number(currentCase?.__nodeCount || 0);
+    if (nodeCount >= HUGE_CASE_NODE_THRESHOLD) {
+      return collectOutline(source).slice(0, 400);
+    }
     return collectOutline(source);
   }, [currentCase]);
 
   const mindStats = useMemo(() => {
+    const nodeCount = Number(currentCase?.__nodeCount || 0);
+    if (nodeCount > 0) {
+      return {
+        nodeCount,
+        wordCount: Number(currentCase?.__wordCount || 0),
+      };
+    }
     const source = getMindRootData(currentCase?.data) || defaultCaseData(currentCase?.title);
     return countMindData(source);
   }, [currentCase]);
@@ -1636,28 +1673,34 @@ const FunctionalCase = ({ project, dispatch }) => {
       });
       return;
     }
-    const isSameCase = Boolean(currentCase?.id && record?.id && currentCase.id === record.id);
-    if (!isSameCase) {
-      setLoadingCase(true);
-      waitingCaseRenderRef.current = true;
-    }
+    setLoadingCase(true);
+    waitingCaseRenderRef.current = true;
     try {
       const res = await queryFunctionalCaseFile({ id: record.id, project_id: projectId });
       if (res?.code === 0) {
         const fallbackTitle = res?.data?.title || record?.title || '功能用例';
         const safeData = sanitizeMindData(res?.data?.data || defaultCaseData(fallbackTitle), fallbackTitle);
-        const nodeCount = Number(countMindData(getMindRootData(safeData))?.nodeCount || 0);
+        const baseStats = countMindData(getMindRootData(safeData));
+        const nodeCount = Number(baseStats?.nodeCount || 0);
+        const isHugeCase = nodeCount >= HUGE_CASE_NODE_THRESHOLD;
+        const renderData = isHugeCase ? buildHugeCasePreview(safeData, 2) : safeData;
         suppressDirtyCheckRef.current = true;
         savedCaseSnapshotRef.current = buildCaseSnapshot(safeData, fallbackTitle);
         setCaseDirty(false);
         setCurrentCase({
           ...res.data,
-          data: safeData,
+          data: renderData,
           __dataSanitized: true,
           __nodeCount: nodeCount,
+          __wordCount: Number(baseStats?.wordCount || 0),
+          __isHugeCase: isHugeCase,
           case_count: Number(res?.data?.case_count ?? res?.data?.case_num ?? 0),
           create_user_name: res?.data?.create_user_name || res?.data?.creator_name || record?.create_user_name || '',
         });
+        if (isHugeCase) {
+          waitingCaseRenderRef.current = false;
+          setLoadingCase(false);
+        }
       } else {
         message.error(res?.msg || '获取功能用例详情失败');
         waitingCaseRenderRef.current = false;
@@ -1798,13 +1841,14 @@ const FunctionalCase = ({ project, dispatch }) => {
     if (currentCase) {
       const isLargeCase = Number(currentCase?.__nodeCount || 0) >= LARGE_CASE_NODE_THRESHOLD;
       const isHugeCase = Number(currentCase?.__nodeCount || 0) >= HUGE_CASE_NODE_THRESHOLD;
+      const enableHugeMode = hugeCaseModeOverride === null ? isHugeCase : Boolean(hugeCaseModeOverride);
       setScale(100);
       suppressDirtyCheckRef.current = true;
       renderMindMap(currentCase.data || defaultCaseData(currentCase.title), {
         fitOnRender: !mindRef.current && !isLargeCase,
         fallbackTitle: currentCase.title,
         skipSanitize: Boolean(currentCase.__dataSanitized),
-        performanceMode: isHugeCase,
+        performanceMode: enableHugeMode,
       });
       if (caseRenderTimerRef.current) {
         window.clearTimeout(caseRenderTimerRef.current);
@@ -1814,7 +1858,7 @@ const FunctionalCase = ({ project, dispatch }) => {
         suppressDirtyCheckRef.current = false;
         setLoadingCase(false);
         caseRenderTimerRef.current = null;
-      }, isLargeCase ? 25000 : 8000);
+      }, isLargeCase ? 6000 : 3000);
     } else {
       waitingCaseRenderRef.current = false;
       suppressDirtyCheckRef.current = false;
@@ -1823,7 +1867,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       destroyMindMap();
       setLoadingCase(false);
     }
-  }, [currentCase, destroyMindMap, renderMindMap]);
+  }, [currentCase, hugeCaseModeOverride, destroyMindMap, renderMindMap]);
 
   useEffect(() => {
     if (!currentCase || !mindRef.current) return undefined;
@@ -3212,6 +3256,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       );
     }
     if (activePanel === 'setting') {
+      const effectiveHugeMode = hugeCaseModeOverride === null ? isHugeCase : Boolean(hugeCaseModeOverride);
       return (
         <div className="functional-panel-section">
           <div className="functional-side-title">设置</div>
@@ -3221,6 +3266,20 @@ const FunctionalCase = ({ project, dispatch }) => {
             <Checkbox onChange={(event) => updateMindConfig({ enableFreeDrag: event.target.checked })}>开启节点自由拖拽</Checkbox>
             <Checkbox onChange={(event) => updateMindConfig({ isShowCreateChildBtnIcon: event.target.checked })}>显示快捷创建子节点按钮</Checkbox>
             <Checkbox onChange={(event) => updateMindConfig({ mousewheelAction: event.target.checked ? 'zoom' : 'move' })}>鼠标滚轮改为缩放</Checkbox>
+            <Checkbox
+              checked={effectiveHugeMode}
+              onChange={(event) => setHugeCaseModeOverride(event.target.checked)}
+            >
+              启用超大用例编辑模式
+            </Checkbox>
+          </div>
+          <div className="functional-panel-group">
+            <div className="functional-field-label">超大用例模式</div>
+            <div className="functional-stat-line">
+              当前策略：{hugeCaseModeOverride === null ? `自动（节点数${HUGE_CASE_NODE_THRESHOLD}+启用）` : (effectiveHugeMode ? '手动开启' : '手动关闭')}
+            </div>
+            <div className="functional-stat-line">当前节点数：{Number(currentCase?.__nodeCount || 0)}</div>
+            <Button onClick={() => setHugeCaseModeOverride(null)}>恢复自动策略</Button>
           </div>
           <div className="functional-panel-group">
             <div className="functional-field-label">统计</div>
