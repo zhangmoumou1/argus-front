@@ -12,21 +12,17 @@ enum ImportType {
   har = 1
 }
 
-interface DirectoryProps {
-
-}
-
 interface RecorderProps {
   recordLists: [];
 }
 
 interface RecorderDrawerProps {
   visible: boolean;
-  setVisible: Function;
-  directory: Array<DirectoryProps>;
+  setVisible: (...args: any[]) => void;
+  directory: Array<any>;
   loading?: any;
   recorder?: RecorderProps;
-  dispatch?: Function;
+  dispatch?: (...args: any[]) => void;
 }
 
 const RecorderDrawer = ({visible, setVisible, directory, loading, recorder, dispatch}: RecorderDrawerProps) => {
@@ -77,12 +73,13 @@ const RecorderDrawer = ({visible, setVisible, directory, loading, recorder, disp
           url: record[key].url,
           body: record[key].body,
           status_code: record[key].status_code,
+          created_at: record[key].created_at,
         }))
       }
     })
     if (res) {
       notification.success({
-        message: '🎉 用例生成成功，可以去对应目录查看哦~',
+        message: `🎉 用例生成成功${res.data?.count > 1 ? `，已批量生成 ${res.data.count} 条接口用例` : '，可以去对应目录查看哦~'}`,
         placement: 'topLeft'
       })
       dispatch({

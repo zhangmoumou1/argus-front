@@ -3,16 +3,18 @@ import {Button, Card, Col, Form, message, Row, Spin, Tabs} from "antd";
 import OssConfig from "@/components/System/OssConfig";
 import EmailConfig from "@/components/System/EmailConfig";
 import YapiConfig from "@/components/System/YapiConfig";
+import AIModelConfig from "@/components/System/AIModelConfig";
 import {SaveOutlined} from "@ant-design/icons";
 import {connect} from "@umijs/max";
-import {useEffect} from "react";
+import {useEffect, useState} from "react";
 
 const {TabPane} = Tabs;
 
 const SystemConfig = ({dispatch, gconfig, loading}) => {
 
   const [form] = Form.useForm()
-  const {configuration} = gconfig;
+  const {configuration, aiModelConfig} = gconfig;
+  const [activeTab, setActiveTab] = useState("1");
 
   const onSetField = () => {
     const {email, oss, yapi} = configuration;
@@ -70,7 +72,7 @@ const SystemConfig = ({dispatch, gconfig, loading}) => {
         <Card>
           <Row>
             <Col span={24}>
-              <Tabs tabPosition="left">
+              <Tabs tabPosition="left" activeKey={activeTab} onChange={setActiveTab}>
                 <TabPane key="1" tab="邮件设置" forceRender>
                   <EmailConfig form={form}/>
                 </TabPane>
@@ -80,14 +82,19 @@ const SystemConfig = ({dispatch, gconfig, loading}) => {
                 <TabPane key="3" tab="Yapi设置" forceRender>
                   <YapiConfig form={form}/>
                 </TabPane>
+                <TabPane key="4" tab="AI模型" forceRender>
+                  <AIModelConfig dispatch={dispatch} aiModelConfig={aiModelConfig} loading={loading}/>
+                </TabPane>
               </Tabs>
             </Col>
           </Row>
-          <Row>
-            <div style={{margin: '16px auto'}}>
-              <Button type="primary" icon={<SaveOutlined/>} onClick={onSubmit}>保存</Button>
-            </div>
-          </Row>
+          {activeTab !== "4" ? (
+            <Row>
+              <div style={{margin: '16px auto'}}>
+                <Button type="primary" icon={<SaveOutlined/>} onClick={onSubmit}>保存</Button>
+              </div>
+            </Row>
+          ) : null}
         </Card>
       </Spin>
     </PageContainer>

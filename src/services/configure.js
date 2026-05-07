@@ -241,6 +241,21 @@ export async function updateSystemConfig(data) {
   });
 }
 
+export async function getAiModelConfig() {
+  return request(`${CONFIG.URL}/config/ai-model/config`, {
+    method: 'GET',
+    headers: auth.headers(),
+  });
+}
+
+export async function updateAiModelConfig(data) {
+  return request(`${CONFIG.URL}/config/ai-model/config/update`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
 export async function listKnowledge(params) {
   return request(`${CONFIG.URL}/config/knowledge/list`, {
     method: 'GET',
@@ -272,5 +287,4 @@ export async function deleteKnowledge(params) {
     headers: auth.headers(),
   });
 }
-
 

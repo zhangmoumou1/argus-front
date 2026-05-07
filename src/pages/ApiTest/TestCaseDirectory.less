@@ -76,3 +76,44 @@
   height: 100%;
   overflow: auto;
 }
+
+.ai-flow-config-card,
+.ai-flow-preview-card {
+  min-height: calc(100vh - 170px);
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.ai-flow-version-tip {
+  margin: -8px 0 14px;
+  padding: 10px 12px;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+}
+
+.ai-flow-summary {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  color: #334155;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(20, 184, 166, 0.06));
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.ai-flow-case-detail {
+  color: #334155;
+
+  pre {
+    max-height: 260px;
+    overflow: auto;
+    margin: 10px 0 0;
+    padding: 12px;
+    color: #243044;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    white-space: pre-wrap;
+  }
+}

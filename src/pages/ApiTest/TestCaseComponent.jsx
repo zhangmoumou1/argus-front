@@ -295,6 +295,10 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
                           label='创建人'><UserLink size={16} user={userMap[caseInfo.create_user]}/></Descriptions.Item>
                         <Descriptions.Item
                           label='更新人'><UserLink size={16} user={userMap[caseInfo.update_user]}/></Descriptions.Item>
+                        <Descriptions.Item label='接口版本'>{caseInfo.api_version_no || '-'}</Descriptions.Item>
+                        <Descriptions.Item label='版本状态'>
+                          {Number(caseInfo.api_pending_update) === 1 ? <Tag color="orange">待更新</Tag> : <Tag color="green">已同步</Tag>}
+                        </Descriptions.Item>
                         <Descriptions.Item label='创建时间'>{caseInfo.created_at}</Descriptions.Item>
                         <Descriptions.Item label='更新时间'>{caseInfo.updated_at}</Descriptions.Item>
                       </Descriptions>

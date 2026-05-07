@@ -79,6 +79,17 @@ export default [
         component: './ApiTest/TestCaseDirectory',
       },
       {
+        path: '/apiTest/interface',
+        name: '接口管理',
+        component: './ApiTest/InterfaceService',
+      },
+      {
+        path: '/apiTest/interface/:service_id',
+        name: '接口列表',
+        hideInMenu: true,
+        component: './ApiTest/InterfaceEndpoint',
+      },
+      {
         path: '/apiTest/functionalCase',
         name: '功能用例',
         component: './ApiTest/FunctionalCase',

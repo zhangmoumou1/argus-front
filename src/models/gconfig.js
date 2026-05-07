@@ -4,6 +4,7 @@ import {
   deleteGateway,
   deleteGConfig,
   deleteRedisConfig,
+  getAiModelConfig,
   getSystemConfig,
   insertDbConfig,
   insertGateway,
@@ -18,6 +19,7 @@ import {
   onlineRedisCommand,
   onTestDbConfig,
   updateDbConfig,
+  updateAiModelConfig as updateAiModelConfigService,
   updateGateway,
   updateGConfig,
   updateRedisConfig,
@@ -32,6 +34,10 @@ export default {
   state: {
     data: [],
     configuration: {},
+    aiModelConfig: {
+      active_provider: 'kimi',
+      models: {},
+    },
     currentEnv: null,
     name: '',
     currentCreateUser: undefined,
@@ -94,6 +100,30 @@ export default {
     * updateConfiguration({payload}, {call, _}) {
       const res = yield call(updateSystemConfig, payload)
       auth.response(res, true)
+    },
+
+    * fetchAiModelConfig({payload}, {call, put}) {
+      const res = yield call(getAiModelConfig, payload);
+      if (auth.response(res)) {
+        yield put({
+          type: 'save',
+          payload: {
+            aiModelConfig: res.data,
+          },
+        });
+      }
+    },
+
+    * updateAiModelConfig({payload}, {call, put}) {
+      const res = yield call(updateAiModelConfigService, payload);
+      if (auth.response(res, true)) {
+        yield put({
+          type: 'save',
+          payload: {
+            aiModelConfig: res.data,
+          },
+        });
+      }
     },
 
     // 获取数据库配置

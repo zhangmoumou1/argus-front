@@ -2,6 +2,7 @@ import auth from "@/utils/auth";
 import {
   createTestCase,
   createTestCaseV2,
+  copyTestCase,
   deleteTestcase,
   deleteTestCaseAsserts,
   deleteTestcaseData,
@@ -149,6 +150,11 @@ export default {
 
     * moveTestCaseToDirectory({payload}, {call, put}) {
       const res = yield call(moveTestCase, payload);
+      return auth.response(res, true);
+    },
+
+    * copyTestCaseToDirectory({payload}, {call, put}) {
+      const res = yield call(copyTestCase, payload);
       return auth.response(res, true);
     },
 
@@ -327,3 +333,5 @@ export default {
     },
   },
 }
+
+

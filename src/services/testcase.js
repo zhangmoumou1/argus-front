@@ -133,6 +133,14 @@ export async function moveTestCase(params) {
   });
 }
 
+export async function copyTestCase(params) {
+  return request(`${CONFIG.URL}/testcase/copy`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
 // 删除目录
 export async function deleteTestcaseDirectory(params) {
   return request(`${CONFIG.URL}/testcase/directory/delete`, {
@@ -233,6 +241,22 @@ export async function generateCase(data) {
   });
 }
 
+export async function aiGenerateFlowPreview(data) {
+  return request(`${CONFIG.URL}/testcase/ai-generate/flow-preview`, {
+    headers: auth.headers(),
+    data,
+    method: 'POST',
+  });
+}
+
+export async function aiGenerateFlowSave(data) {
+  return request(`${CONFIG.URL}/testcase/ai-generate/flow-save`, {
+    headers: auth.headers(),
+    data,
+    method: 'POST',
+  });
+}
+
 // 导入har文件
 export async function importFile(data) {
   const formData = new FormData();
@@ -255,6 +279,14 @@ export async function removeRecord(index) {
   });
 }
 
+export async function removeRecords(index_list) {
+  return await request(`${CONFIG.URL}/testcase/record/remove/batch`, {
+    method: 'POST',
+    data: {index_list},
+    headers: auth.headers(),
+  });
+}
+
 // 查询用例可用变量
 export async function queryVars(data) {
   return await request(`${CONFIG.URL}/testcase/variables`, {
@@ -263,3 +295,4 @@ export async function queryVars(data) {
     headers: auth.headers(),
   });
 }
+

@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Col,
   Divider,
   Drawer,
@@ -30,6 +31,7 @@ import SplitPane from 'react-split-pane';
 import './TestCaseDirectory.less';
 import {
   CameraTwoTone,
+  CopyOutlined,
   DeleteOutlined,
   DownOutlined,
   EditOutlined,
@@ -40,6 +42,7 @@ import {
   QuestionCircleOutlined,
   ReloadOutlined,
   RocketOutlined,
+  RobotOutlined,
   SaveOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
@@ -59,6 +62,8 @@ import AddTestCaseComponent from '@/pages/ApiTest/AddTestCaseComponent';
 import RecorderDrawer from '@/components/TestCase/recorder/RecorderDrawer';
 import {Switch} from '@icon-park/react';
 import common from "@/utils/common";
+import {listApiEndpointVersions, listApiEndpoints, listApiServices} from '@/services/interfaceManage';
+import {aiGenerateFlowPreview, aiGenerateFlowSave, copyTestCase, listTestcaseTree as fetchTestcaseDirectoryTree} from '@/services/testcase';
 
 const {Option} = Select;
 
@@ -84,9 +89,21 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   const [resultModal, setResultModal] = useState(false);
   const [name, setName] = useState('');
   const [moveModal, setMoveModal] = useState(false);
+  const [copyModal, setCopyModal] = useState(false);
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [copyDirectoryTree, setCopyDirectoryTree] = useState([]);
+  const [copyForm] = Form.useForm();
   const [moveDirectoryModal, setMoveDirectoryModal] = useState(false);
   const [moveDirectoryRecord, setMoveDirectoryRecord] = useState({});
   const [recorderModal, setRecorderModal] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiServices, setAiServices] = useState([]);
+  const [aiEndpoints, setAiEndpoints] = useState([]);
+  const [aiVersions, setAiVersions] = useState({});
+  const [aiPreview, setAiPreview] = useState(null);
+  const [aiSelectedKeys, setAiSelectedKeys] = useState([]);
+  const [aiForm] = Form.useForm();
 
   const [bodyType, setBodyType] = useState(0);
   const [formData, setFormData] = useState([]);
@@ -251,6 +268,20 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       key: 'status',
       width: 110,
       render: (status) => <Badge {...CONFIG.CASE_BADGE[status]} />,
+    },
+    {
+      title: '接口版本',
+      dataIndex: 'api_version_no',
+      key: 'api_version_no',
+      width: 120,
+      render: (value) => value || '-',
+    },
+    {
+      title: '版本状态',
+      dataIndex: 'api_pending_update',
+      key: 'api_pending_update',
+      width: 110,
+      render: (value) => (Number(value) === 1 ? <Tag color="orange">待更新</Tag> : <Tag color="green">已同步</Tag>),
     },
     {
       title: '创建人',
@@ -450,6 +481,49 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
         selectedRowKeys: [],
       });
       listTestcase();
+    }
+  };
+
+  const loadCopyDirectoryTree = async (targetProjectId) => {
+    if (!targetProjectId) {
+      setCopyDirectoryTree([]);
+      return;
+    }
+    const res = await fetchTestcaseDirectoryTree({project_id: targetProjectId, move: true});
+    if (auth.response(res, true)) {
+      setCopyDirectoryTree(res.data || []);
+    }
+  };
+
+  const onCopyTestCase = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.info('请先勾选需要复制的用例');
+      return;
+    }
+    copyForm.resetFields();
+    copyForm.setFieldsValue({project_id});
+    setCopyModal(true);
+    await loadCopyDirectoryTree(project_id);
+  };
+
+  const onCopy = async () => {
+    const values = await copyForm.validateFields();
+    setCopyLoading(true);
+    try {
+      const res = await copyTestCase({
+        id_list: selectedRowKeys,
+        project_id: values.project_id,
+        directory_id: values.directory_id,
+      });
+      if (auth.response(res, true)) {
+        setCopyModal(false);
+        saveCase({selectedRowKeys: []});
+        if (values.project_id === project_id) {
+          listTestcase();
+        }
+      }
+    } finally {
+      setCopyLoading(false);
     }
   };
 
@@ -656,6 +730,127 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
     });
   };
 
+  const openAiGenerate = async () => {
+    if (!currentDirectory[0]) {
+      message.info('请先创建或选择用例目录~');
+      return;
+    }
+    setAiDrawerOpen(true);
+    setAiPreview(null);
+    setAiSelectedKeys([]);
+    aiForm.resetFields();
+    aiForm.setFieldsValue({
+      generate_style: 'standard',
+      include_negative: true,
+      include_asserts: true,
+      include_extractors: true,
+    });
+    const res = await listApiServices({project_id, keyword: ''});
+    if (auth.response(res, false)) {
+      setAiServices(res.data || []);
+    }
+  };
+
+  const onAiServiceChange = async (serviceId) => {
+    aiForm.setFieldsValue({endpoint_ids: []});
+    setAiEndpoints([]);
+    setAiVersions({});
+    if (!serviceId) return;
+    const res = await listApiEndpoints({service_id: serviceId, endpoint_status: 'available'});
+    if (auth.response(res, false)) {
+      setAiEndpoints(res.data?.list || []);
+    }
+  };
+
+  const onAiEndpointChange = async (endpointIds = []) => {
+    const nextVersions = {};
+    await Promise.all((endpointIds || []).map(async (endpointId) => {
+      const res = await listApiEndpointVersions({endpoint_id: endpointId});
+      if (auth.response(res, false)) {
+        nextVersions[endpointId] = res.data || [];
+      }
+    }));
+    setAiVersions(nextVersions);
+  };
+
+  const onAiPreview = async () => {
+    const values = await aiForm.validateFields();
+    setAiLoading(true);
+    try {
+      const res = await aiGenerateFlowPreview({
+        ...values,
+        project_id,
+        directory_id: currentDirectory[0],
+      });
+      if (auth.response(res, true)) {
+        setAiPreview(res.data);
+        setAiSelectedKeys((res.data?.cases || []).map((item) => item.key));
+      }
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const onAiSave = async () => {
+    const cases = (aiPreview?.cases || []).filter((item) => aiSelectedKeys.includes(item.key));
+    if (cases.length === 0) {
+      message.info('请至少勾选一条 AI 生成用例');
+      return;
+    }
+    setAiLoading(true);
+    const res = await aiGenerateFlowSave({
+      directory_id: currentDirectory[0],
+      cases,
+    });
+    setAiLoading(false);
+    if (auth.response(res, true)) {
+      setAiDrawerOpen(false);
+      setAiPreview(null);
+      setAiSelectedKeys([]);
+      await listTestcase();
+    }
+  };
+
+  const aiPreviewColumns = [
+    {
+      title: '步骤',
+      dataIndex: 'name',
+      width: 220,
+      render: (value, record) => (
+        <div>
+          <b>{value}</b>
+          <div style={{color: '#667085', fontSize: 12}}>{record.reason}</div>
+        </div>
+      ),
+    },
+    {
+      title: '请求',
+      dataIndex: 'url',
+      render: (value, record) => (
+        <span>
+          <Tag color="blue">{record.request_method}</Tag>
+          {value}
+        </span>
+      ),
+    },
+    {
+      title: '变量/断言',
+      width: 180,
+      render: (_, record) => (
+        <div>
+          <Tag color="green">断言{record.asserts?.length || 0}</Tag>
+          <Tag color="cyan">出参{record.out_parameters?.length || 0}</Tag>
+        </div>
+      ),
+    },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+      width: 90,
+      render: (value) => <Tag color={CONFIG.CASE_TAG[value] || 'blue'}>{value}</Tag>,
+    },
+  ];
+
   const AddCaseMenu = (
     <AMenu>
       <AMenu.Item key="1">
@@ -760,6 +955,42 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
         width={500}
         formName="move"
       />
+      <Modal
+        title="复制用例"
+        open={copyModal}
+        confirmLoading={copyLoading}
+        onOk={onCopy}
+        onCancel={() => setCopyModal(false)}
+        okText="复制"
+        cancelText="取消"
+        width={560}
+      >
+        <Form form={copyForm} layout="vertical">
+          <Form.Item name="project_id" label="目标项目" rules={[{required: true, message: '请选择目标项目'}]}>
+            <Select
+              placeholder="请选择目标项目"
+              onChange={async (value) => {
+                copyForm.setFieldsValue({directory_id: undefined});
+                await loadCopyDirectoryTree(value);
+              }}
+            >
+              {projects.map((item) => (
+                <Option key={item.id} value={item.id}>{item.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="directory_id" label="目标目录" rules={[{required: true, message: '请选择目标目录'}]}>
+            <TreeSelect
+              treeData={copyDirectoryTree}
+              showSearch
+              treeDefaultExpandAll
+              placeholder="请选择复制到哪个目录"
+              treeNodeFilterProp="title"
+            />
+          </Form.Item>
+          <div style={{color: '#667085'}}>将复制当前已勾选的 {selectedRowKeys.length} 条接口用例，包含断言、测试数据、出参和前后置步骤。</div>
+        </Form>
+      </Modal>
       <FormForModal
         title="移动目录"
         onCancel={() => setMoveDirectoryModal(false)}
@@ -992,6 +1223,15 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                             <PlusOutlined/> 新建场景
                           </Button>
                         </Dropdown>
+                        <Button
+                          style={{marginLeft: 8}}
+                          type="primary"
+                          ghost
+                          icon={<RobotOutlined/>}
+                          onClick={openAiGenerate}
+                        >
+                          AI生成流程场景
+                        </Button>
                         {selectedRowKeys.length > 0 ? (
                           <Dropdown overlay={menu()} trigger={['hover']}>
                             <Button
@@ -1016,6 +1256,19 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                             }}
                           >
                             移动用例
+                          </Button>
+                        ) : null}
+                        {selectedRowKeys.length > 0 ? (
+                          <Button
+                            type="dashed"
+                            style={{marginLeft: 8}}
+                            icon={<CopyOutlined/>}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onCopyTestCase();
+                            }}
+                          >
+                            复制用例
                           </Button>
                         ) : null}
                         {selectedRowKeys.length > 0 ? (
@@ -1066,6 +1319,124 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
           </Row>
         </Card>
       )}
+      <Drawer
+        width={1180}
+        title="AI生成流程性接口场景"
+        open={aiDrawerOpen}
+        onClose={() => setAiDrawerOpen(false)}
+        maskClosable={false}
+        footer={(
+          <div style={{float: 'right'}}>
+            <Button onClick={() => setAiDrawerOpen(false)}>取消</Button>
+            <Button style={{marginLeft: 8}} loading={aiLoading} onClick={onAiPreview}>
+              <RobotOutlined/> 生成预览
+            </Button>
+            <Button type="primary" style={{marginLeft: 8}} loading={aiLoading} onClick={onAiSave}>
+              <SaveOutlined/> 保存选中
+            </Button>
+          </div>
+        )}
+      >
+        <Row gutter={16}>
+          <Col span={8}>
+            <Card title="生成配置" bordered={false} className="ai-flow-config-card">
+              <Form form={aiForm} layout="vertical">
+                <Form.Item name="service_id" label="接口服务" rules={[{required: true, message: '请选择接口服务'}]}>
+                  <Select
+                    showSearch
+                    placeholder="选择服务"
+                    options={aiServices.map((item) => ({label: item.name, value: item.id}))}
+                    onChange={onAiServiceChange}
+                  />
+                </Form.Item>
+                <Form.Item name="endpoint_ids" label="流程接口链路" rules={[{required: true, message: '请选择至少一个接口'}]}>
+                  <Select
+                    mode="multiple"
+                    placeholder="按流程顺序选择接口"
+                    optionFilterProp="label"
+                    options={aiEndpoints.map((item) => ({
+                      label: `${item.method} ${item.path} ${item.name}`,
+                      value: item.id,
+                    }))}
+                    onChange={onAiEndpointChange}
+                  />
+                </Form.Item>
+                {Object.keys(aiVersions).length > 0 ? (
+                  <div className="ai-flow-version-tip">
+                    已选择 {Object.keys(aiVersions).length} 个接口，默认使用各接口最新版本生成流程场景。
+                  </div>
+                ) : null}
+                <Form.Item name="business_goal" label="业务目标/生成要求">
+                  <Input.TextArea
+                    rows={4}
+                    placeholder="例如：生成用户登录后创建订单、查询订单、取消订单的完整流程，并覆盖参数异常。"
+                  />
+                </Form.Item>
+                <Form.Item name="generate_style" label="生成风格">
+                  <Select
+                    options={[
+                      {label: '标准覆盖', value: 'standard'},
+                      {label: '主流程优先', value: 'happy_path'},
+                      {label: '严格边界/异常', value: 'strict'},
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item name="include_negative" valuePropName="checked">
+                  <Checkbox>包含异常/边界场景</Checkbox>
+                </Form.Item>
+                <Form.Item name="include_asserts" valuePropName="checked">
+                  <Checkbox>自动生成断言</Checkbox>
+                </Form.Item>
+                <Form.Item name="include_extractors" valuePropName="checked">
+                  <Checkbox>自动提取变量并在后续步骤引用</Checkbox>
+                </Form.Item>
+              </Form>
+            </Card>
+          </Col>
+          <Col span={16}>
+            <Card
+              title={aiPreview?.scenario_name || '生成结果预览'}
+              extra={aiPreview ? <Tag color="blue">{aiPreview.cases?.length || 0}条</Tag> : null}
+              bordered={false}
+              className="ai-flow-preview-card"
+            >
+              {aiPreview ? (
+                <>
+                  <div className="ai-flow-summary">{aiPreview.summary}</div>
+                  {(aiPreview.warnings || []).map((item) => <Tag color="orange" key={item}>{item}</Tag>)}
+                  <Table
+                    style={{marginTop: 12}}
+                    rowKey="key"
+                    size="small"
+                    columns={aiPreviewColumns}
+                    dataSource={aiPreview.cases || []}
+                    pagination={false}
+                    rowSelection={{
+                      selectedRowKeys: aiSelectedKeys,
+                      onChange: setAiSelectedKeys,
+                    }}
+                    expandable={{
+                      expandedRowRender: (record) => (
+                        <div className="ai-flow-case-detail">
+                          <div><b>前后依赖：</b>{(record.pre_steps || []).join('；') || '无'}</div>
+                          <pre>{JSON.stringify({
+                            headers: record.request_headers,
+                            body: record.body,
+                            asserts: record.asserts,
+                            out_parameters: record.out_parameters,
+                          }, null, 2)}</pre>
+                        </div>
+                      ),
+                    }}
+                  />
+                </>
+              ) : (
+                <Empty description="选择服务和接口链路后，点击生成预览" image={emptyWork} imageStyle={{height: 220}}/>
+              )}
+            </Card>
+          </Col>
+        </Row>
+      </Drawer>
     </PageContainer>
   );
 };
@@ -1077,3 +1448,7 @@ export default connect(({testcase, gconfig, project, user, loading}) => ({
   project,
   testcase,
 }))(memo(TestCaseDirectory));
+
+
+
+

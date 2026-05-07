@@ -12,7 +12,7 @@ const IndexPage: React.FC = () => {
 
   useEffect(() => {
     if (currentUser && currentUser.id) {
-      const ws = new WebSocket(`${CONFIG.WS_URL}/${currentUser.id}`);
+      const ws = new WebSocket(`${CONFIG.WS_URL}/ws/${currentUser.id}`);
       ws.onmessage = function (event) {
         event.preventDefault()
         const messages = event.data;
@@ -24,14 +24,6 @@ const IndexPage: React.FC = () => {
             message: msg.title,
             description: msg.content
           })
-        } else if (msg.type === 2) {
-          // 说明是录制消息
-          // dispatch({
-          //   type: 'recorder/readRecord',
-          //   payload: {
-          //     data: JSON.parse(msg.record_msg),
-          //   }
-          // })
         } else if (msg.type === 3) {
           // 心跳包，忽略
         }

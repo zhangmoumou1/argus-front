@@ -1,0 +1,144 @@
+import {Button, Card, Col, Input, Row, Select, Switch, Tag} from "antd";
+import {useEffect, useState} from "react";
+
+const {Option} = Select;
+const providerOrder = ["kimi", "qwen", "deepseek"];
+
+export default ({dispatch, aiModelConfig, loading}) => {
+  const [draft, setDraft] = useState({active_provider: "kimi", models: {}});
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    dispatch({type: "gconfig/fetchAiModelConfig"});
+  }, []);
+
+  useEffect(() => {
+    if (aiModelConfig && aiModelConfig.models) {
+      setDraft(aiModelConfig);
+    }
+  }, [aiModelConfig]);
+
+  const updateProvider = (provider, patch) => {
+    setDraft(prev => ({
+      ...prev,
+      models: {
+        ...(prev.models || {}),
+        [provider]: {
+          ...((prev.models || {})[provider] || {}),
+          ...patch,
+        },
+      },
+    }));
+  };
+
+  const enableProvider = provider => {
+    setDraft(prev => ({
+      ...prev,
+      active_provider: provider,
+      models: Object.keys(prev.models || {}).reduce((acc, key) => {
+        acc[key] = {
+          ...(prev.models[key] || {}),
+          enabled: key === provider,
+        };
+        return acc;
+      }, {}),
+    }));
+  };
+
+  const save = () => {
+    dispatch({
+      type: "gconfig/updateAiModelConfig",
+      payload: draft,
+    });
+    setEditing(false);
+  };
+
+  return (
+    <>
+      <Row style={{marginBottom: 12}}>
+        <Col span={24} style={{textAlign: "right"}}>
+          {!editing ? (
+            <Button type="primary" onClick={() => setEditing(true)}>配置</Button>
+          ) : (
+            <Button onClick={() => {
+              setDraft(aiModelConfig);
+              setEditing(false);
+            }}>取消</Button>
+          )}
+        </Col>
+      </Row>
+      <Row gutter={[12, 12]}>
+        {providerOrder.map(provider => {
+          const item = (draft.models || {})[provider] || {};
+          const enabled = draft.active_provider === provider;
+          return (
+            <Col span={8} key={provider}>
+              <Card
+                size="small"
+                title={
+                  <span>
+                    {item.name || provider}
+                    {enabled ? <Tag color="green" style={{marginLeft: 8}}>当前启用</Tag> : null}
+                  </span>
+                }
+                extra={<Switch disabled={!editing} checked={enabled} onChange={() => enableProvider(provider)}/>}
+              >
+                <Row gutter={[8, 10]}>
+                  <Col span={24}>
+                    <div style={{marginBottom: 4}}>模型版本</div>
+                    <Select
+                      showSearch
+                      mode="tags"
+                      maxTagCount={1}
+                      disabled={!editing}
+                      value={item.model ? [item.model] : []}
+                      style={{width: "100%"}}
+                      placeholder="请选择或输入模型版本"
+                      onChange={values => {
+                        const nextModel = values[values.length - 1] || "";
+                        const nextModels = Array.from(new Set([nextModel, ...(item.models || [])].filter(Boolean)));
+                        updateProvider(provider, {model: nextModel, models: nextModels});
+                      }}
+                    >
+                      {(item.models || []).map(model => <Option key={model} value={model}>{model}</Option>)}
+                    </Select>
+                  </Col>
+                  <Col span={24}>
+                    <div style={{marginBottom: 4}}>API Key</div>
+                    <Input.Password
+                      disabled={!editing}
+                      placeholder={item.api_key_masked || "请输入API Key"}
+                      onChange={event => updateProvider(provider, {api_key: event.target.value})}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <div style={{marginBottom: 4}}>Base URL</div>
+                    <Input
+                      disabled={!editing}
+                      value={item.base_url}
+                      placeholder="请输入Base URL"
+                      onChange={event => updateProvider(provider, {base_url: event.target.value})}
+                    />
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
+          );
+        })}
+      </Row>
+      {editing ? (
+        <Row>
+          <div style={{margin: "16px auto 0"}}>
+          <Button
+            type="primary"
+            loading={loading.effects["gconfig/updateAiModelConfig"]}
+            onClick={save}
+          >
+            保存AI模型配置
+          </Button>
+          </div>
+        </Row>
+      ) : null}
+    </>
+  );
+};
