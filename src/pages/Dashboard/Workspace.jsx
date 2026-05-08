@@ -20,15 +20,11 @@ import {
   BarChartOutlined,
   CheckCircleTwoTone,
   CloseCircleTwoTone,
-  CompassOutlined,
-  DatabaseOutlined,
   FileDoneOutlined,
   FolderOpenOutlined,
   InfoCircleOutlined,
-  PlusOutlined,
   RocketOutlined,
   TeamOutlined,
-  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { RingProgress, TinyArea } from '@ant-design/plots';
 import NoRecord2 from '@/components/NotFound/NoRecord2';
@@ -51,14 +47,6 @@ const getWelcome = (user) => {
 
 const rateDesc = ['糟糕', '差劲', '普通', '良好', '棒极了'];
 
-const QUICK_LINKS = [
-  { name: '项目列表', link: '/project', icon: <FolderOpenOutlined /> },
-  { name: '测试计划', link: '/apiTest/testplan', icon: <CompassOutlined /> },
-  { name: '测试报告', link: '/record/list', icon: <FileDoneOutlined /> },
-  { name: 'HTTP工具', link: '/tool/request', icon: <ThunderboltOutlined /> },
-  { name: '数据库配置', link: '/config/database', icon: <DatabaseOutlined /> },
-];
-
 const calculatePercent = (report, decimal = false) => {
   const percent = common.calPiePercent(
     report?.success_count || 0,
@@ -79,12 +67,10 @@ const reversePercentSeries = (report = []) => [...report].reverse().map((item) =
 
 const Hero = ({ currentUser, projectCount, caseCount, userRank, totalUser }) => (
   <Card bordered={false} className={styles.heroCard}>
-    <div className={styles.heroGlow} />
     <div className={styles.heroContent}>
       <div className={styles.heroUser}>
-        <Avatar size={72} src={getAvatarByUser(currentUser)} />
+        <Avatar size={58} src={getAvatarByUser(currentUser)} />
         <div>
-          <div className={styles.heroEyebrow}>Argux Workspace</div>
           <div className={styles.heroTitle}>{getWelcome(currentUser?.name || '同学')}</div>
           <div className={styles.heroDesc}>
             {currentUser?.email || '-'} {currentUser?.nickname || ''}
@@ -104,13 +90,6 @@ const Hero = ({ currentUser, projectCount, caseCount, userRank, totalUser }) => 
       </div>
     </div>
   </Card>
-);
-
-const QuickLink = ({ item }) => (
-  <div className={styles.quickLink} onClick={() => history.push(item.link)}>
-    <span className={styles.quickLinkIcon}>{item.icon}</span>
-    <span>{item.name}</span>
-  </div>
 );
 
 const RingPie = ({ report }) => {
@@ -273,23 +252,6 @@ const SidePanel = ({ weeklyCase }) => {
 
   return (
     <Space direction="vertical" size={16} className={styles.sidePanel}>
-      <Card
-        bordered={false}
-        className={styles.quickCard}
-        title={(
-          <Space>
-            <CompassOutlined />
-            <span>快速导航</span>
-          </Space>
-        )}
-      >
-        <div className={styles.quickGrid}>
-          {QUICK_LINKS.map((item) => <QuickLink item={item} key={item.name} />)}
-          <Button className={styles.addQuickButton} type="primary" ghost>
-            <PlusOutlined /> 添加
-          </Button>
-        </div>
-      </Card>
       <Card
         bordered={false}
         className={styles.weeklyCard}

@@ -71,6 +71,16 @@ const InterfaceService = ({ project, dispatch }) => {
     }
   };
 
+  const getNextRunTime = (cronExpr) => {
+    if (!cronExpr) return '-';
+    try {
+      const date = parser.parseExpression(cronExpr);
+      return moment(new Date(date.next())).format('YYYY-MM-DD HH:mm:ss');
+    } catch (e) {
+      return '-';
+    }
+  };
+
   const fetchServices = async () => {
     setLoading(true);
     const res = await listApiServices({ project_id: queryProjectId, keyword });
@@ -134,7 +144,6 @@ const InterfaceService = ({ project, dispatch }) => {
         <Row justify="space-between" style={{ marginBottom: 16 }}>
           <Col>
             <Space>
-              <h3 style={{ margin: 0 }}>接口管理服务</h3>
               <Select
                 allowClear
                 showSearch
@@ -189,7 +198,7 @@ const InterfaceService = ({ project, dispatch }) => {
                     <div>接口数：{item.endpoint_total || 0}</div>
                     <div className="interface-service-card__sync">
                       {item.source_type !== 'manual'
-                        ? `定时同步：${Number(item.sync_enabled) === 1 ? `开启(${item.sync_cron || '-'})` : '关闭'}`
+                        ? `定时同步：${Number(item.sync_enabled) === 1 ? `开启(下次执行: ${getNextRunTime(item.sync_cron)})` : '关闭'}`
                         : '定时同步：手动服务无需同步'}
                     </div>
                     <div style={{ color: '#667085' }}>最近同步：{item.last_sync_at || '-'}</div>

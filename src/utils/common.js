@@ -18,7 +18,13 @@ export default {
     }
     let hd = {}
     if (typeof headers === 'string') {
-      hd = JSON.parse(headers);
+      try {
+        hd = JSON.parse(headers);
+      } catch (e) {
+        // Backward-compatible fallback: avoid UI crash when legacy data stores
+        // non-JSON previews like "...<truncated xxx chars>".
+        hd = {};
+      }
     } else {
       hd = headers;
     }
@@ -29,6 +35,9 @@ export default {
   translateHeaders: headers => {
     const hd = {};
     for (const h in headers) {
+      if (!Object.prototype.hasOwnProperty.call(headers, h)) {
+        continue;
+      }
       hd[headers[h].key] = headers[h].value;
     }
     return JSON.stringify(hd, null, 2);

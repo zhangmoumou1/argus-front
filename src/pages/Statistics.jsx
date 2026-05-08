@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
+import { connect } from '@umijs/max';
 import {
-  Avatar,
   Button,
   Card,
   Col,
@@ -23,9 +23,9 @@ import {
 } from '@ant-design/icons';
 import { Line, TinyArea } from '@ant-design/charts';
 import moment from 'moment';
-import CONFIG from '@/consts/config';
 import { queryStatistics } from '@/services/statistics';
 import auth from '@/utils/auth';
+import UserLink from '@/components/Button/UserLink';
 import './Statistics.less';
 
 const { RangePicker } = DatePicker;
@@ -66,17 +66,21 @@ const buildSparkline = (trend = [], field) => (
 
 const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 
-const RankUser = ({ record }) => (
-  <div className="statistics-rank-user">
-    <Avatar src={record.avatar || CONFIG.AVATAR_URL} size={34} />
-    <div className="statistics-rank-user__meta">
-      <div className="statistics-rank-user__name">{record.name}</div>
-      <div className="statistics-rank-user__email">{record.email || '-'}</div>
+const RankUser = ({ record, userMap = {} }) => {
+  const matchedUser = userMap[record.user_id] || userMap[String(record.user_id)];
+  return (
+    <div className="statistics-rank-user">
+      <UserLink user={matchedUser} size={30} marginLeft={6} />
+      <div className="statistics-rank-user__meta">
+        {!matchedUser ? <div className="statistics-rank-user__name">{record.name}</div> : null}
+        <div className="statistics-rank-user__email">{record.email || matchedUser?.email || '-'}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
-export default () => {
+const Statistics = ({ user, dispatch }) => {
+  const { userMap = {} } = user || {};
   const [period, setPeriod] = useState('week');
   const [range, setRange] = useState(getPresetRange('week'));
   const [loading, setLoading] = useState(false);
@@ -105,6 +109,7 @@ export default () => {
   };
 
   useEffect(() => {
+    dispatch({ type: 'user/fetchUserList' });
     fetchStatistics(period, range);
   }, []);
 
@@ -146,7 +151,7 @@ export default () => {
     {
       title: '测试人员',
       dataIndex: 'name',
-      render: (_, record) => <RankUser record={record} />,
+      render: (_, record) => <RankUser record={record} userMap={userMap} />,
     },
     {
       title: '新增用例数',
@@ -202,13 +207,12 @@ export default () => {
   };
 
   return (
-    <PageContainer title="测试管理看板" breadcrumb={null}>
+    <PageContainer title={false} breadcrumb={null}>
       <div className="statistics-board">
         <Card className="statistics-filter-card" bordered={false}>
           <div className="statistics-filter-card__content">
             <div>
-              <div className="statistics-filter-card__eyebrow">测试看板</div>
-              <div className="statistics-filter-card__title">接口与功能用例的新增、覆盖与通过情况</div>
+              <div className="statistics-filter-card__title">接口与功能用例统计</div>
               <div className="statistics-filter-card__desc">
                 当前区间：{statistics.range?.start_date || '-'} 至 {statistics.range?.end_date || '-'}
               </div>
@@ -324,16 +328,9 @@ export default () => {
                 bordered={false}
                 title={(
                   <div className="statistics-panel-card__header">
-                    <div>
-                      <div className="statistics-panel-card__title">
-                        <LineChartOutlined />
-                        <span>用例数趋势</span>
-                      </div>
-                    </div>
-                    <div className="statistics-panel-card__switch">
-                      <span className="active">接口用例</span>
-                      <span>功能用例</span>
-                      <span>总览</span>
+                    <div className="statistics-panel-card__title">
+                      <LineChartOutlined />
+                      <span>用例数趋势</span>
                     </div>
                   </div>
                 )}
@@ -386,3 +383,5 @@ export default () => {
     </PageContainer>
   );
 };
+
+export default connect(({ user }) => ({ user }))(Statistics);

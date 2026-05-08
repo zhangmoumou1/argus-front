@@ -1,0 +1,213 @@
+.mockConfigPage {
+  min-height: calc(100vh - 112px);
+}
+
+.toolbarCard,
+.tableCard {
+  border-radius: 8px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.toolbarSearch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ruleName {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ruleMeta {
+  color: #667085;
+  font-size: 12px;
+}
+
+.jsonPreview {
+  max-height: 360px;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  color: #344054;
+  border: 1px solid #e6eaf0;
+  border-radius: 0 0 8px 8px;
+  background: #fbfcfe;
+  line-height: 1.6;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mockUrl {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.drawerFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.drawerBody {
+  padding-bottom: 12px;
+}
+
+.detailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.detailTitle {
+  color: #101828;
+  font-size: 15px;
+}
+
+.detailPath {
+  margin-top: 8px;
+  color: #667085;
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.detailMetaGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(100px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.detailMetaItem {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.detailMetaItem > span:first-child {
+  display: block;
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.detailMetaItem strong {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.detailTabs {
+  margin-top: 4px;
+  padding: 0 2px;
+}
+
+.detailTabs :global(.ant-tabs-nav) {
+  margin-bottom: 12px;
+}
+
+.detailPanelList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.codeBlock {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.codeBlockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px 0 14px;
+  color: #344054;
+  border: 1px solid #e6eaf0;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #f7f9fc;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.responseStrip {
+  display: flex;
+  gap: 24px;
+  padding: 10px 12px;
+  color: #475467;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.responseStrip strong {
+  color: #101828;
+  font-weight: 500;
+}
+
+.editForm {
+  padding-bottom: 6px;
+}
+
+.formSection {
+  padding: 16px 16px 4px;
+  margin-bottom: 14px;
+  background: #fff;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+}
+
+.formSectionTitle {
+  position: relative;
+  margin-bottom: 14px;
+  padding-left: 10px;
+  color: #101828;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.formSectionTitle::before {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: #1677ff;
+  content: '';
+}
+
+.formTabs :global(.ant-tabs-nav) {
+  margin-bottom: 12px;
+}
+
+.formTabs :global(.ant-form-item) {
+  margin-bottom: 10px;
+}
+
+.editDrawer :global(.ant-drawer-body),
+.detailDrawer :global(.ant-drawer-body) {
+  background: #fafbfc;
+}

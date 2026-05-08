@@ -13,6 +13,12 @@ import routesConfig from '../config/routes';
 import { keepaliveEmitter } from '@@/plugin-keepalive/context';
 
 import { ConfigProvider, Empty, message, Modal, Spin } from 'antd';
+import {
+  BankOutlined,
+  HistoryOutlined,
+  MacCommandOutlined,
+  ProjectOutlined,
+} from '@ant-design/icons';
 import IndexPage from '@/pages/IndexPage';
 import { Loading } from '@icon-park/react';
 
@@ -172,6 +178,21 @@ export async function getInitialState(): Promise<{
 }
 
 export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) => {
+  const normalizeMenuIcon = (icon: any) => {
+    if (icon === 'project' || icon === 'Project' || icon === 'Porject') return <ProjectOutlined />;
+    if (icon === 'macCommand' || icon === 'MacCommand') return <MacCommandOutlined />;
+    if (icon === 'history' || icon === 'History') return <HistoryOutlined />;
+    if (icon === 'bank' || icon === 'Bank') return <BankOutlined />;
+    return icon;
+  };
+
+  const normalizeMenuData = (menuData: any[] = []): any[] =>
+    menuData.map((item) => ({
+      ...item,
+      icon: normalizeMenuIcon(item?.icon),
+      children: Array.isArray(item?.children) ? normalizeMenuData(item.children) : item?.children,
+    }));
+
   return {
     siderWidth: 216,
     rightContentRender: () => <RightContent />,
@@ -207,6 +228,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     ],
     links: [],
     menuHeaderRender: undefined,
+    menuDataRender: (menuData) => normalizeMenuData(menuData as any[]),
     childrenRender: (children) => {
       if (initialState?.loading) return <PageLoading />;
       return (

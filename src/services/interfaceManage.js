@@ -82,6 +82,14 @@ export async function listApiEndpointVersions(params) {
   });
 }
 
+export async function getApiEndpointSample(params) {
+  return request(`${CONFIG.URL}/interface-management/endpoint/sample/query`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
 export async function getApiEndpointVersionDetail(params) {
   return request(`${CONFIG.URL}/interface-management/endpoint/version/detail`, {
     method: 'GET',

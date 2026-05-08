@@ -64,6 +64,7 @@ import {Switch} from '@icon-park/react';
 import common from "@/utils/common";
 import {listApiEndpointVersions, listApiEndpoints, listApiServices} from '@/services/interfaceManage';
 import {aiGenerateFlowPreview, aiGenerateFlowSave, copyTestCase, listTestcaseTree as fetchTestcaseDirectoryTree} from '@/services/testcase';
+import {listFunctionalCaseSkillDocs} from '@/services/functionalCase';
 
 const {Option} = Select;
 
@@ -103,6 +104,8 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   const [aiVersions, setAiVersions] = useState({});
   const [aiPreview, setAiPreview] = useState(null);
   const [aiSelectedKeys, setAiSelectedKeys] = useState([]);
+  const [aiSkillDocs, setAiSkillDocs] = useState([]);
+  const [loadingAiSkillDocs, setLoadingAiSkillDocs] = useState(false);
   const [aiForm] = Form.useForm();
 
   const [bodyType, setBodyType] = useState(0);
@@ -741,15 +744,49 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
     aiForm.resetFields();
     aiForm.setFieldsValue({
       generate_style: 'standard',
-      include_negative: true,
+      include_negative: false,
       include_asserts: true,
       include_extractors: true,
+      skill_doc_ids: [],
     });
     const res = await listApiServices({project_id, keyword: ''});
     if (auth.response(res, false)) {
       setAiServices(res.data || []);
     }
   };
+
+  useEffect(() => {
+    if (!aiDrawerOpen) {
+      return;
+    }
+    let active = true;
+    const loadSkillDocs = async () => {
+      setLoadingAiSkillDocs(true);
+      try {
+        const res = await listFunctionalCaseSkillDocs({});
+        if (!active) return;
+        if (res?.code !== 0) {
+          throw new Error(res?.msg || '获取技能文档失败');
+        }
+        setAiSkillDocs((res?.data || []).map((item) => ({
+          label: `${item.title}${item.doc_type === 'skill_md' ? ' · 技能文档' : ' · 普通文档'}`,
+          value: item.id,
+        })));
+      } catch (error) {
+        if (active) {
+          message.error(error?.message || '获取技能文档失败');
+        }
+      } finally {
+        if (active) {
+          setLoadingAiSkillDocs(false);
+        }
+      }
+    };
+    loadSkillDocs();
+    return () => {
+      active = false;
+    };
+  }, [aiDrawerOpen]);
 
   const onAiServiceChange = async (serviceId) => {
     aiForm.setFieldsValue({endpoint_ids: []});
@@ -792,6 +829,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   };
 
   const onAiSave = async () => {
+    const values = aiForm.getFieldsValue();
     const cases = (aiPreview?.cases || []).filter((item) => aiSelectedKeys.includes(item.key));
     if (cases.length === 0) {
       message.info('请至少勾选一条 AI 生成用例');
@@ -799,6 +837,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
     }
     setAiLoading(true);
     const res = await aiGenerateFlowSave({
+      ...values,
       directory_id: currentDirectory[0],
       cases,
     });
@@ -1350,26 +1389,48 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                   />
                 </Form.Item>
                 <Form.Item name="endpoint_ids" label="流程接口链路" rules={[{required: true, message: '请选择至少一个接口'}]}>
-                  <Select
-                    mode="multiple"
-                    placeholder="按流程顺序选择接口"
-                    optionFilterProp="label"
-                    options={aiEndpoints.map((item) => ({
-                      label: `${item.method} ${item.path} ${item.name}`,
-                      value: item.id,
-                    }))}
-                    onChange={onAiEndpointChange}
-                  />
-                </Form.Item>
-                {Object.keys(aiVersions).length > 0 ? (
-                  <div className="ai-flow-version-tip">
-                    已选择 {Object.keys(aiVersions).length} 个接口，默认使用各接口最新版本生成流程场景。
-                  </div>
-                ) : null}
+                    <Select
+                      mode="multiple"
+                      placeholder="按流程顺序选择接口"
+                      optionFilterProp="label"
+                      options={aiEndpoints.map((item) => ({
+                        label: `${item.method} ${item.path} ${item.name}${item.sample_available ? `【实例 ${item.sample_recorded_at || '已关联'}】` : '【无实例】'}`,
+                        value: item.id,
+                      }))}
+                      onChange={onAiEndpointChange}
+                    />
+                  </Form.Item>
+                  {Object.keys(aiVersions).length > 0 ? (
+                    <div className="ai-flow-version-tip">
+                      已选择 {Object.keys(aiVersions).length} 个接口，默认使用各接口最新版本生成流程场景。
+                    </div>
+                  ) : null}
+                  {(aiForm.getFieldValue('endpoint_ids') || []).length > 0 ? (
+                    <div className="ai-flow-version-tip" style={{ marginTop: 8 }}>
+                      {(aiEndpoints.filter((item) => (aiForm.getFieldValue('endpoint_ids') || []).includes(item.id) && !item.sample_available).length > 0)
+                        ? '当前所选接口中存在未关联录制实例的数据，AI会回退使用接口定义生成，建议先录制真实请求后再生成。'
+                        : '当前所选接口都已有关联录制实例，AI会优先基于真实实例数据生成流程场景。'}
+                    </div>
+                  ) : null}
                 <Form.Item name="business_goal" label="业务目标/生成要求">
                   <Input.TextArea
                     rows={4}
                     placeholder="例如：生成用户登录后创建订单、查询订单、取消订单的完整流程，并覆盖参数异常。"
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="skill_doc_ids"
+                  label="技能 / 文档"
+                  rules={[{required: true, message: '请选择至少一个技能或文档'}]}
+                >
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder="选择当前用户可见的技能文档或普通文档"
+                    options={aiSkillDocs}
+                    loading={loadingAiSkillDocs}
                   />
                 </Form.Item>
                 <Form.Item name="generate_style" label="生成风格">

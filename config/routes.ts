@@ -39,7 +39,7 @@ export default [
       },
       {
         path: '/dashboard/statistics',
-        name: 'statistics',
+        name: '统计大盘',
         component: './Statistics',
       },
     ],
@@ -59,7 +59,7 @@ export default [
   {
     path: '/project',
     name: '项目管理',
-    icon: 'icon-Project',
+    icon: 'Porject',
     component: './ApiTest/Project',
   },
   {
@@ -69,79 +69,151 @@ export default [
     component: './ApiTest/ProjectDetail',
   },
   {
-    path: '/apiTest',
-    name: '测试管理',
+    path: '/asset',
+    name: '接口资产',
     icon: 'api',
     routes: [
       {
-        path: '/apiTest/testcase',
-        name: '接口用例',
-        component: './ApiTest/TestCaseDirectory',
-      },
-      {
-        path: '/apiTest/interface',
+        path: '/asset/interface',
         name: '接口管理',
         component: './ApiTest/InterfaceService',
       },
       {
-        path: '/apiTest/interface/:service_id',
+        path: '/asset/interface/:service_id',
         name: '接口列表',
         hideInMenu: true,
         component: './ApiTest/InterfaceEndpoint',
       },
       {
-        path: '/apiTest/functionalCase',
-        name: '功能用例',
-        component: './ApiTest/FunctionalCase',
-      },
-      {
-        path: '/apiTest/functionalSkill',
-        name: '用例技能',
-        component: './ApiTest/FunctionalSkill',
-      },
-      {
-        path: '/apiTest/record',
+        path: '/asset/record',
         name: '用例录制',
         component: './ApiTest/TestCaseRecorder',
       },
       {
-        path: '/apiTest/testcase/:directory/add',
+        path: '/asset/mock',
+        name: 'Mock服务',
+        component: './ApiTest/MockConfig',
+      },
+    ],
+  },
+  {
+    path: '/scenario',
+    name: '场景测试',
+    icon: 'macCommand',
+    routes: [
+      {
+        path: '/scenario/testcase',
+        name: '接口用例',
+        component: './ApiTest/TestCaseDirectory',
+      },
+      {
+        path: '/scenario/testcase/:directory/add',
         name: '添加用例',
         hideInMenu: true,
         keepAlive: false,
         component: './ApiTest/TestCaseComponent',
       },
       {
-        path: '/apiTest/testcase/:directory/:case_id',
+        path: '/scenario/testcase/:directory/:case_id',
         name: '编辑用例',
         hideInMenu: true,
         keepAlive: false,
         component: './ApiTest/TestCaseComponent',
       },
       {
-        path: '/apiTest/testplan',
-        name: '测试计划',
-        component: './ApiTest/TestPlan',
+        path: '/scenario/functionalCase',
+        name: '功能用例',
+        component: './ApiTest/FunctionalCase',
+      },
+      {
+        path: '/scenario/functionalSkill',
+        name: '用例技能',
+        component: './ApiTest/FunctionalSkill',
       },
     ],
   },
   {
-    path: '/record',
-    icon: 'icon-jilu1',
-    name: '测试报告',
+    path: '/run',
+    icon: 'history',
+    name: '测试运行',
     routes: [
       {
-        path: '/record/list',
-        name: '构建历史',
+        path: '/run/testplan',
+        name: '测试计划',
+        component: './ApiTest/TestPlan',
+      },
+      {
+        path: '/run/report',
+        name: '测试报告',
         component: './BuildHistory/ReportList',
       },
       {
-        path: '/record/report/:id',
+        path: '/run/report/:id',
         hideInMenu: true,
-        name: '测试报告',
+        name: '测试报告详情',
         component: './BuildHistory/ReportDetail',
       },
     ],
+  },
+  {
+    path: '/apiTest/interface',
+    hideInMenu: true,
+    redirect: '/asset/interface',
+  },
+  {
+    path: '/apiTest/interface/:service_id',
+    hideInMenu: true,
+    redirect: '/asset/interface/:service_id',
+  },
+  {
+    path: '/apiTest/record',
+    hideInMenu: true,
+    redirect: '/asset/record',
+  },
+  {
+    path: '/mock',
+    hideInMenu: true,
+    redirect: '/asset/mock',
+  },
+  {
+    path: '/apiTest/testcase',
+    hideInMenu: true,
+    redirect: '/scenario/testcase',
+  },
+  {
+    path: '/apiTest/testcase/:directory/add',
+    hideInMenu: true,
+    redirect: '/scenario/testcase/:directory/add',
+  },
+  {
+    path: '/apiTest/testcase/:directory/:case_id',
+    hideInMenu: true,
+    redirect: '/scenario/testcase/:directory/:case_id',
+  },
+  {
+    path: '/apiTest/functionalCase',
+    hideInMenu: true,
+    redirect: '/scenario/functionalCase',
+  },
+  {
+    path: '/apiTest/functionalSkill',
+    hideInMenu: true,
+    redirect: '/scenario/functionalSkill',
+  },
+  {
+    path: '/apiTest/testplan',
+    hideInMenu: true,
+    redirect: '/run/testplan',
+  },
+  {
+    path: '/record/list',
+    hideInMenu: true,
+    redirect: '/run/report',
+  },
+  {
+    path: '/record/report/:id',
+    hideInMenu: true,
+    redirect: '/run/report/:id',
   },
   {
     path: '/notification',
@@ -189,7 +261,7 @@ export default [
   },
   {
     path: '/system',
-    icon: 'lock',
+    icon: 'bank',
     name: '后台管理',
     authority: ['superAdmin'],
     routes: [
@@ -205,12 +277,6 @@ export default [
         authority: ['superAdmin'],
       },
     ],
-  },
-  {
-    path: '/mock',
-    icon: 'icon-mockplus_doc',
-    name: 'Mock配置',
-    component: './Building',
   },
   {
     path: '/tool',

@@ -30,10 +30,11 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   compareApiEndpointVersion,
   deprecateApiEndpoint,
+  getApiEndpointSample,
   listApiEndpointVersions,
   listApiEndpoints,
 } from '@/services/interfaceManage';
@@ -90,6 +91,40 @@ const JsonBlock = ({ title, text, compact = false }) => {
         <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       )}
     </Card>
+  );
+};
+
+const SampleDetail = ({ sample }) => {
+  if (!sample) {
+    return <Empty description="暂无录制实例数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+  return (
+    <div className="interface-version-detail">
+      <Descriptions bordered column={2} size="small" className="interface-version-desc">
+        <Descriptions.Item label="样本来源">{sample.sample_source || 'record'}</Descriptions.Item>
+        <Descriptions.Item label="录制时间">{sample.recorded_at || '-'}</Descriptions.Item>
+        <Descriptions.Item label="状态码">{sample.status_code || '-'}</Descriptions.Item>
+        <Descriptions.Item label="请求路径">{sample.request_path || '-'}</Descriptions.Item>
+        <Descriptions.Item label="请求地址" span={2}>{sample.request_url || '-'}</Descriptions.Item>
+      </Descriptions>
+      <Row gutter={[16, 16]} className="interface-version-blocks">
+        <Col span={24}>
+          <JsonBlock title="请求 Headers" text={sample.request_headers} />
+        </Col>
+        <Col span={12}>
+          <JsonBlock title="请求 Query" text={sample.request_query} />
+        </Col>
+        <Col span={12}>
+          <JsonBlock title="请求 Body" text={sample.request_body} />
+        </Col>
+        <Col span={12}>
+          <JsonBlock title="返回 Headers" text={sample.response_headers} />
+        </Col>
+        <Col span={12}>
+          <JsonBlock title="Response" text={sample.response_body} />
+        </Col>
+      </Row>
+    </div>
   );
 };
 
@@ -279,6 +314,7 @@ const InterfaceEndpoint = () => {
   const [moduleOptions, setModuleOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
+  const requestIdRef = useRef(0);
 
   const [versionOpen, setVersionOpen] = useState(false);
   const [versions, setVersions] = useState([]);
@@ -287,21 +323,30 @@ const InterfaceEndpoint = () => {
   const [leftVersionId, setLeftVersionId] = useState(null);
   const [rightVersionId, setRightVersionId] = useState(null);
   const [compareResult, setCompareResult] = useState(null);
+  const [sampleDetail, setSampleDetail] = useState(null);
 
-  const fetchList = async () => {
+  const fetchList = async (overrides = {}) => {
     if (!service_id) return;
-    setLoading(true);
-    const res = await listApiEndpoints({
+    const query = {
       service_id,
-      keyword,
-      url: urlKeyword,
-      module_name: moduleName,
-      endpoint_status: status,
-    });
+      keyword: overrides.keyword ?? keyword,
+      url: overrides.urlKeyword ?? urlKeyword,
+      module_name: overrides.moduleName ?? moduleName,
+      endpoint_status: overrides.status ?? status,
+    };
+    requestIdRef.current += 1;
+    const currentRequestId = requestIdRef.current;
+    setLoading(true);
+    const res = await listApiEndpoints(query);
+    if (currentRequestId !== requestIdRef.current) {
+      return;
+    }
     setLoading(false);
     if (auth.response(res, false)) {
-      setList(res.data?.list || []);
-      setModuleOptions(res.data?.modules || []);
+      const nextList = res.data?.list || [];
+      const nextModules = res.data?.modules || [];
+      setList(nextList);
+      setModuleOptions(nextModules);
     }
   };
 
@@ -334,15 +379,22 @@ const InterfaceEndpoint = () => {
     setVersions([]);
     setDetailVersionId(null);
     setCompareResult(null);
+    setSampleDetail(null);
     setVersionOpen(true);
-    const res = await listApiEndpointVersions({ endpoint_id: record.id });
-    if (auth.response(res, false)) {
-      const versionRows = res.data || [];
+    const [versionRes, sampleRes] = await Promise.all([
+      listApiEndpointVersions({ endpoint_id: record.id }),
+      getApiEndpointSample({ endpoint_id: record.id }),
+    ]);
+    if (auth.response(versionRes, false)) {
+      const versionRows = versionRes.data || [];
       const firstId = versionRows[0]?.id || null;
       setVersions(versionRows);
       setDetailVersionId(firstId);
       setLeftVersionId(versionRows[1]?.id || firstId);
       setRightVersionId(firstId);
+    }
+    if (auth.response(sampleRes, false)) {
+      setSampleDetail(sampleRes.data || null);
     }
   };
 
@@ -365,7 +417,12 @@ const InterfaceEndpoint = () => {
     setUrlKeyword('');
     setModuleName('');
     setStatus('');
-    setTimeout(fetchList, 0);
+    fetchList({
+      keyword: '',
+      urlKeyword: '',
+      moduleName: '',
+      status: '',
+    });
   };
 
   const endpointColumns = [
@@ -390,14 +447,14 @@ const InterfaceEndpoint = () => {
       title: 'Method',
       dataIndex: 'method',
       key: 'method',
-      width: 100,
+      width: 84,
       render: (v) => <MethodTag value={v} />,
     },
     {
       title: '功能模块',
       dataIndex: 'module_name',
       key: 'module_name',
-      width: 160,
+      width: 220,
       render: (v) => <Tag>{v || '默认模块'}</Tag>,
     },
     {
@@ -406,6 +463,22 @@ const InterfaceEndpoint = () => {
       key: 'endpoint_status',
       width: 110,
       render: (v) => <StatusTag value={v} />,
+    },
+    {
+      title: '实例数据',
+      dataIndex: 'sample_available',
+      key: 'sample_available',
+      width: 110,
+      render: (value, record) => (
+        value ? <Tag color="green">有实例</Tag> : <Tag color="default">无实例</Tag>
+      ),
+    },
+    {
+      title: '实例时间',
+      dataIndex: 'sample_recorded_at',
+      key: 'sample_recorded_at',
+      width: 170,
+      render: (value) => value || '-',
     },
     { title: '当前版本', dataIndex: 'current_version_no', key: 'current_version_no', width: 120 },
     { title: '更新时间', dataIndex: 'updated_at', key: 'updated_at', width: 170 },
@@ -518,10 +591,15 @@ const InterfaceEndpoint = () => {
                     label: '版本快照',
                     children: <VersionDetail detail={detailData} />,
                   },
-                  {
-                    key: 'compare',
-                    label: (
-                      <Tooltip title="对比两个版本在基础信息、请求头、参数、响应上的差异">
+                    {
+                      key: 'sample',
+                      label: '实例样本',
+                      children: <SampleDetail sample={sampleDetail} />,
+                    },
+                    {
+                      key: 'compare',
+                      label: (
+                        <Tooltip title="对比两个版本在基础信息、请求头、参数、响应上的差异">
                         <span>版本对比</span>
                       </Tooltip>
                     ),
