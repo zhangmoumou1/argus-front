@@ -122,3 +122,18 @@ export async function queryFollowTestPlanData(params) {
   });
 }
 
+export async function resetSelfPassword(data) {
+  return await request(`${CONFIG.URL}/auth/reset/self`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function resetUserPasswordByAdmin(data) {
+  return await request(`${CONFIG.URL}/auth/reset/admin`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}

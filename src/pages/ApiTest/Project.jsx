@@ -9,7 +9,7 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 import FormForModal from '@/components/PityForm/FormForModal';
-import {connect, history} from '@umijs/max';
+import {connect, history, useModel} from '@umijs/max';
 import {insertProject, listProject} from '@/services/project';
 import auth from '@/utils/auth';
 import {listUsers} from '@/services/user';
@@ -22,6 +22,11 @@ import ProjectAvatar from "@/components/Project/ProjectAvatar";
 
 
 const Project = ({dispatch, project, loading}) => {
+  const { initialState } = useModel('@@initialState');
+  const currentUser = initialState?.currentUser || {};
+  const currentRole = Number(currentUser?.role ?? 0);
+  const isSuperAdmin = currentRole === 2;
+  const isLeader = currentRole === 1;
   const [data, setData] = useState([]);
   const [pagination, setPagination] = useState({
     current: 1,
@@ -122,14 +127,6 @@ const Project = ({dispatch, project, loading}) => {
       type: 'textarea',
       placeholder: '请输入项目描述',
     },
-    {
-      name: 'private',
-      label: '是否私有',
-      required: true,
-      message: '请选择项目是否私有',
-      type: 'switch',
-      valuePropName: 'checked',
-    },
   ];
 
   const menu = item => <Menu>
@@ -161,13 +158,20 @@ const Project = ({dispatch, project, loading}) => {
   const CardTitle = ({item}) => (
     <div style={{fontSize: 16, fontWeight: 'bold', color: 'rgb(65, 74, 105)'}}>
       {item.name}
-      <span style={{float: 'right', lineHeight: '24px', fontSize: 24, marginRight: 4}}>
-          <Dropdown overlay={menu(item)} onClick={e => {
-            e.stopPropagation();
-          }}>
-            <IconFont type="icon-more1" style={{cursor: 'pointer'}}/>
-          </Dropdown>
-        </span>
+      {(() => {
+        const isOwner = Number(item?.owner) === Number(currentUser?.id);
+        const allowOps = isSuperAdmin || isLeader || isOwner;
+        if (!allowOps) return null;
+        return (
+          <span style={{float: 'right', lineHeight: '24px', fontSize: 24, marginRight: 4}}>
+            <Dropdown overlay={menu(item)} onClick={e => {
+              e.stopPropagation();
+            }}>
+              <IconFont type="icon-more1" style={{cursor: 'pointer'}}/>
+            </Dropdown>
+          </span>
+        );
+      })()}
     </div>
   )
 
@@ -178,7 +182,7 @@ const Project = ({dispatch, project, loading}) => {
         title="添加项目"
         left={6}
         right={18}
-        record={{private: false}}
+        record={{}}
         open={visible}
         onCancel={() => setVisible(false)}
         fields={fields}

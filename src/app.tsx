@@ -178,6 +178,17 @@ export async function getInitialState(): Promise<{
 }
 
 export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) => {
+  const currentRole = Number(initialState?.currentUser?.role ?? 0);
+  const isSuperAdmin = currentRole === 2;
+
+  const canAccessMenu = (path: string) => {
+    const currentPath = String(path || '');
+    if (currentPath.startsWith('/system')) {
+      return isSuperAdmin;
+    }
+    return true;
+  };
+
   const normalizeMenuIcon = (icon: any) => {
     if (icon === 'project' || icon === 'Project' || icon === 'Porject') return <ProjectOutlined />;
     if (icon === 'macCommand' || icon === 'MacCommand') return <MacCommandOutlined />;
@@ -187,11 +198,16 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
   };
 
   const normalizeMenuData = (menuData: any[] = []): any[] =>
-    menuData.map((item) => ({
-      ...item,
-      icon: normalizeMenuIcon(item?.icon),
-      children: Array.isArray(item?.children) ? normalizeMenuData(item.children) : item?.children,
-    }));
+    menuData
+      .filter((item) => canAccessMenu(String(item?.path || '')))
+      .map((item) => {
+        const children = Array.isArray(item?.children) ? normalizeMenuData(item.children) : item?.children;
+        return {
+          ...item,
+          icon: normalizeMenuIcon(item?.icon),
+          children,
+        };
+      });
 
   return {
     siderWidth: 216,

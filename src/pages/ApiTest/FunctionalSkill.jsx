@@ -23,6 +23,9 @@ const readCurrentUser = () => {
 
 const FunctionalSkill = () => {
   const currentUser = useMemo(() => readCurrentUser(), []);
+  const currentRole = Number(currentUser?.role ?? 0);
+  const isSuperAdmin = currentRole === 2;
+  const isLeader = currentRole === 1;
   const [loading, setLoading] = useState(false);
   const [docs, setDocs] = useState([]);
   const [keyword, setKeyword] = useState('');
@@ -184,7 +187,7 @@ const FunctionalSkill = () => {
       key: 'action',
       width: 180,
       render: (_, record) => {
-        const editable = Number(record.create_user) === Number(currentUser?.id);
+        const editable = isSuperAdmin || isLeader || Number(record.create_user) === Number(currentUser?.id);
         return (
           <Space>
             <Button size="small" onClick={() => openViewModal(record)}>

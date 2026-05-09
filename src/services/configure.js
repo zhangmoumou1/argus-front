@@ -199,6 +199,150 @@ export async function onlineRedisCommand(params) {
   });
 }
 
+export async function listMQConfig(params) {
+  return request(`${CONFIG.URL}/config/mq/list`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
+export async function insertMQConfig(params) {
+  return request(`${CONFIG.URL}/config/mq/insert`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function updateMQConfig(params) {
+  return request(`${CONFIG.URL}/config/mq/update`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function deleteMQConfig(params) {
+  return request(`${CONFIG.URL}/config/mq/delete`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
+export async function testMQConnect(params) {
+  return request(`${CONFIG.URL}/config/mq/connect`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
+export async function testMQConnectByForm(params) {
+  return request(`${CONFIG.URL}/config/mq/connect/test`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function publishMQMessage(params) {
+  return request(`${CONFIG.URL}/config/mq/publish`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function consumeMQMessage(params) {
+  return request(`${CONFIG.URL}/config/mq/consume`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function listMQConsumers(params) {
+  return request(`${CONFIG.URL}/config/mq/consumers`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function listKafkaTopics(params) {
+  return request(`${CONFIG.URL}/config/mq/kafka/topics`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function listKafkaTopicMessages(params) {
+  return request(`${CONFIG.URL}/config/mq/kafka/topic/messages`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function listKafkaTopicPartitions(params) {
+  return request(`${CONFIG.URL}/config/mq/kafka/topic/partitions`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function listKafkaConsumerGroups(params) {
+  return request(`${CONFIG.URL}/config/mq/kafka/consumer-groups`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function getKafkaConsumerGroupDetail(params) {
+  return request(`${CONFIG.URL}/config/mq/kafka/consumer-group/detail`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function listRabbitQueues(params) {
+  return request(`${CONFIG.URL}/config/mq/rabbit/queues`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function rabbitGetMessages(params) {
+  return request(`${CONFIG.URL}/config/mq/rabbit/get-messages`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function rabbitPurgeQueue(params) {
+  return request(`${CONFIG.URL}/config/mq/rabbit/purge`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
+export async function rabbitDeleteQueue(params) {
+  return request(`${CONFIG.URL}/config/mq/rabbit/delete-queue`, {
+    method: 'POST',
+    data: params,
+    headers: auth.headers(),
+  });
+}
+
 export async function uploadFile(params) {
   const formData = new FormData();
   formData.append("file", params.files[0].originFileObj)
@@ -287,4 +431,3 @@ export async function deleteKnowledge(params) {
     headers: auth.headers(),
   });
 }
-

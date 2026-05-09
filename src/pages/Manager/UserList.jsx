@@ -6,6 +6,8 @@ import UserLink from "@/components/Button/UserLink";
 import CONFIG from "@/consts/config";
 import PityPopConfirm from "@/components/Confirm/PityPopConfirm";
 import {UserOutlined} from "@ant-design/icons";
+import {resetUserPasswordByAdmin} from "@/services/user";
+import auth from "@/utils/auth";
 
 const {Option} = Select;
 
@@ -14,6 +16,10 @@ const UserInfo = ({user, dispatch, loading}) => {
 
   // 用户表单窗口, 默认关闭
   const [modal, setModal] = useState(false);
+  const [resetPwdModal, setResetPwdModal] = useState(false);
+  const [resetPwdLoading, setResetPwdLoading] = useState(false);
+  const [resetPwdValue, setResetPwdValue] = useState('');
+  const [resetPwdRecord, setResetPwdRecord] = useState(null);
   const [record, setRecord] = useState({});
   const [form] = Form.useForm()
 
@@ -52,6 +58,12 @@ const UserInfo = ({user, dispatch, loading}) => {
       render: (_, record) => <UserLink marginLeft={4} user={record}/>
     },
     {
+      title: '用户名',
+      dataIndex: 'username',
+      key: 'username',
+      render: value => value || '-',
+    },
+    {
       title: '✉ 邮箱',
       dataIndex: 'email',
       key: 'email',
@@ -84,6 +96,12 @@ const UserInfo = ({user, dispatch, loading}) => {
           form.setFieldsValue(record)
           setModal(true)
         }}>编辑</a>
+        <Divider type="vertical"/>
+        <a onClick={() => {
+          setResetPwdRecord(record)
+          setResetPwdValue('')
+          setResetPwdModal(true)
+        }}>重置密码</a>
         <Divider type="vertical"/>
         <PityPopConfirm onConfirm={async () => {
           await onDeleteUser(record.id)
@@ -149,6 +167,24 @@ const UserInfo = ({user, dispatch, loading}) => {
     }
   }
 
+  const onResetUserPwdByAdmin = async () => {
+    const password = resetPwdValue.trim();
+    if (!password || !resetPwdRecord?.id) {
+      return;
+    }
+    setResetPwdLoading(true);
+    const res = await resetUserPasswordByAdmin({
+      user_id: resetPwdRecord.id,
+      password,
+    });
+    setResetPwdLoading(false);
+    if (auth.response(res, true)) {
+      setResetPwdModal(false);
+      setResetPwdValue('');
+      setResetPwdRecord(null);
+    }
+  }
+
 
   return (
     <PageContainer breadcrumb={null} title="用户管理页面">
@@ -169,6 +205,21 @@ const UserInfo = ({user, dispatch, loading}) => {
               </Select>
             </Form.Item>
           </Form>
+        </Modal>
+        <Modal
+          title={`重置密码${resetPwdRecord ? ` - ${resetPwdRecord.name || resetPwdRecord.email || resetPwdRecord.id}` : ''}`}
+          open={resetPwdModal}
+          onOk={onResetUserPwdByAdmin}
+          onCancel={() => setResetPwdModal(false)}
+          okText="确定"
+          cancelText="取消"
+          confirmLoading={resetPwdLoading}
+        >
+          <Input.Password
+            value={resetPwdValue}
+            onChange={(e) => setResetPwdValue(e.target.value)}
+            placeholder="请输入新密码"
+          />
         </Modal>
         <Row style={{marginBottom: 12}}>
           <Col span={18}/>

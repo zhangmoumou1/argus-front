@@ -1,5 +1,5 @@
 import React from 'react';
-import {Avatar, Collapse, Tag} from 'antd';
+import {Collapse, Tag} from 'antd';
 import styles from './OperationLog.less';
 import {Scrollbars} from 'react-custom-scrollbars';
 import NoRecord2 from "@/components/NotFound/NoRecord2";
@@ -25,8 +25,6 @@ export default ({userMap, userId, record}) => {
     })
     const realTitle = titles.join("　")
     return <div>
-      <Avatar
-        src={userMap[userId]?.avatar || `https://joeschmoe.io/api/v1/${userMap[userId]?.name || 'unknown'}`}/>
       <span className={styles.tag}><Tag color="green">{item.tag}</Tag></span>
       <span className={styles.userName}>{userMap[item.user_id]?.name}</span>
       <span>{OperationType[item.mode]}</span>
@@ -47,7 +45,7 @@ export default ({userMap, userId, record}) => {
     const desc = JSON.parse(item.description);
     return <div className={styles.description}>
       {desc.length > 0 ? desc.map(v => {
-        if (v.old == null) {
+        if (v.old === null || v.old === undefined) {
           return <div className={styles.desc} key={index}>
             <span className={styles.field}>{v.name}:</span>
             <strong className={styles.newField}>{v.now}</strong></div>

@@ -1,17 +1,27 @@
 import {PageContainer} from "@ant-design/pro-components";
 import {connect, useParams} from '@umijs/max';
-import {Avatar, Card, Col, Empty, Row, Statistic} from "antd";
+import {Avatar, Card, Col, Empty, Row, Space, Statistic, Tag} from "antd";
 import styles from './UserInfo.less';
 import HeatMap from "@/components/Charts/HeatMap";
 import React, {useEffect} from "react";
 import moment from 'moment';
 import OperationLog from "@/components/Operation/OperationLog";
 import noRecord from "@/assets/no_record.svg";
-import {LikeOutlined, UserOutlined} from "@ant-design/icons";
+import {CrownOutlined, LikeOutlined, TeamOutlined, UserOutlined} from "@ant-design/icons";
 import LoadingFailed from '@/assets/LoadingFailed.svg';
-import CONFIG from "@/consts/config";
+import {getAvatarByUser} from "@/utils/avatar";
 
 const today = new Date()
+const ROLE_TEXT_MAP = {
+  2: '超级管理员',
+  1: '组长',
+  0: '普通用户',
+};
+const ROLE_ICON_MAP = {
+  2: <CrownOutlined/>,
+  1: <TeamOutlined/>,
+  0: <UserOutlined/>,
+};
 
 const shiftDate = (date, numDays) => {
   const newDate = new Date(date);
@@ -34,14 +44,27 @@ const Workspace = ({user, dispatch}) => {
         <div className={styles.pageHeaderContent}>
           <div className={styles.avatar}>
             <Avatar size="large"
-                    src={currentUser?.avatar || CONFIG.AVATAR_URL}/>
+                    icon={<UserOutlined />}
+                    src={getAvatarByUser(currentUser)}/>
           </div>
           <div className={styles.content}>
             <div className={styles.contentTitle}>
               {currentUser.name} {currentUser.deleted_at ? "(已注销)" : null}
             </div>
             <div>
-              {currentUser.email} {currentUser.nickname}
+              <Space size={8}>
+                <UserOutlined/>
+                <Tag color="blue">
+                  {ROLE_ICON_MAP[Number(currentUser.role)] || <UserOutlined/>} {' '}
+                  {ROLE_TEXT_MAP[Number(currentUser.role)] || '普通用户'}
+                </Tag>
+              </Space>
+            </div>
+            <div>
+              用户名：{currentUser.username || '-'}
+            </div>
+            <div>
+              邮箱：{currentUser.email} {currentUser.nickname}
             </div>
             <div className={styles.lastLogin}>
               <span>上次登录</span> {currentUser.last_login_at}

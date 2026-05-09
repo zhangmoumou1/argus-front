@@ -86,7 +86,7 @@ export default [
       },
       {
         path: '/asset/record',
-        name: '用例录制',
+        name: '接口录制',
         component: './ApiTest/TestCaseRecorder',
       },
       {
@@ -225,7 +225,6 @@ export default [
     path: '/config',
     icon: 'icon-config',
     name: '测试配置',
-    authority: ['superAdmin', 'admin'],
     routes: [
       {
         path: '/config/environment',
@@ -253,6 +252,11 @@ export default [
         component: './Config/Redis',
       },
       {
+        path: '/config/mq',
+        name: '消息中间件',
+        component: './Config/MessageBroker',
+      },
+      {
         path: '/config/oss',
         name: 'oss文件',
         component: './Config/Oss',
@@ -263,7 +267,6 @@ export default [
     path: '/system',
     icon: 'bank',
     name: '后台管理',
-    authority: ['superAdmin'],
     routes: [
       {
         path: '/system/configure',
@@ -274,7 +277,6 @@ export default [
         path: '/system/user',
         name: '用户管理',
         component: './Manager/UserList',
-        authority: ['superAdmin'],
       },
     ],
   },
@@ -300,6 +302,16 @@ export default [
         name: 'Redis客户端',
         icon: 'redis',
         component: './Tool/RedisOnline',
+      },
+      {
+        path: '/tool/kafka',
+        name: 'Kafka Tools',
+        component: './Tool/KafkaTools',
+      },
+      {
+        path: '/tool/rabbitmq',
+        name: 'RabbitMQ Tools',
+        component: './Tool/RabbitMQTools',
       },
     ],
   },

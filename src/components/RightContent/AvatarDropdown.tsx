@@ -1,14 +1,15 @@
 import { LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import { useEmotionCss } from '@ant-design/use-emotion-css';
 import { history, useModel } from '@umijs/max';
-import { Avatar, Spin } from 'antd';
+import { Avatar, Input, Modal, Spin, message } from 'antd';
 import { setAlpha } from '@ant-design/pro-components';
 import { stringify } from 'querystring';
 import type { MenuInfo } from 'rc-menu/lib/interface';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { flushSync } from 'react-dom';
 import HeaderDropdown from '../HeaderDropdown';
 import { getAvatarByUser } from '@/utils/avatar';
+import { resetSelfPassword } from '@/services/user';
 
 export type GlobalHeaderRightProps = {
   menu?: boolean;
@@ -62,6 +63,9 @@ const AvatarLogo = () => {
 };
 
 const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetSubmitting, setResetSubmitting] = useState(false);
   /**
    * 退出登录，并且将当前的 url 保存
    */
@@ -109,9 +113,21 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
         loginOut();
         return;
       }
+      if (key === 'reset-password') {
+        setResetPasswordValue('');
+        setResetOpen(true);
+        return;
+      }
+      if (key === 'profile') {
+        const userId = initialState?.currentUser?.id;
+        if (userId) {
+          history.push(`/member/${userId}`);
+        }
+        return;
+      }
       history.push(`/account/${key}`);
     },
-    [setInitialState],
+    [initialState?.currentUser?.id, setInitialState],
   );
 
   const loading = (
@@ -155,25 +171,73 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
         ]
       : []),
     {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: '个人信息',
+    },
+    {
+      key: 'reset-password',
+      icon: <SettingOutlined />,
+      label: '重置密码',
+    },
+    {
+      type: 'divider' as const,
+    },
+    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: '退出登录',
     },
   ];
 
+  const onSubmitResetSelfPassword = async () => {
+    const value = resetPasswordValue.trim();
+    if (!value) {
+      message.warning('请输入新密码');
+      return;
+    }
+    setResetSubmitting(true);
+    const res = await resetSelfPassword({ password: value });
+    setResetSubmitting(false);
+    if (res?.code === 0) {
+      message.success('密码重置成功');
+      setResetOpen(false);
+      setResetPasswordValue('');
+    } else {
+      message.error(res?.msg || '密码重置失败');
+    }
+  };
+
   return (
-    <HeaderDropdown
-      menu={{
-        selectedKeys: [],
-        onClick: onMenuClick,
-        items: menuItems,
-      }}
-    >
-      <span className={actionClassName}>
-        <AvatarLogo />
-        <Name />
-      </span>
-    </HeaderDropdown>
+    <>
+      <HeaderDropdown
+        menu={{
+          selectedKeys: [],
+          onClick: onMenuClick,
+          items: menuItems,
+        }}
+      >
+        <span className={actionClassName}>
+          <AvatarLogo />
+          <Name />
+        </span>
+      </HeaderDropdown>
+      <Modal
+        title="重置密码"
+        open={resetOpen}
+        onOk={onSubmitResetSelfPassword}
+        onCancel={() => setResetOpen(false)}
+        confirmLoading={resetSubmitting}
+        okText="确定"
+        cancelText="取消"
+      >
+        <Input.Password
+          value={resetPasswordValue}
+          onChange={(event) => setResetPasswordValue(event.target.value)}
+          placeholder="请输入新密码"
+        />
+      </Modal>
+    </>
   );
 };
 
