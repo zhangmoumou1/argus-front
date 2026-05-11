@@ -1,6 +1,6 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { connect, history } from '@umijs/max';
-import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Switch, Tag } from 'antd';
+import { Button, Card, Col, Dropdown, Form, Input, Menu, Modal, Row, Select, Space, Switch, Tag } from 'antd';
 import React, { useEffect, useState } from 'react';
 import parser from 'cron-parser';
 import moment from 'moment';
@@ -11,9 +11,9 @@ import {
   ClusterOutlined,
   CodeOutlined,
   LinkOutlined,
+  MoreOutlined,
   NodeIndexOutlined,
   RocketOutlined,
-  TeamOutlined,
 } from '@ant-design/icons';
 import {
   deleteApiService,
@@ -138,6 +138,46 @@ const InterfaceService = ({ project, dispatch }) => {
     }
   };
 
+  const buildCardMenu = (item) => (
+    <Menu
+      className="interface-service-card__menu"
+      onClick={({ key, domEvent }) => {
+        domEvent.stopPropagation();
+        if (key === 'edit') {
+          setEditing(item);
+          form.setFieldsValue({
+            ...item,
+            source_config: parseSourceConfig(item.source_config),
+            sync_enabled: Number(item.sync_enabled) === 1,
+          });
+          setCronDate(null);
+          setModalOpen(true);
+          return;
+        }
+        if (key === 'sync') {
+          if (item.source_type !== 'manual') onSync(item.id);
+          return;
+        }
+        if (key === 'delete') {
+          Modal.confirm({
+            title: '确认删除该服务吗？',
+            okType: 'danger',
+            okText: '删除',
+            cancelText: '取消',
+            onOk: async () => {
+              await onDeleteService(item.id);
+            },
+          });
+        }
+      }}
+      items={[
+        { key: 'edit', label: '编辑' },
+        { key: 'sync', label: '同步', disabled: item.source_type === 'manual' },
+        { key: 'delete', label: '删除', danger: true },
+      ]}
+    />
+  );
+
   return (
     <PageContainer title={false} breadcrumb={null}>
       <Card bordered={false}>
@@ -176,54 +216,45 @@ const InterfaceService = ({ project, dispatch }) => {
           {(services || []).map((item) => (
             <Col xs={24} md={12} lg={8} xl={6} key={item.id}>
               <Card className="interface-service-card" hoverable loading={loading} onClick={() => history.push(`/apiTest/interface/${item.id}`)}>
-                <div className="interface-service-card__inner">
-                  <div className="interface-service-card__content">
-                    <Space style={{ justifyContent: 'space-between', width: '100%' }} align="start">
-                      <Space>
-                        <span className="interface-service-card__icon">{getCardIcon(item.id)}</span>
-                        <b style={{ fontSize: 16 }}>{item.name}</b>
-                      </Space>
-                      <Tag color={item.source_type === 'manual' ? 'default' : 'blue'}>
-                        {sourceLabelMap[item.source_type] || sourceLabelMap.manual}
-                      </Tag>
-                    </Space>
-                    <div>所属项目：{projects.find((p) => p.id === item.project_id)?.name || item.project_id}</div>
-                    <div>
-                      <Space size={4}>
-                        <TeamOutlined style={{ color: '#667085' }} />
-                        <span>开发：{item.developer || '-'}</span>
-                        <span>测试：{item.tester || '-'}</span>
-                      </Space>
+                <div className="interface-service-card__head">
+                  <div className="interface-service-card__main">
+                    <span className="interface-service-card__icon">{getCardIcon(item.id)}</span>
+                    <div className="interface-service-card__name-wrap">
+                      <div className="interface-service-card__name" title={item.name}>{item.name}</div>
+                      <div className="interface-service-card__project" title={projects.find((p) => p.id === item.project_id)?.name || item.project_id}>
+                        {projects.find((p) => p.id === item.project_id)?.name || item.project_id}
+                      </div>
                     </div>
-                    <div>接口数：{item.endpoint_total || 0}</div>
-                    <div className="interface-service-card__sync">
-                      {item.source_type !== 'manual'
-                        ? `定时同步：${Number(item.sync_enabled) === 1 ? `开启(下次执行: ${getNextRunTime(item.sync_cron)})` : '关闭'}`
-                        : '定时同步：手动服务无需同步'}
-                    </div>
-                    <div style={{ color: '#667085' }}>最近同步：{item.last_sync_at || '-'}</div>
                   </div>
-                  <Space wrap className="interface-service-card__actions">
-                    <Button size="small" onClick={(e) => {
-                      e.stopPropagation();
-                      setEditing(item);
-                      form.setFieldsValue({
-                        ...item,
-                        source_config: parseSourceConfig(item.source_config),
-                        sync_enabled: Number(item.sync_enabled) === 1,
-                      });
-                      setCronDate(null);
-                      setModalOpen(true);
-                    }}>编辑</Button>
-                    {item.source_type !== 'manual' ? (
-                      <>
-                        <Button size="small" onClick={(e) => { e.stopPropagation(); onSync(item.id); }}>同步</Button>
-                      </>
-                    ) : <Button size="small" disabled>同步</Button>}
-                    <Popconfirm title="确认删除该服务吗？" onConfirm={(e) => { e?.stopPropagation?.(); onDeleteService(item.id); }}>
-                      <Button size="small" danger onClick={(e) => e.stopPropagation()}>删除</Button>
-                    </Popconfirm>
+                  <Space size={6} onClick={(e) => e.stopPropagation()}>
+                    <Tag color={item.source_type === 'manual' ? 'default' : 'blue'}>
+                      {sourceLabelMap[item.source_type] || sourceLabelMap.manual}
+                    </Tag>
+                    <Dropdown trigger={['click']} overlay={buildCardMenu(item)}>
+                      <Button className="interface-service-card__more" size="small" type="text" icon={<MoreOutlined />} />
+                    </Dropdown>
                   </Space>
+                </div>
+                <div className="interface-service-card__metric">
+                  <div>
+                    <div className="metric-value">{item.endpoint_total || 0}</div>
+                    <div className="metric-label">接口数量</div>
+                  </div>
+                  <div className="metric-divider" />
+                  <div className="metric-meta">
+                    <div><span>开发</span>{item.developer || '-'}</div>
+                    <div><span>测试</span>{item.tester || '-'}</div>
+                  </div>
+                </div>
+                <div className="interface-service-card__sync-bar">
+                  <span>
+                    {item.source_type !== 'manual'
+                      ? `定时同步：${Number(item.sync_enabled) === 1 ? '开启' : '关闭'}`
+                      : '手动服务'}
+                  </span>
+                  <span title={Number(item.sync_enabled) === 1 ? getNextRunTime(item.sync_cron) : item.last_sync_at || '-'}>
+                    {Number(item.sync_enabled) === 1 ? `下次执行 ${getNextRunTime(item.sync_cron)}` : `最近同步 ${item.last_sync_at || '-'}`}
+                  </span>
                 </div>
               </Card>
             </Col>
