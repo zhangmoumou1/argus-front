@@ -112,7 +112,7 @@ class Environment extends Component {
       }];
 
     return (
-      <PageContainer title='环境配置' breadcrumb={null}>
+      <PageContainer title={false} breadcrumb={null}>
         <Spin spinning={this.state.loading}>
           <Card>
             <FormForModal open={this.state.visible} onCancel={() => {

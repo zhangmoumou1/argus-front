@@ -1,5 +1,6 @@
 import Footer from '@/components/Footer';
 import RightContent from '@/components/RightContent';
+import AvatarDropdown from '@/components/RightContent/AvatarDropdown';
 import { PageLoading, Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
 import type { RunTimeLayoutConfig } from '@umijs/max';
@@ -10,9 +11,8 @@ import { currentUser as queryCurrentUser, LoginUser } from './services/auth';
 import React from 'react';
 import NoTableData from '@/assets/NoSearch.svg';
 import routesConfig from '../config/routes';
-import { keepaliveEmitter } from '@@/plugin-keepalive/context';
 
-import { ConfigProvider, Empty, message, Modal, Spin } from 'antd';
+import { Breadcrumb, ConfigProvider, Empty, message, Spin } from 'antd';
 import {
   BankOutlined,
   HistoryOutlined,
@@ -40,69 +40,115 @@ const getFullPath = (currPath = '', parentPath = '') => {
   return `${parentPath.replace(/\/$/, '')}/${currPath}`;
 };
 
-const buildTabsLocalConfig = (routes: any[] = []) => {
-  const config = {
-    local: {},
-    icon: {},
-  } as { local: Record<string, string>; icon: Record<string, string> };
+type RouteEntry = {
+  path: string;
+  name?: string;
+  hideInMenu?: boolean;
+  labels: string[];
+};
 
-  const walk = (items: any[] = [], parentPath = '') => {
+const routeNameText: Record<string, string> = {
+  dashboard: '仪表盘',
+};
+
+const getRouteLabel = (name?: string) => {
+  if (!name) return '';
+  return routeNameText[name] || name;
+};
+
+const normalizePath = (path = '') => {
+  const cleanPath = path.split('?')[0].replace(/\/+$/, '');
+  return cleanPath || '/';
+};
+
+const createRouteMatcher = (path = '') => {
+  const pattern = normalizePath(path)
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/:([^/]+)/g, '[^/]+');
+  return new RegExp(`^${pattern}$`, 'i');
+};
+
+const buildRouteEntries = (routes: any[] = []) => {
+  const entries: RouteEntry[] = [];
+
+  const walk = (items: any[] = [], parentPath = '', labels: string[] = []) => {
     items.forEach((item) => {
-      const fullPath = getFullPath(String(item?.path || '').toLowerCase(), parentPath.toLowerCase());
-      if (item?.name && fullPath && item.path !== '*') {
-        config.local[fullPath] = item.name;
-        if (item?.icon) {
-          config.icon[fullPath] = item.icon;
-        }
+      if (!item?.path || item.path === '*') return;
+      const fullPath = normalizePath(getFullPath(String(item.path), parentPath));
+      const label = getRouteLabel(item.name);
+      const currentLabels = label ? [...labels, label] : labels;
+      if (label) {
+        entries.push({
+          path: fullPath,
+          name: item.name,
+          hideInMenu: item.hideInMenu,
+          labels: currentLabels,
+        });
       }
-      if (Array.isArray(item?.routes)) {
-        walk(item.routes, fullPath);
+      if (Array.isArray(item.routes)) {
+        walk(item.routes, fullPath, currentLabels);
       }
-      if (Array.isArray(item?.children)) {
-        walk(item.children, fullPath);
+      if (Array.isArray(item.children)) {
+        walk(item.children, fullPath, currentLabels);
       }
     });
   };
 
   walk(routes);
-  return config;
+  return entries;
 };
 
-const tabsLocalConfig = buildTabsLocalConfig(routesConfig as any[]);
+const routeEntries = buildRouteEntries(routesConfig as any[]);
 
-export const tabsLayout = ({ initialState }: { initialState?: any }) => ({
-  ...tabsLocalConfig,
-  initialState,
-  onEdit: (targetKey: string | { key?: string }, action?: string) => {
-    const actionType = typeof action === 'string' ? action : 'remove';
-    if (actionType !== 'remove') return;
-    const rawKey = typeof targetKey === 'string' ? targetKey : targetKey?.key || '';
-    const path = String(rawKey || '').split('::')[0]?.toLowerCase();
-    if (!path) return;
+const getRouteCrumbs = (pathname = '') => {
+  const currentPath = normalizePath(pathname);
+  const matched = routeEntries
+    .filter((entry) => createRouteMatcher(entry.path).test(currentPath))
+    .sort((a, b) => b.path.length - a.path.length)[0];
 
-    const closeTab = () => {
-      keepaliveEmitter?.emit?.({
-        type: 'closeTab',
-        payload: { path },
-      });
-    };
+  if (!matched) return [];
 
-    const unsavedState = window.__FUNCTIONAL_CASE_UNSAVED__ || {};
-    const dirtyPath = String(unsavedState?.path || '').toLowerCase();
-    if (unsavedState?.dirty && dirtyPath && dirtyPath === path) {
-      Modal.confirm({
-        title: '未保存提醒',
-        content: '你有未保存用例，是否关闭窗口',
-        okText: '关闭',
-        cancelText: '取消',
-        onOk: closeTab,
-      });
-      return;
+  if (matched.labels.length === 1 && matched.hideInMenu) {
+    const parent = routeEntries
+      .filter((entry) => {
+        if (entry.hideInMenu || entry.path === matched.path) return false;
+        return currentPath === entry.path || currentPath.startsWith(`${entry.path}/`);
+      })
+      .sort((a, b) => b.path.length - a.path.length)[0];
+
+    if (parent?.labels?.length) {
+      return [...parent.labels, ...matched.labels.filter((label) => !parent.labels.includes(label))];
     }
+  }
 
-    closeTab();
-  },
-});
+  return matched.labels;
+};
+
+const PageTopBar = ({ onOpenTheme }: { onOpenTheme: () => void }) => (
+  <div className="argus-topbar">
+    <RightContent onOpenTheme={onOpenTheme} />
+  </div>
+);
+
+const GlobalPageShell = ({ children, toolbar }: { children: React.ReactNode; toolbar?: React.ReactNode }) => {
+  const crumbs = getRouteCrumbs(history.location.pathname);
+
+  return (
+    <main className="argus-page-shell">
+      {toolbar}
+      {crumbs.length > 0 && (
+        <div className="argus-page-shell__header">
+          <Breadcrumb separator=">">
+            {crumbs.map((item) => (
+              <Breadcrumb.Item key={item}>{item}</Breadcrumb.Item>
+            ))}
+          </Breadcrumb>
+        </div>
+      )}
+      <div className="argus-page-shell__content">{children}</div>
+    </main>
+  );
+};
 
 /**
  * @see  https://umijs.org/zh-CN/plugins/plugin-initial-state
@@ -210,8 +256,8 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
       });
 
   return {
-    siderWidth: 216,
-    rightContentRender: () => <RightContent />,
+    siderWidth: 260,
+    headerRender: false,
     waterMarkProps: {
       content: initialState?.currentUser?.name,
     },
@@ -244,6 +290,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     ],
     links: [],
     menuHeaderRender: undefined,
+    menuFooterRender: (props) => (props?.collapsed ? null : <AvatarDropdown variant="sider" />),
     menuDataRender: (menuData) => normalizeMenuData(menuData as any[]),
     childrenRender: (children) => {
       if (initialState?.loading) return <PageLoading />;
@@ -251,13 +298,24 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
         <ConfigProvider
           renderEmpty={() => <Empty image={NoTableData} imageStyle={{ height: 160 }} description="暂无数据" />}
         >
-          <div style={{ paddingBottom: 40 }}>
+          <GlobalPageShell
+            toolbar={(
+              <PageTopBar
+                onOpenTheme={() => {
+                  const handle = document.querySelector('[class*="pro-setting-drawer-handle"]') as HTMLElement | null;
+                  handle?.click();
+                }}
+              />
+            )}
+          >
             {children}
             <IndexPage />
-          </div>
+          </GlobalPageShell>
           <SettingDrawer
             disableUrlParams
             enableDarkTheme
+            hideHintAlert
+            hideCopyButton
             settings={initialState?.settings}
             onSettingChange={(settings) => {
               setInitialState((preInitialState) => ({

@@ -1,9 +1,9 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Input, Space, Spin, message } from 'antd';
+import { Button, Card, Input, Select, Space, Spin, message } from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { history, useModel, useParams } from '@umijs/max';
-import { insertKnowledge, listKnowledge, updateKnowledge } from '@/services/configure';
+import { insertKnowledge, listKnowledge, listKnowledgeCategory, updateKnowledge } from '@/services/configure';
 import { ensureHtml, getPlainText } from './store';
 import './index.less';
 
@@ -17,7 +17,9 @@ const EditorPage = () => {
   const isEdit = Boolean(docId);
   const [editor, setEditor] = useState(null);
   const [docs, setDocs] = useState([]);
-  const [draft, setDraft] = useState({ title: '', summary: '', content: '' });
+  const [categories, setCategories] = useState([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [draft, setDraft] = useState({ title: '', summary: '', content: '', category: '' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -31,11 +33,27 @@ const EditorPage = () => {
   }, [isSuperAdmin]);
 
   useEffect(() => {
+    const fetchCategories = async () => {
+      setCategoryLoading(true);
+      try {
+        const res = await listKnowledgeCategory();
+        if (res?.code === 0) {
+          setCategories(Array.isArray(res.data) ? res.data : []);
+        }
+      } finally {
+        setCategoryLoading(false);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
     if (currentDoc) {
       setDraft({
         title: currentDoc.title || '',
         summary: currentDoc.summary || '',
         content: ensureHtml(currentDoc.content || ''),
+        category: currentDoc.category || '',
       });
     }
   }, [isEdit, currentDoc]);
@@ -88,6 +106,7 @@ const EditorPage = () => {
       title: draft.title.trim(),
       summary,
       content: normalizedContent,
+      category: draft.category || '',
     };
     setSaving(true);
     try {
@@ -114,6 +133,20 @@ const EditorPage = () => {
                 value={draft.title}
                 onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
               />
+              <Select
+                loading={categoryLoading}
+                placeholder="请选择文档分类"
+                value={draft.category || undefined}
+                onChange={(value) => setDraft((prev) => ({ ...prev, category: value }))}
+                allowClear
+                style={{ width: '100%' }}
+              >
+                {categories.map((cat) => (
+                  <Select.Option key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </Select.Option>
+                ))}
+              </Select>
               <Input
                 placeholder="请输入文档摘要（可选）"
                 value={draft.summary}

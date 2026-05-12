@@ -12,19 +12,32 @@ import { getAvatarByUser } from '@/utils/avatar';
 import { resetSelfPassword } from '@/services/user';
 
 export type GlobalHeaderRightProps = {
-  menu?: boolean;
+  variant?: 'header' | 'sider';
 };
 
-const Name = () => {
+const Name = ({ variant = 'header' }: { variant?: 'header' | 'sider' }) => {
   const { initialState } = useModel('@@initialState');
   const { currentUser } = initialState || {};
 
   const nameClassName = useEmotionCss(({ token }) => {
+    if (variant === 'sider') {
+      return {
+        display: 'flex',
+        minWidth: 0,
+        flexDirection: 'column',
+        justifyContent: 'center',
+        lineHeight: 1.25,
+        [`@media only screen and (max-width: ${token.screenMD}px)`]: {
+          display: 'none',
+        },
+      };
+    }
+
     return {
       width: '70px',
-      height: '48px',
+      height: '40px',
       overflow: 'hidden',
-      lineHeight: '48px',
+      lineHeight: '40px',
       whiteSpace: 'nowrap',
       textOverflow: 'ellipsis',
       [`@media only screen and (max-width: ${token.screenMD}px)`]: {
@@ -33,14 +46,35 @@ const Name = () => {
     };
   });
 
+  if (variant === 'sider') {
+    return (
+      <span className={nameClassName}>
+        <span style={{ color: '#111827', fontSize: 14, fontWeight: 600 }}>{currentUser?.name}</span>
+        <span style={{ color: '#667085', fontSize: 12 }}>{currentUser?.username}</span>
+      </span>
+    );
+  }
+
   return <span className={`${nameClassName} anticon`}>{currentUser?.name}</span>;
 };
 
-const AvatarLogo = () => {
+const AvatarLogo = ({ variant = 'header' }: { variant?: 'header' | 'sider' }) => {
   const { initialState } = useModel('@@initialState');
   const { currentUser } = initialState || {};
 
   const avatarClassName = useEmotionCss(({ token }) => {
+    if (variant === 'sider') {
+      return {
+        marginRight: '10px',
+        color: token.colorPrimary,
+        flex: 'none',
+        background: '#eef2ff',
+        [`@media only screen and (max-width: ${token.screenMD}px)`]: {
+          marginRight: 0,
+        },
+      };
+    }
+
     return {
       marginRight: '8px',
       color: token.colorPrimary,
@@ -54,7 +88,7 @@ const AvatarLogo = () => {
 
   return (
     <Avatar
-      size="small"
+      size={variant === 'sider' ? 36 : 28}
       className={avatarClassName}
       src={getAvatarByUser(currentUser)}
       alt="avatar"
@@ -62,40 +96,53 @@ const AvatarLogo = () => {
   );
 };
 
-const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
+const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ variant = 'header' }) => {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetPasswordValue, setResetPasswordValue] = useState('');
   const [resetSubmitting, setResetSubmitting] = useState(false);
   /**
    * 退出登录，并且将当前的 url 保存
    */
-  const loginOut = async () => {
-    // await outLogin();
-    localStorage.removeItem("pityToken")
-    const { search, pathname } = window.location;
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('pityToken');
+    localStorage.removeItem('pityUser');
     const urlParams = new URL(window.location.href).searchParams;
-    /** 此方法会跳转到 redirect 参数所在的位置 */
     const redirect = urlParams.get('redirect');
-    // Note: There may be security issues, please note
-    if (window.location.pathname !== '/user/login' && !redirect) {
+    if (window.location.pathname !== '/#/user/login' && !redirect) {
       history.replace({
         pathname: '/user/login',
         search: stringify({
-          redirect: pathname + search,
+          redirect: window.location.href,
         }),
       });
     }
-  };
+  }, []);
   const actionClassName = useEmotionCss(({ token }) => {
+    if (variant === 'sider') {
+      return {
+        display: 'flex',
+        width: '100%',
+        minWidth: 0,
+        alignItems: 'center',
+        padding: '0',
+        cursor: 'pointer',
+        borderRadius: 12,
+        transition: 'all 0.2s ease',
+        '&:hover': {
+          backgroundColor: '#f3f4f6',
+        },
+      };
+    }
+
     return {
       display: 'flex',
-      height: '48px',
+      height: '40px',
       marginLeft: 'auto',
       overflow: 'hidden',
       alignItems: 'center',
-      padding: '0 8px',
+      padding: '0 6px',
       cursor: 'pointer',
-      borderRadius: token.borderRadius,
+      borderRadius: 8,
       '&:hover': {
         backgroundColor: token.colorBgTextHover,
       },
@@ -110,7 +157,7 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
         flushSync(() => {
           setInitialState((s) => ({ ...s, currentUser: undefined }));
         });
-        loginOut();
+        handleLogout();
         return;
       }
       if (key === 'reset-password') {
@@ -127,7 +174,7 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
       }
       history.push(`/account/${key}`);
     },
-    [initialState?.currentUser?.id, setInitialState],
+    [handleLogout, initialState?.currentUser?.id, setInitialState],
   );
 
   const loading = (
@@ -153,23 +200,6 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
   }
 
   const menuItems = [
-    ...(menu
-      ? [
-          {
-            key: 'center',
-            icon: <UserOutlined />,
-            label: '个人中心',
-          },
-          {
-            key: 'settings',
-            icon: <SettingOutlined />,
-            label: '个人设置',
-          },
-          {
-            type: 'divider' as const,
-          },
-        ]
-      : []),
     {
       key: 'profile',
       icon: <UserOutlined />,
@@ -210,18 +240,46 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ menu }) => {
 
   return (
     <>
-      <HeaderDropdown
-        menu={{
-          selectedKeys: [],
-          onClick: onMenuClick,
-          items: menuItems,
-        }}
-      >
-        <span className={actionClassName}>
-          <AvatarLogo />
-          <Name />
-        </span>
-      </HeaderDropdown>
+      {variant === 'sider' ? (
+        <div className="argus-sider-user">
+          <span className={actionClassName}>
+            <AvatarLogo variant={variant} />
+            <Name variant={variant} />
+          </span>
+          <button
+            type="button"
+            className="argus-sider-user__logout"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              flushSync(() => {
+                setInitialState((s) => ({ ...s, currentUser: undefined }));
+              });
+              handleLogout();
+            }}
+            aria-label="退出登录"
+          >
+            <LogoutOutlined />
+          </button>
+        </div>
+      ) : (
+        <HeaderDropdown
+          menu={{
+            selectedKeys: [],
+            onClick: onMenuClick,
+            items: menuItems,
+          }}
+        >
+          <span className={actionClassName}>
+            <AvatarLogo variant={variant} />
+            <Name variant={variant} />
+          </span>
+        </HeaderDropdown>
+      )}
       <Modal
         title="重置密码"
         open={resetOpen}

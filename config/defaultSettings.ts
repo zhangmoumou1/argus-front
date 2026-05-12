@@ -14,7 +14,7 @@ const Settings: LayoutSettings & {
   colorPrimary: '#1677ff',
   layout: 'side',
   contentWidth: 'Fluid',
-  fixedHeader: false,
+  fixedHeader: true,
   fixSiderbar: true,
   colorWeak: false,
   title: 'Argus测试平台',

@@ -263,7 +263,7 @@ const Database = ({dispatch, gconfig, loading}) => {
   }
 
   return (
-    <PageContainer title="数据库配置列表" breadcrumb={null}>
+    <PageContainer title={false} breadcrumb={null}>
       <Card>
         <FormForModal Footer={Footer} onTest={onTest} width={520}
                       record={databaseRecord} fields={fields} title="数据库配置" onFinish={onFinish}

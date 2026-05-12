@@ -237,10 +237,7 @@ const TestCaseRecorder = ({ dispatch, project, recorder, testcase, loading }) =>
   </Menu>
 
   return (
-    <PageContainer breadcrumb={null}
-      title={<span className="ant-page-header-heading-title">用例录制 <CameraOne theme="outline" size="18"
-        fill="#7ed321"
-        strokeLinecap="square" /> </span>}>
+    <PageContainer breadcrumb={null} title={false}>
       <Card>
         <Modal title={<span>生成用例 - 已选中{selectedRowKeys.length}条数据</span>} open={visible}
           onOk={onGenerateCase}

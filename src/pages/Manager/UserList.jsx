@@ -187,7 +187,7 @@ const UserInfo = ({user, dispatch, loading}) => {
 
 
   return (
-    <PageContainer breadcrumb={null} title="用户管理页面">
+    <PageContainer breadcrumb={null} title={false}>
       <Card>
         <Modal title="编辑用户" width={500} open={modal} onCancel={() => setModal(false)} onOk={onSubmit}>
           <Form form={form} initialValues={record} {...CONFIG.LAYOUT}>

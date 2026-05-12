@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//e/github_argus/argus-end/app/crud/config/**)",
+      "Read(//e/github_argus/argus-end/app/schema/**)"
+    ]
+  }
+}

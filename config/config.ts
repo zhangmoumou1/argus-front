@@ -111,11 +111,8 @@ export default defineConfig({
    */
   request: {},
 
-  tabsLayout: {
-    hasDropdown: true,
-  },
-
-  keepalive: [/./],
+  tabsLayout: false,
+  keepalive: false,
 
   /**
    * @name 权限插件

@@ -1,4 +1,4 @@
-import {BellOutlined, QuestionCircleOutlined} from '@ant-design/icons';
+import { BellOutlined, BgColorsOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import {useEmotionCss} from '@ant-design/use-emotion-css';
 import {history, useModel} from '@umijs/max';
 import {Badge, Tooltip} from 'antd';
@@ -6,28 +6,33 @@ import React from 'react';
 import Avatar from './AvatarDropdown';
 import "./index.less"
 
-const GlobalHeaderRight = () => {
+type GlobalHeaderRightProps = {
+  onOpenTheme?: () => void;
+};
+
+const GlobalHeaderRight = ({ onOpenTheme }: GlobalHeaderRightProps) => {
   const className = useEmotionCss(() => {
     return {
       display: 'flex',
-      height: '48px',
+      alignItems: 'center',
+      height: '40px',
       marginLeft: 'auto',
-      overflow: 'hidden',
-      gap: 8,
+      gap: 4,
     };
   });
 
   const actionClassName = useEmotionCss(({token}) => {
     return {
       display: 'flex',
-      float: 'right',
-      height: '48px',
-      marginLeft: 'auto',
-      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '40px',
       cursor: 'pointer',
-      padding: '0 12px',
-      borderRadius: token.borderRadius,
+      padding: '0 8px',
+      borderRadius: 8,
+      color: '#475467',
       '&:hover': {
+        color: '#111827',
         backgroundColor: token.colorBgTextHover,
       },
     };
@@ -35,7 +40,7 @@ const GlobalHeaderRight = () => {
 
   const badgeClassName = useEmotionCss(() => {
     return {
-      lineHeight: '48px',
+      lineHeight: '40px',
       color: 'inherit',
     }
   })
@@ -68,6 +73,16 @@ const GlobalHeaderRight = () => {
       >
         <QuestionCircleOutlined/>
       </span>
+      <Tooltip title="主题设置">
+        <span
+          className={actionClassName}
+          onClick={() => {
+            onOpenTheme?.();
+          }}
+        >
+          <BgColorsOutlined />
+        </span>
+      </Tooltip>
       <Avatar/>
       {/*<SelectLang className={actionClassName} />*/}
     </div>

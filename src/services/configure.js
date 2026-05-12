@@ -431,3 +431,34 @@ export async function deleteKnowledge(params) {
     headers: auth.headers(),
   });
 }
+
+export async function listKnowledgeCategory() {
+  return request(`${CONFIG.URL}/config/knowledge/category/list`, {
+    method: 'GET',
+    headers: auth.headers(),
+  });
+}
+
+export async function insertKnowledgeCategory(data) {
+  return request(`${CONFIG.URL}/config/knowledge/category/insert`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function updateKnowledgeCategory(data) {
+  return request(`${CONFIG.URL}/config/knowledge/category/update`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function deleteKnowledgeCategory(params) {
+  return request(`${CONFIG.URL}/config/knowledge/category/delete`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}

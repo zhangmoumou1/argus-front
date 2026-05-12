@@ -852,7 +852,7 @@ const MQToolWorkbench = ({ gconfig, dispatch, loading: modelLoading, mqType, pag
   };
 
   return (
-    <PageContainer title={pageTitle} breadcrumb={null}>
+    <PageContainer title={false} breadcrumb={null}>
       <Card>
         {isKafka ? renderKafkaHome() : (
           <>

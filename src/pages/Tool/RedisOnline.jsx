@@ -169,7 +169,7 @@ const RedisOnline = ({dispatch, gconfig}) => {
   }
 
   return (
-    <PageContainer title="在线执行Redis" breadcrumb={null}>
+    <PageContainer title={false} breadcrumb={null}>
 
       <Card style={{margin: -12}}>
         <Row>

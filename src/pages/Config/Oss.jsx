@@ -120,7 +120,7 @@ const Oss = ({loading, dispatch, gconfig, user}) => {
 
 
   return (
-    <PageContainer title="OSS文件管理" breadcrumb={null}>
+    <PageContainer title={false} breadcrumb={null}>
       <Card>
         <Modal width={600} title="上传文件" open={visible} onCancel={() => setVisible(false)} onOk={onUpload}>
           <Form form={form} {...CONFIG.SQL_LAYOUT}>

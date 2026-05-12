@@ -212,12 +212,7 @@ const FunctionalSkill = () => {
   ];
 
   return (
-    <PageContainer
-      header={{
-        title: '用例技能',
-        ghost: true,
-      }}
-    >
+    <PageContainer title={false} breadcrumb={null}>
       <div style={{ background: '#fff', padding: 16, borderRadius: 8 }}>
         <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
           <Space wrap>

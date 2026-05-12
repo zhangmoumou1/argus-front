@@ -1,198 +1,402 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Empty, Input, Popconfirm, Space, Spin, Tag, message } from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Button,
+  Empty,
+  Input,
+  Modal,
+  Form,
+  Table,
+  InputNumber,
+  Popconfirm,
+  Space,
+  Spin,
+  Tag,
+  Tooltip,
+  message,
+} from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
 import {
   PlusOutlined,
   ShareAltOutlined,
   EditOutlined,
   DeleteOutlined,
-  EyeOutlined,
   BookOutlined,
-  ClockCircleOutlined,
+  FolderOpenOutlined,
+  TagsOutlined,
 } from '@ant-design/icons';
 import { history, useLocation, useModel } from '@umijs/max';
-import { deleteKnowledge, listKnowledge } from '@/services/configure';
+import {
+  deleteKnowledge,
+  listKnowledge,
+  listKnowledgeCategory,
+  insertKnowledgeCategory,
+  updateKnowledgeCategory,
+  deleteKnowledgeCategory,
+} from '@/services/configure';
+import { ensureHtml } from './store';
 import './index.less';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 1000;
+
+const normalizeCategory = (doc) => {
+  const explicit = doc?.category || doc?.catalog || doc?.group || doc?.module;
+  if (explicit && String(explicit).trim()) {
+    return String(explicit).trim();
+  }
+  const title = String(doc?.title || '').trim();
+  if (title.includes('：')) {
+    return title.split('：')[0].trim() || '未分类';
+  }
+  if (title.includes('-')) {
+    return title.split('-')[0].trim() || '未分类';
+  }
+  return '未分类';
+};
+
+const getShareLink = (id) => `${window.location.origin}${window.location.pathname}#/knowledge?id=${id}`;
 
 const KnowledgeBase = () => {
   const { initialState } = useModel('@@initialState');
   const location = useLocation();
   const currentUser = initialState?.currentUser;
-  const isSuperAdmin = currentUser?.role === 2;
+  const isSuperAdmin = Number(currentUser?.role) === 2;
 
+  const [loading, setLoading] = useState(false);
   const [docs, setDocs] = useState([]);
   const [keyword, setKeyword] = useState('');
   const [searchTitle, setSearchTitle] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: PAGE_SIZE, total: 0 });
-  const requestLock = useRef(false);
-  const loadMoreRef = useRef(null);
+  const [activeId, setActiveId] = useState(null);
 
-  const fetchDocs = useCallback(async ({ page = 1, title = '', append = false } = {}) => {
-    if (requestLock.current) return;
-    requestLock.current = true;
-    if (append) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
+  // 分类管理状态
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [categoryFormVisible, setCategoryFormVisible] = useState(false);
+  const [categoryEditing, setCategoryEditing] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryFormLoading, setCategoryFormLoading] = useState(false);
+  const [categoryForm] = Form.useForm();
+
+  const fetchDocs = async (title = '') => {
+    setLoading(true);
     try {
-      const res = await listKnowledge({ page, size: PAGE_SIZE, title });
+      const res = await listKnowledge({ page: 1, size: PAGE_SIZE, title });
       if (res?.code === 0) {
-        const nextData = Array.isArray(res.data) ? res.data : [];
-        setDocs((prev) => {
-          if (!append) return nextData;
-          const exists = new Set(prev.map((item) => item.id));
-          return [...prev, ...nextData.filter((item) => !exists.has(item.id))];
+        const list = Array.isArray(res.data) ? res.data : [];
+        setDocs(list);
+        if (list.length === 0) {
+          setActiveId(null);
+          return;
+        }
+        const query = new URLSearchParams(location.search);
+        const queryId = query.get('id');
+        const hit = list.find((item) => String(item.id) === String(queryId));
+        setActiveId((prev) => {
+          if (prev && list.some((item) => String(item.id) === String(prev))) {
+            return prev;
+          }
+          return hit ? hit.id : list[0].id;
         });
-        setPagination({ current: page, pageSize: PAGE_SIZE, total: res.total || 0 });
       } else {
         message.error(res?.msg || '获取知识库列表失败');
       }
     } finally {
-      if (append) {
-        setLoadingMore(false);
-      } else {
-        setLoading(false);
-      }
-      requestLock.current = false;
+      setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    fetchDocs({ page: 1, title: '', append: false });
-  }, [fetchDocs, location.search]);
+    fetchDocs(searchTitle);
+  }, [location.search]);
 
-  useEffect(() => {
-    const node = loadMoreRef.current;
-    if (!node) return undefined;
+  const grouped = useMemo(() => {
+    const map = new Map();
+    docs.forEach((doc) => {
+      const category = normalizeCategory(doc);
+      if (!map.has(category)) {
+        map.set(category, []);
+      }
+      map.get(category).push(doc);
+    });
+    return Array.from(map.entries()).map(([category, items]) => ({ category, items }));
+  }, [docs]);
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting || loading || loadingMore || docs.length >= pagination.total) return;
-        fetchDocs({ page: pagination.current + 1, title: searchTitle, append: true });
-      },
-      { root: null, rootMargin: '240px 0px', threshold: 0 },
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [docs.length, fetchDocs, loading, loadingMore, pagination.current, pagination.total, searchTitle]);
+  const activeDoc = useMemo(
+    () => docs.find((item) => String(item.id) === String(activeId)) || null,
+    [docs, activeId],
+  );
 
   const handleSearch = (value) => {
-    const title = value.trim();
+    const title = String(value || '').trim();
     setSearchTitle(title);
-    fetchDocs({ page: 1, title, append: false });
+    fetchDocs(title);
   };
 
   const handleDelete = async (id) => {
     const res = await deleteKnowledge({ id });
     if (res?.code === 0) {
       message.success('删除成功');
-      fetchDocs({ page: 1, title: searchTitle, append: false });
+      await fetchDocs(searchTitle);
     } else {
       message.error(res?.msg || '删除失败');
     }
   };
 
   const handleShare = async (doc) => {
-    const url = `${window.location.origin}${window.location.pathname}#/knowledge/view/${doc.id}`;
+    const link = getShareLink(doc.id);
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(link);
       message.success('分享链接已复制');
     } catch (e) {
       message.warning('复制失败，请手动复制地址栏链接');
     }
   };
 
+  // 分类管理方法
+  const fetchCategories = async () => {
+    setCategoryLoading(true);
+    try {
+      const res = await listKnowledgeCategory();
+      if (res?.code === 0) {
+        setCategories(Array.isArray(res.data) ? res.data : []);
+      } else {
+        message.error(res?.msg || '获取分类失败');
+      }
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const openCategoryModal = () => {
+    setCategoryModalVisible(true);
+    fetchCategories();
+  };
+
+  const handleDeleteCategory = async (id) => {
+    const res = await deleteKnowledgeCategory({ id });
+    if (res?.code === 0) {
+      message.success('删除成功');
+      fetchCategories();
+    } else {
+      message.error(res?.msg || '删除失败');
+    }
+  };
+
+  const openCategoryForm = (record = null) => {
+    setCategoryEditing(record);
+    setCategoryFormVisible(true);
+    if (record) {
+      categoryForm.setFieldsValue({ name: record.name, sort_order: record.sort_order });
+    } else {
+      categoryForm.resetFields();
+    }
+  };
+
+  const handleCategoryFormSubmit = async () => {
+    try {
+      const values = await categoryForm.validateFields();
+      setCategoryFormLoading(true);
+      const payload = categoryEditing ? { ...values, id: categoryEditing.id } : values;
+      const res = categoryEditing
+        ? await updateKnowledgeCategory(payload)
+        : await insertKnowledgeCategory(payload);
+      if (res?.code === 0) {
+        message.success(categoryEditing ? '修改成功' : '新增成功');
+        setCategoryFormVisible(false);
+        fetchCategories();
+      } else {
+        message.error(res?.msg || '操作失败');
+      }
+    } catch (e) {
+      // validation error
+    } finally {
+      setCategoryFormLoading(false);
+    }
+  };
+
   return (
     <PageContainer title={false} breadcrumb={null}>
-      <div className="knowledge-page">
-        <div className="knowledge-toolbar">
-          <Space>
+      <div className="knowledge-docs">
+        <aside className="knowledge-docs__sidebar">
+          <div className="knowledge-docs__sidebar-top">
             <Input.Search
               allowClear
-              placeholder="搜索知识库文档"
-              style={{ width: 280 }}
+              placeholder="搜索文档标题"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onSearch={handleSearch}
             />
             {isSuperAdmin ? (
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => history.push('/knowledge/create')}>
-                新增文档
-              </Button>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => history.push('/knowledge/create')} block>
+                  新增文档
+                </Button>
+                <Button icon={<TagsOutlined />} onClick={openCategoryModal} block>
+                  分类管理
+                </Button>
+              </Space>
             ) : (
               <Tag color="blue">只读模式</Tag>
             )}
-          </Space>
-        </div>
+          </div>
 
-        <Spin spinning={loading}>
-          <div className="knowledge-grid">
-            {docs.length === 0 ? (
-              <Card className="knowledge-empty-card">
-                <Empty description="暂无知识库文档" />
-              </Card>
+          <Spin spinning={loading}>
+            {grouped.length === 0 ? (
+              <Empty description="暂无文档" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
-              docs.map((doc) => (
-                <Card key={doc.id} className="knowledge-card" bordered={false}>
-                  <div className="knowledge-card-head">
-                    <div className="knowledge-card-icon">
-                      <BookOutlined />
+              <div className="knowledge-docs__menu">
+                {grouped.map((group) => (
+                  <div key={group.category} className="knowledge-docs__group">
+                    <div className="knowledge-docs__group-title">
+                      <FolderOpenOutlined />
+                      <span>{group.category}</span>
                     </div>
-                    <div className="knowledge-card-title-wrap">
-                      <div className="knowledge-card-title">{doc.title}</div>
-                      <div className="knowledge-time">
-                        <ClockCircleOutlined /> 更新于 {doc.updated_at || '-'}
-                      </div>
+                    <div className="knowledge-docs__group-list">
+                      {group.items.map((doc) => {
+                        const active = String(doc.id) === String(activeId);
+                        return (
+                          <button
+                            key={doc.id}
+                            type="button"
+                            className={`knowledge-docs__item ${active ? 'is-active' : ''}`}
+                            onClick={() => {
+                              setActiveId(doc.id);
+                              history.replace(`/knowledge?id=${doc.id}`);
+                            }}
+                          >
+                            {doc.title}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="knowledge-summary">{doc.summary || '暂无描述'}</div>
-                  <div className="knowledge-meta">
-                    <span>创建人：{doc.create_user_name || '-'}</span>
-                    <span>创建时间：{doc.created_at || '-'}</span>
-                  </div>
-                  <div className="knowledge-actions">
-                    <Button type="link" icon={<EyeOutlined />} onClick={() => history.push(`/knowledge/view/${doc.id}`)}>
-                      查看
-                    </Button>
-                    <Button type="link" icon={<ShareAltOutlined />} onClick={() => handleShare(doc)}>
+                ))}
+              </div>
+            )}
+          </Spin>
+        </aside>
+
+        <section className="knowledge-docs__content">
+          {!activeDoc ? (
+            <Empty description="请选择文档查看内容" />
+          ) : (
+            <>
+              <div className="knowledge-docs__content-head">
+                <div>
+                  <h1>{activeDoc.title}</h1>
+                  <p>{activeDoc.summary || '暂无摘要'}</p>
+                </div>
+                <Space>
+                  <Tooltip title="复制分享链接">
+                    <Button icon={<ShareAltOutlined />} onClick={() => handleShare(activeDoc)}>
                       分享
                     </Button>
-                    {isSuperAdmin && (
-                      <>
-                        <Button type="link" icon={<EditOutlined />} onClick={() => history.push(`/knowledge/edit/${doc.id}`)}>
-                          编辑
+                  </Tooltip>
+                  {isSuperAdmin && (
+                    <>
+                      <Button icon={<EditOutlined />} onClick={() => history.push(`/knowledge/edit/${activeDoc.id}`)}>
+                        编辑
+                      </Button>
+                      <Popconfirm
+                        title="确认删除该文档吗？"
+                        okText="删除"
+                        cancelText="取消"
+                        onConfirm={() => handleDelete(activeDoc.id)}
+                      >
+                        <Button danger icon={<DeleteOutlined />}>
+                          删除
                         </Button>
-                        <Popconfirm
-                          title="确认删除该文档吗？"
-                          onConfirm={() => handleDelete(doc.id)}
-                          okText="删除"
-                          cancelText="取消"
-                        >
-                          <Button type="link" danger icon={<DeleteOutlined />}>
-                            删除
-                          </Button>
-                        </Popconfirm>
-                      </>
-                    )}
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
-        </Spin>
+                      </Popconfirm>
+                    </>
+                  )}
+                </Space>
+              </div>
 
-        {docs.length > 0 && (
-          <div className="knowledge-scroll-footer" ref={loadMoreRef}>
-            {loadingMore ? <Spin size="small" /> : docs.length >= pagination.total ? '没有更多文档了' : '向下滚动加载更多'}
-          </div>
-        )}
+              <div className="knowledge-docs__meta">
+                <Tag icon={<BookOutlined />}>创建人：{activeDoc.create_user_name || '-'}</Tag>
+                <Tag>创建时间：{activeDoc.created_at || '-'}</Tag>
+                <Tag>更新时间：{activeDoc.updated_at || '-'}</Tag>
+              </div>
+
+              <article className="knowledge-viewer">
+                <div
+                  className="knowledge-viewer-content w-e-text"
+                  dangerouslySetInnerHTML={{ __html: ensureHtml(activeDoc.content || '') }}
+                />
+              </article>
+            </>
+          )}
+        </section>
       </div>
+
+      {/* 分类管理弹窗 */}
+      <Modal
+        title="分类管理"
+        open={categoryModalVisible}
+        onCancel={() => setCategoryModalVisible(false)}
+        footer={null}
+        width={560}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openCategoryForm()}>
+            新增分类
+          </Button>
+        </div>
+        <Table
+          size="small"
+          rowKey="id"
+          loading={categoryLoading}
+          dataSource={categories}
+          pagination={false}
+          columns={[
+            { title: '分类名称', dataIndex: 'name' },
+            { title: '排序', dataIndex: 'sort_order', width: 80 },
+            {
+              title: '操作',
+              width: 140,
+              render: (_, record) => (
+                <Space>
+                  <Button type="link" size="small" onClick={() => openCategoryForm(record)}>
+                    编辑
+                  </Button>
+                  <Popconfirm title="确认删除该分类吗？" onConfirm={() => handleDeleteCategory(record.id)}>
+                    <Button type="link" danger size="small">
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Modal>
+
+      {/* 分类新增/编辑弹窗 */}
+      <Modal
+        title={categoryEditing ? '编辑分类' : '新增分类'}
+        open={categoryFormVisible}
+        onCancel={() => setCategoryFormVisible(false)}
+        onOk={handleCategoryFormSubmit}
+        confirmLoading={categoryFormLoading}
+        destroyOnClose
+      >
+        <Form form={categoryForm} layout="vertical" preserve={false}>
+          <Form.Item
+            label="分类名称"
+            name="name"
+            rules={[{ required: true, message: '请输入分类名称' }]}
+          >
+            <Input placeholder="请输入分类名称" />
+          </Form.Item>
+          <Form.Item
+            label="排序"
+            name="sort_order"
+            initialValue={0}
+            rules={[{ required: true, message: '请输入排序' }]}
+          >
+            <InputNumber style={{ width: '100%' }} placeholder="数字越小越靠前" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </PageContainer>
   );
 };

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /e/github_argus/argus-end && ls -la app/models/)",
+      "Read(//e/github_argus/argus-end/**)",
+      "Bash(cd /e/github_argus/argus-end && ls -la app/routers/config/)",
+      "Bash(cd /e/github_argus/argus-end && find app -type f -name \"*.py\" | head -60)",
+      "Bash(echo \"test\")",
+      "Bash(rm /e/github_argus/argus-end/app/models/test_file.py)",
+      "Bash(cat > *)"
+    ],
+    "additionalDirectories": [
+      "E:\\github_argus\\argus-end\\app\\models",
+      "e:\\github_argus\\argus-end\\app\\schema",
+      "e:\\github_argus\\argus-end\\app\\routers\\config"
+    ]
+  }
+}

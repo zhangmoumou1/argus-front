@@ -149,7 +149,7 @@ const Address = ({loading, gconfig, dispatch}) => {
 
 
   return (
-    <PageContainer breadcrumb={null} title="请求地址管理">
+    <PageContainer breadcrumb={null} title={false}>
       <Card>
         <FormForModal open={modal} fields={fields} title={item.id ? "修改地址": "添加地址"} left={6} right={18} record={item}
                       onFinish={onSubmit} onCancel={() => setModal(false)}/>

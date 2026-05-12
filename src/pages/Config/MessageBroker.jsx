@@ -125,7 +125,7 @@ const MessageBroker = ({ gconfig, dispatch, loading: modelLoading }) => {
   ];
 
   return (
-    <PageContainer title="消息中间件" breadcrumb={null}>
+    <PageContainer title={false} breadcrumb={null}>
       <Card>
         <Form form={queryForm} {...CONFIG.LAYOUT} onValuesChange={fetchList}>
           <Row gutter={[8, 8]}>
