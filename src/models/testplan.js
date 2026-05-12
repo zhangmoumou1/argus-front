@@ -5,6 +5,7 @@ import {
   insertTestPlan,
   listTestPlan,
   listTestPlanCaseTree,
+  switchTestPlan,
   unFollowTestPlan,
   updateTestPlan
 } from "@/services/testplan";
@@ -68,6 +69,11 @@ export default {
     * executeTestPlan({payload}, {call}) {
       const res = yield call(executeTestPlan, payload);
       return auth.response(res)
+    },
+
+    * switchTestPlan({payload}, {call}) {
+      const res = yield call(switchTestPlan, payload);
+      return auth.response(res, true);
     },
 
     /**

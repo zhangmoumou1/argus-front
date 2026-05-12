@@ -1,5 +1,5 @@
 import {connect} from '@umijs/max';
-import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Steps, TreeSelect} from "antd";
+import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Steps, Switch, TreeSelect} from "antd";
 import {ApiOutlined, NotificationOutlined, SaveOutlined, TeamOutlined} from "@ant-design/icons";
 import React, {useEffect, useState} from 'react';
 import CONFIG from "@/consts/config";
@@ -108,7 +108,7 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
 
   const onSubmit = async () => {
 
-    const values = form.getFieldsValue(["name", "env", "priority", "cron", "ordered", "case_list", "project_id", "pass_rate", "retry_minutes", "msg_type", "receiver"])
+    const values = form.getFieldsValue(["name", "env", "priority", "cron", "ordered", "enabled", "case_list", "project_id", "pass_rate", "retry_minutes", "msg_type", "receiver"])
     let res;
     if (planRecord.id) {
       res = await dispatch({
@@ -213,6 +213,11 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
               <Option value={false}>否</Option>
               <Option value={true}>是</Option>
             </Select>
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item label="是否开启" name="enabled" valuePropName="checked" initialValue={true}>
+            <Switch checkedChildren="开启" unCheckedChildren="关闭"/>
           </Form.Item>
         </Col>
       </>

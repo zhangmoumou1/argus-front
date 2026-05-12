@@ -28,17 +28,37 @@ export default {
     } else {
       hd = headers;
     }
+    if (Array.isArray(hd)) {
+      return hd.map((item, index) => ({
+        key: item?.key ?? '',
+        value: item?.value ?? '',
+        description: item?.description ?? '',
+        id: item?.id ?? index,
+      }));
+    }
     return Object.keys(hd).map((key, index) => ({
-      key, value: hd[key], id: index
+      key,
+      value: hd[key],
+      description: '',
+      id: index,
     }))
   },
   translateHeaders: headers => {
-    const hd = {};
+    const hd = [];
     for (const h in headers) {
       if (!Object.prototype.hasOwnProperty.call(headers, h)) {
         continue;
       }
-      hd[headers[h].key] = headers[h].value;
+      const item = headers[h];
+      const key = item?.key;
+      if (!key) {
+        continue;
+      }
+      hd.push({
+        key,
+        value: item?.value ?? '',
+        description: item?.description ?? '',
+      });
     }
     return JSON.stringify(hd, null, 2);
   },

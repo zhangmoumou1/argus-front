@@ -79,7 +79,6 @@ const ConstructorModal = ({
   const onSubmit = async () => {
     const values = await form.validateFields();
     const params = {
-      value: values.value,
       type: testCaseConstructorData.type,
       name: values.name,
       constructor_json: getConstructorJson(values),
@@ -147,14 +146,6 @@ const ConstructorModal = ({
   const getContent = () => {
     if (currentStep === 0) {
       return <Row gutter={[12, 12]} style={{marginTop: 36}}>
-        <Col span={8}>
-          <CheckCard
-            avatar={<IconFont type="icon-yongliliebiao" style={{fontSize: 32}}/>}
-            title="测试场景"
-            description="测试场景可以复用, 并传递用例的数据给下一个场景"
-            onClick={() => onSelectType(0)}
-          />
-        </Col>
         <Col span={8}>
           <CheckCard
             avatar={<IconFont type="icon-mysql11" style={{fontSize: 32}}/>}

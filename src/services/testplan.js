@@ -53,6 +53,14 @@ export async function executeTestPlan(params) {
   });
 }
 
+export async function switchTestPlan(params) {
+  return request(`${CONFIG.URL}/testcase/plan/switch`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
 /**
  * 关注测试计划
  * @param params

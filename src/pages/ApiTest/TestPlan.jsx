@@ -87,6 +87,16 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
     })
   }
 
+  const onSwitchTestPlan = async (id, value) => {
+    const res = await dispatch({
+      type: 'testplan/switchTestPlan',
+      payload: {id, status: value},
+    });
+    if (res) {
+      fetchTestPlan();
+    }
+  }
+
   // 执行测试计划
   const onExecute = async id => {
     const res = await dispatch({
@@ -144,6 +154,16 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
       key: 'next_run',
       dataIndex: 'next_run',
       render: (_, record) => getStatus(record)
+    },
+    {
+      title: <span>
+          是否开启 <Tooltip title="关闭后该计划不会按定时触发"><QuestionCircleOutlined/></Tooltip>
+        </span>,
+      key: 'enabled',
+      dataIndex: 'enabled',
+      render: (enabled, record) => <Switch checked={!!enabled} onChange={value => {
+        onSwitchTestPlan(record.id, value)
+      }}/>
     },
     {
       title: <span>
@@ -266,7 +286,7 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
           </Form>
           <Row style={{marginBottom: 12}}>
             <Button type="primary" onClick={() => {
-              onSave({visible: true, title: '新增测试计划', planRecord: {}, currentStep: 0,})
+              onSave({visible: true, title: '新增测试计划', planRecord: {enabled: true}, currentStep: 0,})
             }}><PlusOutlined/> 添加计划</Button>
           </Row>
           <Table columns={columns} dataSource={planData} rowKey={row => row.id} loading={spin}/>

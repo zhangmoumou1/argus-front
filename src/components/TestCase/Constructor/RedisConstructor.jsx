@@ -76,11 +76,6 @@ const RedisConstructor = ({form, dispatch, construct, gconfig, suffix}) => {
                 </Col>
               </Row>
               <Row gutter={8}>
-                <Col span={12}>
-                  <Form.Item label="返回值" name="value">
-                    <Input placeholder="请填写造数后的返回值，可不填"/>
-                  </Form.Item>
-                </Col>
                 <Col span={6}>
                   <Form.Item {...CONFIG.SWITCH_LAYOUT}
                              label={<ShareTooltip/>}

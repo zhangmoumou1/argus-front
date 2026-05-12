@@ -60,7 +60,7 @@ const tabExtra = (response) => {
 const PostmanBody = ({
                        form, gconfig, dispatch, body, setBody, headers, setHeaders,
                        formData, setFormData, caseInfo,
-                       bodyType, setBodyType, save = null
+                       bodyType, setBodyType, save = null, editable = true
                      }) => {
   const [rawType, setRawType] = useState('JSON');
   const [method, setMethod] = useState('GET');
@@ -292,7 +292,7 @@ const PostmanBody = ({
   );
 
   const columns = (columnType) => {
-    return [
+    const baseColumns = [
       {
         title: 'KEY',
         key: 'key',
@@ -304,10 +304,16 @@ const PostmanBody = ({
         dataIndex: 'value',
       },
       {
-        title: 'DESCRIPTION',
+        title: '描述',
         key: 'description',
         dataIndex: 'description',
       },
+    ];
+    if (!editable) {
+      return baseColumns;
+    }
+    return [
+      ...baseColumns,
       {
         title: '操作',
         valueType: 'option',
@@ -369,6 +375,7 @@ const PostmanBody = ({
   const prefixSelector = (
     <Form.Item name="base_path" noStyle>
       <Select style={{width: 130}} placeholder="选择BasePath" showSearch allowClear
+              disabled={!editable}
               optionLabelProp="label"
               filterOption={(input, option) => {
                 if (option.children.length > 1) {
@@ -407,6 +414,7 @@ const PostmanBody = ({
               } initialValue={method}>
                 <Select
                   placeholder="选择请求方式"
+                  disabled={!editable}
                   onChange={(data) => setMethod(data)}
                   style={{width: 120, textAlign: 'left'}}
                 >
@@ -427,6 +435,7 @@ const PostmanBody = ({
                            [{required: true, message: "请输入请求url"}]
                          }>
                 <Input addonBefore={prefixSelector} style={{width: '100%'}} placeholder="请输入要请求的url"
+                       disabled={!editable}
                        onChange={(e) => {
                          splitUrl(e.target.value);
                          form.setFieldsValue({url: e.target.value})
@@ -450,7 +459,7 @@ const PostmanBody = ({
         </Col>
       </Row>
       <Row style={{marginTop: 8}}>
-        <Tabs defaultActiveKey="1" style={{width: '100%'}}>
+          <Tabs defaultActiveKey="1" style={{width: '100%'}}>
           <TabPane tab="Params" key="1">
             <EditableTable
               columns={columns('params')}
@@ -460,6 +469,7 @@ const PostmanBody = ({
               extra={joinUrl}
               editableKeys={editableKeys}
               setEditableRowKeys={setEditableRowKeys}
+              editable={editable}
             />
           </TabPane>
           <TabPane tab="Headers" key="2">
@@ -470,6 +480,7 @@ const PostmanBody = ({
               setDataSource={setHeaders}
               editableKeys={headersKeys}
               setEditableRowKeys={setHeadersKeys}
+              editable={editable}
             />
           </TabPane>
           <TabPane tab="Body" key="3">
@@ -477,6 +488,7 @@ const PostmanBody = ({
               <Radio.Group
                 defaultValue={0}
                 value={bodyType}
+                disabled={!editable}
                 onChange={(e) => {
                   setBodyType(e.target.value)
                   if (e.target.value === 'form-data') {
@@ -495,7 +507,7 @@ const PostmanBody = ({
                 <Radio value={5}>GraphQL</Radio>
               </Radio.Group>
               {bodyType === 1 ? (
-                <Dropdown style={{marginLeft: 8}} overlay={menu} trigger={['click']}>
+                <Dropdown style={{marginLeft: 8}} overlay={menu} trigger={editable ? ['click'] : []}>
                   <a onClick={(e) => e.preventDefault()}>
                     {rawType} <DownOutlined/>
                   </a>
@@ -504,7 +516,7 @@ const PostmanBody = ({
             </Row>
             {getBody(bodyType)}
           </TabPane>
-        </Tabs>
+          </Tabs>
       </Row>
       <Row gutter={[8, 8]}>
         {Object.keys(response).length === 0 ? null : (

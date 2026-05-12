@@ -306,6 +306,7 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
                                       body={body} setBody={setBody} case_id={case_id} formData={formData}
                                       setFormData={setFormData} bodyType={bodyType} form={form}
                                       setBodyType={setBodyType} onSubmit={onSubmit}
+                                      editable={editing}
                       />
                     </Card>
                 }

@@ -20,7 +20,6 @@ const PythonConstructor = ({form, dispatch, construct, suffix}) => {
 
   const onExecuteCommand = async () => {
     const command = form.getFieldValue("command")
-    const value = form.getFieldValue("value")
     if (!command) {
       message.info("脚本内容不能为空")
       return;
@@ -28,7 +27,6 @@ const PythonConstructor = ({form, dispatch, construct, suffix}) => {
     const data = await dispatch({
       type: 'testcase/onlinePyScript',
       payload: {
-        value,
         command,
       }
     })
@@ -48,11 +46,6 @@ const PythonConstructor = ({form, dispatch, construct, suffix}) => {
               <Form.Item label="名称" name="name" rules={[{required: true, message: '请输入Python脚本名称'}]}
                          initialValue={testCaseConstructorData.name}>
                 <Input placeholder="请输入Python脚本名称"/>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="返回值" name="value">
-                <Input placeholder="请填写造数后的返回值，可不填"/>
               </Form.Item>
             </Col>
           </Row>

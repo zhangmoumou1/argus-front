@@ -45,11 +45,6 @@ const HTTPConstructor = ({
                 <Input placeholder="请输入http请求名称"/>
               </Form.Item>
             </Col>
-            <Col span={12}>
-              <Form.Item label="返回值" name="value">
-                <Input placeholder="请填写造数后的返回值，可不填"/>
-              </Form.Item>
-            </Col>
           </Row>
           <Row gutter={8}>
             <Col span={12}>

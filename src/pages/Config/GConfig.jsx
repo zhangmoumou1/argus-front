@@ -1,6 +1,6 @@
 import {PageContainer} from '@ant-design/pro-components';
 import {Badge, Button, Card, Col, Divider, Input, Modal, Row, Select, Switch, Table, Tag} from 'antd';
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {connect} from '@umijs/max';
 
 import {PlusOutlined} from '@ant-design/icons';
@@ -15,12 +15,13 @@ import {listProject} from "@/services/project";
 const {Option} = Select;
 const GConfig = ({gconfig, user, loading, dispatch}) => {
   const {data, envList, key_type, var_type, envMap, modal, currentEnv, currentCreateUser, currentVarType, currentProjectId, currentCaseName, name, pagination} = gconfig;
-  const {userMap, userList} = user;
+  const {userMap, userList, currentUser} = user;
   const [record, setRecord] = useState({id: 0, key_type: 0, type: 1});
   const [language, setLanguage] = useState(0);
   const [editor, setEditor] = useState(null);
   const [projectOptions, setProjectOptions] = useState([]);
   const [projectMap, setProjectMap] = useState({});
+  const initializedCreateUserRef = useRef(false);
 
   const getType = () => {
     if (language === 1) {
@@ -296,6 +297,21 @@ const GConfig = ({gconfig, user, loading, dispatch}) => {
     fetchUserList()
     getConfig();
   }, [currentEnv, currentCreateUser, currentVarType, currentProjectId, currentCaseName, name, pagination.current]);
+
+  useEffect(() => {
+    if (initializedCreateUserRef.current) {
+      return;
+    }
+    initializedCreateUserRef.current = true;
+    if (currentCreateUser !== undefined && currentCreateUser !== null && currentCreateUser !== '') {
+      return;
+    }
+    const localUser = localStorage.getItem('pityUser');
+    const uid = currentUser?.id || (localUser ? JSON.parse(localUser || '{}')?.id : undefined);
+    if (uid !== undefined && uid !== null && uid !== '') {
+      saveQuery({currentCreateUser: uid});
+    }
+  }, [currentCreateUser, currentUser?.id]);
 
   const onFinish = async values => {
     const params = {

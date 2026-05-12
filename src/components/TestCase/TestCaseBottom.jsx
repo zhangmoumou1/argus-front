@@ -62,6 +62,7 @@ const TestCaseBottom = ({
                           bodyType,
                           setBodyType,
                           loading,
+                          editable = true,
                         }) => {
   const {
     preConstructor,
@@ -434,12 +435,6 @@ const TestCaseBottom = ({
       ),
     },
     {
-      title: '返回值',
-      key: 'value',
-      dataIndex: 'value',
-      className: 'drag-visible',
-    },
-    {
       title: '操作',
       key: 'ops',
       className: 'drag-visible',
@@ -700,6 +695,7 @@ const TestCaseBottom = ({
                   setBodyType={setBodyType}
                   bordered={false}
                   save={onSubmit}
+                  editable={editable}
                 />
               </Col>
             </Row>
@@ -717,12 +713,14 @@ const TestCaseBottom = ({
               </span>
             }
           >
-            <TestCaseOutParameters
-              caseId={case_id}
-              createMode={createMode}
-              dispatch={dispatch}
-              testcase={testcase}
-            />
+            <div style={!editable ? {pointerEvents: 'none', opacity: 0.75} : {}}>
+              <TestCaseOutParameters
+                caseId={case_id}
+                createMode={createMode}
+                dispatch={dispatch}
+                testcase={testcase}
+              />
+            </div>
           </TabPane>
           <TabPane
             key="5"

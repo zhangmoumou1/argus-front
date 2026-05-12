@@ -50,19 +50,6 @@ export default ({data, form, dispatch, testcaseData, constructorType}) => {
       }
     },
     {
-      name: 'value',
-      label: '返回值',
-      placeholder: "请填写返回变量名称，不需要可不填",
-      required: false,
-      type: 'input',
-      initialValue: data.value,
-      span: 12,
-      layout: {
-        labelCol: {span: 8},
-        wrapperCol: {span: 16},
-      }
-    },
-    {
       name: 'public',
       label: <Tooltip title="开启共享后, 其他人可使用你的数据构造器"><span>共享<QuestionOutlined/></span></Tooltip>,
       required: true,
