@@ -408,6 +408,13 @@ export async function listKnowledge(params) {
   });
 }
 
+export async function listPublicKnowledge(params) {
+  return request(`${CONFIG.URL}/config/knowledge/public/list`, {
+    method: 'GET',
+    params,
+  });
+}
+
 export async function insertKnowledge(data) {
   return request(`${CONFIG.URL}/config/knowledge/insert`, {
     method: 'POST',
@@ -436,6 +443,12 @@ export async function listKnowledgeCategory() {
   return request(`${CONFIG.URL}/config/knowledge/category/list`, {
     method: 'GET',
     headers: auth.headers(),
+  });
+}
+
+export async function listPublicKnowledgeCategory() {
+  return request(`${CONFIG.URL}/config/knowledge/category/public/list`, {
+    method: 'GET',
   });
 }
 

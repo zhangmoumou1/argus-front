@@ -125,12 +125,9 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ variant = 'header' }
         minWidth: 0,
         alignItems: 'center',
         padding: '0',
-        cursor: 'pointer',
+        cursor: 'default',
         borderRadius: 12,
         transition: 'all 0.2s ease',
-        '&:hover': {
-          backgroundColor: '#f3f4f6',
-        },
       };
     }
 

@@ -8,7 +8,7 @@ import { history } from '@umijs/max';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 import { currentUser as queryCurrentUser, LoginUser } from './services/auth';
-import React from 'react';
+import React, { useEffect } from 'react';
 import NoTableData from '@/assets/NoSearch.svg';
 import routesConfig from '../config/routes';
 
@@ -40,6 +40,25 @@ const getFullPath = (currPath = '', parentPath = '') => {
   return `${parentPath.replace(/\/$/, '')}/${currPath}`;
 };
 
+const hexToRgba = (color = '#1677ff', alpha = 1) => {
+  const normalized = String(color).trim().replace('#', '');
+  const full = normalized.length === 3
+    ? normalized
+        .split('')
+        .map((char) => `${char}${char}`)
+        .join('')
+    : normalized;
+
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) {
+    return `rgba(22, 119, 255, ${alpha})`;
+  }
+
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 type RouteEntry = {
   path: string;
   name?: string;
@@ -59,6 +78,13 @@ const getRouteLabel = (name?: string) => {
 const normalizePath = (path = '') => {
   const cleanPath = path.split('?')[0].replace(/\/+$/, '');
   return cleanPath || '/';
+};
+
+const isKnowledgePath = (pathname = '') => normalizePath(pathname) === '/knowledge';
+
+const isPublicKnowledgeShare = (locationLike?: { pathname?: string; search?: string }) => {
+  const pathname = normalizePath(locationLike?.pathname || '');
+  return pathname === '/knowledge/docs';
 };
 
 const createRouteMatcher = (path = '') => {
@@ -130,11 +156,31 @@ const PageTopBar = ({ onOpenTheme }: { onOpenTheme: () => void }) => (
   </div>
 );
 
-const GlobalPageShell = ({ children, toolbar }: { children: React.ReactNode; toolbar?: React.ReactNode }) => {
+const GlobalPageShell = ({
+  children,
+  toolbar,
+  accentColor,
+}: {
+  children: React.ReactNode;
+  toolbar?: React.ReactNode;
+  accentColor?: string;
+}) => {
   const crumbs = getRouteCrumbs(history.location.pathname);
+  const accent = accentColor || '#1677ff';
+  const accentSoft = hexToRgba(accent, 0.12);
+  const shellStyle = {
+    ['--argus-accent' as const]: accent,
+    ['--argus-accent-soft' as const]: accentSoft,
+  } as React.CSSProperties;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--argus-accent', accent);
+    root.style.setProperty('--argus-accent-soft', accentSoft);
+  }, [accent, accentSoft]);
 
   return (
-    <main className="argus-page-shell">
+    <main className="argus-page-shell" style={shellStyle}>
       {toolbar}
       {crumbs.length > 0 && (
         <div className="argus-page-shell__header">
@@ -208,6 +254,12 @@ export async function getInitialState(): Promise<{
     return undefined;
   };
   const { location } = history;
+  if (isPublicKnowledgeShare(location)) {
+    return {
+      fetchUserInfo,
+      settings: defaultSettings,
+    };
+  }
   if (location.pathname !== loginPath) {
     const currentUser = await fetchUserInfo();
     return {
@@ -226,6 +278,8 @@ export async function getInitialState(): Promise<{
 export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) => {
   const currentRole = Number(initialState?.currentUser?.role ?? 0);
   const isSuperAdmin = currentRole === 2;
+  const currentLocation = history.location;
+  const hideAppShellForKnowledge = isKnowledgePath(currentLocation.pathname);
 
   const canAccessMenu = (path: string) => {
     const currentPath = String(path || '');
@@ -261,10 +315,10 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     waterMarkProps: {
       content: initialState?.currentUser?.name,
     },
-    footerRender: () => <Footer />,
+    footerRender: () => (hideAppShellForKnowledge ? false : <Footer />),
     onPageChange: () => {
       const { location } = history;
-      if (!initialState?.currentUser && location.pathname !== loginPath) {
+      if (!initialState?.currentUser && location.pathname !== loginPath && !isPublicKnowledgeShare(location)) {
         history.push(loginPath);
       }
     },
@@ -290,15 +344,26 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     ],
     links: [],
     menuHeaderRender: undefined,
-    menuFooterRender: (props) => (props?.collapsed ? null : <AvatarDropdown variant="sider" />),
+    menuFooterRender: () => <AvatarDropdown variant="sider" />,
+    menuRender: (props, defaultDom) => (hideAppShellForKnowledge ? false : defaultDom),
     menuDataRender: (menuData) => normalizeMenuData(menuData as any[]),
     childrenRender: (children) => {
       if (initialState?.loading) return <PageLoading />;
+      if (hideAppShellForKnowledge) {
+        return (
+          <ConfigProvider
+            renderEmpty={() => <Empty image={NoTableData} imageStyle={{ height: 160 }} description="暂无数据" />}
+          >
+            {children}
+          </ConfigProvider>
+        );
+      }
       return (
         <ConfigProvider
           renderEmpty={() => <Empty image={NoTableData} imageStyle={{ height: 160 }} description="暂无数据" />}
         >
           <GlobalPageShell
+            accentColor={initialState?.settings?.colorPrimary}
             toolbar={(
               <PageTopBar
                 onOpenTheme={() => {

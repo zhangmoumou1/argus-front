@@ -1,4 +1,4 @@
-import { BellOutlined, BgColorsOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { BellOutlined, BgColorsOutlined } from '@ant-design/icons';
 import {useEmotionCss} from '@ant-design/use-emotion-css';
 import {history, useModel} from '@umijs/max';
 import {Badge, Tooltip} from 'antd';
@@ -65,14 +65,6 @@ const GlobalHeaderRight = ({ onOpenTheme }: GlobalHeaderRightProps) => {
           </Badge>
         </span>
       </Tooltip>
-      <span
-        className={actionClassName}
-        onClick={() => {
-          window.open('https://wuranxu.github.io/pityDoc/');
-        }}
-      >
-        <QuestionCircleOutlined/>
-      </span>
       <Tooltip title="主题设置">
         <span
           className={actionClassName}

@@ -342,7 +342,13 @@ export default [
   {
     path: '/knowledge',
     icon: 'book',
-    name: '知识库',
+    name: '帮助文档',
+    component: './KnowledgeBase',
+  },
+  {
+    path: '/knowledge/docs',
+    hideInMenu: true,
+    layout: false,
     component: './KnowledgeBase',
   },
   {
