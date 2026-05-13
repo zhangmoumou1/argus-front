@@ -1,6 +1,5 @@
 import Footer from '@/components/Footer';
 import RightContent from '@/components/RightContent';
-import AvatarDropdown from '@/components/RightContent/AvatarDropdown';
 import { PageLoading, Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
 import type { RunTimeLayoutConfig } from '@umijs/max';
@@ -17,6 +16,7 @@ import {
   BankOutlined,
   HistoryOutlined,
   MacCommandOutlined,
+  MenuOutlined,
   ProjectOutlined,
 } from '@ant-design/icons';
 import IndexPage from '@/pages/IndexPage';
@@ -150,11 +150,44 @@ const getRouteCrumbs = (pathname = '') => {
   return matched.labels;
 };
 
-const PageTopBar = ({ onOpenTheme }: { onOpenTheme: () => void }) => (
-  <div className="argus-topbar">
-    <RightContent onOpenTheme={onOpenTheme} />
-  </div>
-);
+const PageTopBar = ({
+  crumbs,
+  onOpenTheme,
+}: {
+  crumbs: string[];
+  onOpenTheme: () => void;
+}) => {
+  const onToggleSider = () => {
+    const nextCollapsed = !document.body.classList.contains('argus-sider-collapsed');
+    document.body.classList.toggle('argus-sider-collapsed', nextCollapsed);
+    document.querySelectorAll('.ant-pro-sider .ant-menu-inline-collapsed').forEach((menu) => {
+      menu.classList.remove('ant-menu-inline-collapsed');
+    });
+    document.querySelectorAll('.ant-menu-submenu-popup').forEach((popup) => {
+      popup.parentElement?.removeChild(popup);
+    });
+  };
+
+  return (
+    <header className="argus-topbar">
+      <div className="argus-topbar__left">
+        <button className="argus-topbar__toggle" type="button" aria-label="Toggle Sidebar" onClick={onToggleSider}>
+          <MenuOutlined />
+        </button>
+        {crumbs.length > 0 && (
+          <Breadcrumb className="argus-topbar__breadcrumb" separator=">">
+            {crumbs.map((item) => (
+              <Breadcrumb.Item key={item}>{item}</Breadcrumb.Item>
+            ))}
+          </Breadcrumb>
+        )}
+      </div>
+      <div className="argus-topbar__right">
+        <RightContent onOpenTheme={onOpenTheme} />
+      </div>
+    </header>
+  );
+};
 
 const GlobalPageShell = ({
   children,
@@ -165,7 +198,6 @@ const GlobalPageShell = ({
   toolbar?: React.ReactNode;
   accentColor?: string;
 }) => {
-  const crumbs = getRouteCrumbs(history.location.pathname);
   const accent = accentColor || '#1677ff';
   const accentSoft = hexToRgba(accent, 0.12);
   const shellStyle = {
@@ -182,15 +214,6 @@ const GlobalPageShell = ({
   return (
     <main className="argus-page-shell" style={shellStyle}>
       {toolbar}
-      {crumbs.length > 0 && (
-        <div className="argus-page-shell__header">
-          <Breadcrumb separator=">">
-            {crumbs.map((item) => (
-              <Breadcrumb.Item key={item}>{item}</Breadcrumb.Item>
-            ))}
-          </Breadcrumb>
-        </div>
-      )}
       <div className="argus-page-shell__content">{children}</div>
     </main>
   );
@@ -310,7 +333,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
       });
 
   return {
-    siderWidth: 260,
+    siderWidth: 290,
     headerRender: false,
     waterMarkProps: {
       content: initialState?.currentUser?.name,
@@ -344,7 +367,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     ],
     links: [],
     menuHeaderRender: undefined,
-    menuFooterRender: () => <AvatarDropdown variant="sider" />,
+    menuFooterRender: false,
     menuRender: (props, defaultDom) => (hideAppShellForKnowledge ? false : defaultDom),
     menuDataRender: (menuData) => normalizeMenuData(menuData as any[]),
     childrenRender: (children) => {
@@ -366,6 +389,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
             accentColor={initialState?.settings?.colorPrimary}
             toolbar={(
               <PageTopBar
+                crumbs={getRouteCrumbs(history.location.pathname)}
                 onOpenTheme={() => {
                   const handle = document.querySelector('[class*="pro-setting-drawer-handle"]') as HTMLElement | null;
                   handle?.click();
