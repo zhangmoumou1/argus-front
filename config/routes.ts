@@ -319,12 +319,14 @@ export default [
     path: '/ci',
     icon: 'icon-CI',
     name: '持续集成',
+    hideInMenu: true,
     component: './Building',
   },
   {
     path: '/precise',
     icon: 'icon-jingzhun',
     name: '精准测试',
+    hideInMenu: true,
     component: './Building',
   },
   {
@@ -343,6 +345,7 @@ export default [
     path: '/knowledge',
     icon: 'book',
     name: '帮助文档',
+    hideInMenu: true,
     component: './KnowledgeBase',
   },
   {

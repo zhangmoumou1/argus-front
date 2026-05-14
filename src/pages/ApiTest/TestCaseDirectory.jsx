@@ -898,12 +898,12 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
             onAddTestCase();
           }}
         >
-          <RocketOutlined/> 普通场景
+          <RocketOutlined/> 普通用例
         </a>
       </AMenu.Item>
       <AMenu.Item key="2">
         <a onClick={() => setRecorderModal(true)}>
-          <CameraTwoTone/> 录制场景
+          <CameraTwoTone/> 录制用例
           <Tag
             color="red"
             style={{
@@ -1074,7 +1074,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
               bodyStyle={{padding: 0}}
               open={addCaseVisible}
               width={1300}
-              title="添加场景用例"
+              title="添加接口用例"
               onClose={() => setAddCaseVisible(false)}
               maskClosable={false}
               footer={<div style={{float: 'right'}}>
@@ -1259,7 +1259,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                       <Col span={24}>
                         <Dropdown overlay={AddCaseMenu} trigger="click">
                           <Button type="primary">
-                            <PlusOutlined/> 新建场景
+                            <PlusOutlined/> 新建用例
                           </Button>
                         </Dropdown>
                         <Button

@@ -34,11 +34,11 @@ export default ({data, form, dispatch, testcaseData, constructorType}) => {
     },
     {
       name: 'constructor_case_id',
-      label: '测试场景',
+      label: '测试接口',
       required: true,
       initialValue: data.constructor_case_id,
-      placeholder: '请选择测试场景',
-      component: <Select placeholder="请选择场景">
+      placeholder: '请选择测试接口',
+      component: <Select placeholder="请选择接口">
         {
           testcaseData.map(v => <Option key={v.id} value={v.id}>{v.name}</Option>)
         }

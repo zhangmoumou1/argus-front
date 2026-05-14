@@ -1,4 +1,5 @@
 import moment from 'moment';
+import hljs from 'highlight.js';
 
 export const STORAGE_KEY = 'argux_knowledge_docs_v1';
 export const STYLE_DEMO_DOC_ID = 'kb-style-demo';
@@ -54,6 +55,83 @@ export const getPlainText = (html = '') =>
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+export const getCodeBlockLanguage = (block) => {
+  if (!block) return '';
+
+  const classLanguage = Array.from(block.classList || []).find((item) => item.startsWith('language-'));
+  if (classLanguage) {
+    return classLanguage.replace('language-', '').trim();
+  }
+
+  const dataLanguage =
+    block.getAttribute('data-language') ||
+    block.getAttribute('data-code-language') ||
+    block.getAttribute('data-codeblock-language') ||
+    block.parentElement?.getAttribute('data-language') ||
+    block.parentElement?.getAttribute('data-code-language') ||
+    block.parentElement?.getAttribute('data-codeblock-language');
+
+  return String(dataLanguage || '').trim();
+};
+
+export const highlightCodeBlocksInElement = (root) => {
+  if (!root?.querySelectorAll) return;
+
+  root.querySelectorAll('pre code').forEach((block) => {
+    const source = block.textContent || '';
+    const language = getCodeBlockLanguage(block);
+
+    try {
+      let highlighted = language && hljs.getLanguage(language)
+        ? hljs.highlight(source, { language })
+        : hljs.highlightAuto(source);
+
+      // Some legacy docs were saved with a wrong language class (for example
+      // `language-html` on Python code). If explicit highlighting produces no
+      // token markup, fall back to auto-detection so the viewer still renders
+      // a readable colored code block.
+      if (
+        language &&
+        hljs.getLanguage(language) &&
+        !/<span class="hljs-/.test(highlighted.value) &&
+        source.trim()
+      ) {
+        highlighted = hljs.highlightAuto(source);
+      }
+
+      block.innerHTML = highlighted.value;
+      block.className = 'hljs';
+      block.removeAttribute('style');
+      block.querySelectorAll('*').forEach((node) => node.removeAttribute('style'));
+
+      if (language) {
+        block.classList.add(`language-${language}`);
+      } else if (highlighted.language) {
+        block.classList.add(`language-${highlighted.language}`);
+      }
+
+      const pre = block.closest('pre');
+      if (pre) {
+        pre.removeAttribute('style');
+      }
+    } catch (error) {
+      block.textContent = source;
+    }
+  });
+};
+
+export const highlightKnowledgeHtml = (html = '') => {
+  const normalizedHtml = ensureHtml(html);
+  if (typeof document === 'undefined') {
+    return normalizedHtml;
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = normalizedHtml;
+  highlightCodeBlocksInElement(container);
+  return container.innerHTML;
+};
 
 const defaultDocs = [
   {

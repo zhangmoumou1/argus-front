@@ -647,8 +647,7 @@ body,
 }
 
 .ant-pro-sider .ant-pro-sider-logo {
-  height: 76px;
-  padding: 0 20px;
+  height: 70px;
   border-bottom: 0;
   background: var(--argus-shell-panel);
 }
@@ -658,12 +657,17 @@ body,
   gap: 12px;
   align-items: center;
   min-width: 0;
+  margin-left: 10px;
 }
 
 .ant-pro-sider .ant-pro-sider-logo img {
   width: 32px;
   height: 32px;
   border-radius: 8px;
+}
+
+.ant-pro-layout .ant-pro-sider-logo > a > img {
+  height: 23px;
 }
 
 .ant-pro-sider .ant-pro-sider-logo h1 {
@@ -673,8 +677,12 @@ body,
   line-height: 20px;
 }
 
+.ant-pro-layout .ant-pro-sider-logo > a > h1 {
+  font-size: 18px;
+}
+
 .ant-pro-sider-menu {
-  padding: 10px 20px 20px !important;
+  padding: 0 10px 20px !important;
   background: var(--argus-shell-panel) !important;
 }
 
@@ -717,7 +725,7 @@ body,
 }
 
 .ant-pro-sider-menu .ant-menu-sub {
-  padding: 4px 0 8px 34px !important;
+  padding: 4px 0 8px 20px !important;
   background: transparent !important;
 }
 
@@ -752,7 +760,7 @@ body,
 }
 
 .ant-layout-sider-collapsed .ant-pro-sider-logo {
-  height: 76px;
+  height: 70px;
   padding: 0;
   justify-content: center;
 }
@@ -766,7 +774,7 @@ body,
 }
 
 .ant-layout-sider-collapsed .ant-pro-sider-menu {
-  padding: 10px 16px 20px !important;
+  padding: 0 16px 20px !important;
 }
 
 .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title,
@@ -812,7 +820,7 @@ body,
   grid-template-columns: minmax(220px, 1fr) minmax(280px, 430px) minmax(180px, 1fr);
   align-items: center;
   gap: 18px;
-  min-height: 80px;
+  min-height: 70px;
   padding: 0 24px;
   background: var(--argus-shell-panel);
   border-bottom: 1px solid var(--argus-shell-line);
@@ -833,8 +841,8 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 35px;
+  height: 35px;
   margin-right: 14px;
   color: var(--argus-shell-muted);
   background: #fff;
@@ -919,7 +927,7 @@ body,
 }
 
 .argus-page-shell__content {
-  padding: 24px;
+  padding: 20px;
 }
 
 @media (max-width: 1100px) {
@@ -1002,7 +1010,7 @@ ol {
 
 @media (min-width: 640px) {
   .argus-page-shell__content {
-    padding: 24px;
+    padding: 20px;
   }
 }
 
@@ -1175,7 +1183,7 @@ body.argus-sider-collapsed .ant-pro-sider-menu .ant-menu-inline-collapsed-toolti
 
   .ant-layout-sider-collapsed.ant-pro-sider:hover .ant-pro-sider-menu,
   body.argus-sider-collapsed .ant-pro-sider:hover .ant-pro-sider-menu {
-    padding: 10px 20px 20px !important;
+    padding: 0 20px 20px !important;
   }
 
   .ant-layout-sider-collapsed.ant-pro-sider:hover .ant-pro-sider-menu .ant-menu-submenu-title,
@@ -1291,7 +1299,7 @@ body.argus-sider-collapsed .argus-page-shell__content {
   width: auto !important;
   max-width: none !important;
   margin: 0 !important;
-  padding: 24px !important;
+  padding: 20px !important;
 }
 
 @media (min-width: 992px) {

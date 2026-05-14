@@ -448,30 +448,49 @@ const InterfaceEndpoint = () => {
       dataIndex: 'method',
       key: 'method',
       width: 84,
-      render: (v) => <MethodTag value={v} />,
+      render: (value) => String(value || 'GET').toUpperCase(),
     },
     {
       title: '功能模块',
       dataIndex: 'module_name',
       key: 'module_name',
       width: 220,
-      render: (v) => <Tag>{v || '默认模块'}</Tag>,
+      render: (value) => value || '默认模块',
     },
     {
       title: '状态',
       dataIndex: 'endpoint_status',
       key: 'endpoint_status',
       width: 110,
-      render: (v) => <StatusTag value={v} />,
+      render: (value) => {
+        const deprecated = value === 'deprecated';
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: 56,
+              padding: '2px 10px',
+              borderRadius: 8,
+              border: `1px solid ${deprecated ? '#ec9a08' : '#2f9f3d'}`,
+              background: deprecated ? '#ec9a08' : '#2f9f3d',
+              color: deprecated ? '#000' : '#f9fafb',
+              fontSize: 12,
+              lineHeight: '20px',
+            }}
+          >
+            {deprecated ? '废弃' : '可用'}
+          </span>
+        );
+      },
     },
     {
       title: '实例数据',
       dataIndex: 'sample_available',
       key: 'sample_available',
       width: 110,
-      render: (value, record) => (
-        value ? <Tag color="green">有实例</Tag> : <Tag color="default">无实例</Tag>
-      ),
+      render: (value) => (value ? '有实例' : '无实例'),
     },
     {
       title: '实例时间',

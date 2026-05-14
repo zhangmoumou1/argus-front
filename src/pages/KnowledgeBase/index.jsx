@@ -21,7 +21,6 @@ import {
   FolderOpenOutlined,
   TagsOutlined,
 } from '@ant-design/icons';
-import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-dark.css';
 import { history, useLocation, useModel } from '@umijs/max';
 import {
@@ -34,7 +33,7 @@ import {
   updateKnowledgeCategory,
   deleteKnowledgeCategory,
 } from '@/services/configure';
-import { ensureHtml } from './store';
+import { highlightKnowledgeHtml } from './store';
 import './index.less';
 
 const PAGE_SIZE = 1000;
@@ -170,41 +169,7 @@ const KnowledgeBase = () => {
   );
 
   const highlightedContent = useMemo(() => {
-    const html = ensureHtml(activeDoc?.content || '');
-    if (typeof document === 'undefined') {
-      return html;
-    }
-    const container = document.createElement('div');
-    container.innerHTML = html;
-    const codeBlocks = container.querySelectorAll('pre code');
-    codeBlocks.forEach((block) => {
-      const source = block.textContent || '';
-      const languageClass = Array.from(block.classList).find((item) => item.startsWith('language-'));
-      const language = languageClass ? languageClass.replace('language-', '').trim() : '';
-      try {
-        const highlighted = language && hljs.getLanguage(language)
-          ? hljs.highlight(source, { language })
-          : hljs.highlightAuto(source);
-        block.innerHTML = highlighted.value;
-        block.className = 'hljs';
-        block.removeAttribute('style');
-        block.querySelectorAll('*').forEach((node) => {
-          node.removeAttribute('style');
-        });
-        const pre = block.closest('pre');
-        if (pre) {
-          pre.removeAttribute('style');
-        }
-        if (highlighted.language) {
-          block.classList.add(`language-${highlighted.language}`);
-        } else if (language) {
-          block.classList.add(`language-${language}`);
-        }
-      } catch (error) {
-        block.textContent = source;
-      }
-    });
-    return container.innerHTML;
+    return highlightKnowledgeHtml(activeDoc?.content || '');
   }, [activeDoc?.content]);
 
   const activeDocAuthor = activeDoc?.create_user_name || activeDoc?.author || '-';

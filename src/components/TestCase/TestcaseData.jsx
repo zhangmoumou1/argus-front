@@ -68,7 +68,7 @@ const TestcaseData = ({caseId, testcase, loading, dispatch, currentEnv, createMo
       key: 'id'
     },
     {
-      title: '场景名称',
+      title: '接口名称',
       dataIndex: 'name',
       key: 'name'
     },
@@ -167,17 +167,17 @@ const TestcaseData = ({caseId, testcase, loading, dispatch, currentEnv, createMo
   const fields = [
     {
       name: 'name',
-      label: '测试场景',
+      label: '测试接口',
       required: true,
       type: 'input',
-      placeholder: '请输入测试场景',
+      placeholder: '请输入测试接口',
       initialValue: record.name,
     },
     {
       name: 'json_data',
       label: 'JSON数据',
       required: true,
-      placeholder: '请输入测试场景',
+      placeholder: '请输入测试接口',
       initialValue: record.name,
       component: <JSONAceEditor height={200} setEditor={setEditor} theme="material-one-dark"/>
     },

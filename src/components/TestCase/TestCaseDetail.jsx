@@ -119,7 +119,9 @@ export default ({caseId, userMap, setExecuteStatus, project, checkedKeys}) => {
   const translateHeaders = () => {
     const hd = {};
     for (const h in headers) {
-      hd[headers[h].key] = headers[h].value;
+      if (Object.prototype.hasOwnProperty.call(headers, h)) {
+        hd[headers[h].key] = headers[h].value;
+      }
     }
     return JSON.stringify(hd, null, 2);
   };
@@ -156,8 +158,8 @@ export default ({caseId, userMap, setExecuteStatus, project, checkedKeys}) => {
                   <Tabs defaultActiveKey="1" style={{marginTop: 12}}>
                     <TabPane key="1" tab="基础信息">
                       <Descriptions bordered size='middle' column={2}>
-                        <Descriptions.Item label='场景名称'><a>{data.name}</a></Descriptions.Item>
-                        <Descriptions.Item label='场景目录'>{data.catalogue}</Descriptions.Item>
+                        <Descriptions.Item label='接口名称'><a>{data.name}</a></Descriptions.Item>
+                        <Descriptions.Item label='接口目录'>{data.catalogue}</Descriptions.Item>
                         <Descriptions.Item label='优先级'>{<Tag
                           color={CONFIG.CASE_TAG[data.priority]}>{data.priority}</Tag>}</Descriptions.Item>
                         <Descriptions.Item label='请求协议'>{REQUEST_TYPE[data.request_type]}</Descriptions.Item>
@@ -177,7 +179,7 @@ export default ({caseId, userMap, setExecuteStatus, project, checkedKeys}) => {
                         <Descriptions.Item label='更新时间'>{data.updated_at}</Descriptions.Item>
                         <Descriptions.Item label='用例标签' span={2}>{
                           <div style={{textAlign: 'center'}}>
-                            {data.tag ? data.tag.split(',').map(v => <Tag style={{marginRight: 4}}
+                            {data.tag ? data.tag.split(',').map(v => <Tag key={v} style={{marginRight: 4}}
                                                                           color='blue'>{v}</Tag>) : '无'}
                           </div>
                         }</Descriptions.Item>

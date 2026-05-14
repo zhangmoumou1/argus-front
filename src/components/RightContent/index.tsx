@@ -1,4 +1,4 @@
-import { BellOutlined, BgColorsOutlined } from '@ant-design/icons';
+import { BellOutlined, BgColorsOutlined, BookOutlined } from '@ant-design/icons';
 import {useEmotionCss} from '@ant-design/use-emotion-css';
 import {history, useModel} from '@umijs/max';
 import {Badge, Tooltip} from 'antd';
@@ -54,6 +54,16 @@ const GlobalHeaderRight = ({ onOpenTheme }: GlobalHeaderRightProps) => {
 
   return (
     <div className={className}>
+      <Tooltip title="帮助文档">
+        <span
+          className={actionClassName}
+          onClick={() => {
+            history.push('/knowledge');
+          }}
+        >
+          <BookOutlined />
+        </span>
+      </Tooltip>
       <Tooltip title="消息中心">
         <span className={actionClassName}
               onClick={() => {

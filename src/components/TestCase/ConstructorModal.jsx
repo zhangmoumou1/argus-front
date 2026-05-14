@@ -150,7 +150,7 @@ const ConstructorModal = ({
           <CheckCard
             avatar={<IconFont type="icon-mysql11" style={{fontSize: 32}}/>}
             title="SQL语句"
-            description="通过执行SQL语句，可以造出/恢复用例场景需要的数据"
+            description="通过执行SQL语句，可以造出/恢复接口需要的数据"
             onClick={() => onSelectType(1)}
           />
         </Col>

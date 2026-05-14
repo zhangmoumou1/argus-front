@@ -1,0 +1,122 @@
+- generic [ref=e4]:
+  - complementary [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e9] [cursor=pointer]:
+        - img "logo" [ref=e10]
+        - heading "Argus Testplatform" [level=1] [ref=e11]
+      - menu [ref=e13]:
+        - menuitem "dashboard Dashboard" [ref=e14] [cursor=pointer]:
+          - generic [ref=e16]:
+            - img "dashboard" [ref=e18]:
+              - img [ref=e19]
+            - generic [ref=e21]: Dashboard
+        - menuitem "project 项目管理" [ref=e22] [cursor=pointer]:
+          - link "project 项目管理" [ref=e24]:
+            - /url: "#/project"
+            - generic [ref=e25]:
+              - img "project" [ref=e27]:
+                - img [ref=e28]
+              - generic [ref=e30]: 项目管理
+        - menuitem "api 接口资产" [ref=e31] [cursor=pointer]:
+          - generic [ref=e33]:
+            - img "api" [ref=e35]:
+              - img [ref=e36]
+            - generic [ref=e38]: 接口资产
+        - menuitem "mac-command 场景测试" [ref=e39] [cursor=pointer]:
+          - generic [ref=e41]:
+            - img "mac-command" [ref=e43]:
+              - img [ref=e44]
+            - generic [ref=e47]: 场景测试
+        - menuitem "history 测试运行" [ref=e48] [cursor=pointer]:
+          - generic [ref=e50]:
+            - img "history" [ref=e52]:
+              - img [ref=e53]
+            - generic [ref=e55]: 测试运行
+        - menuitem "测试配置" [ref=e56] [cursor=pointer]:
+          - generic [ref=e58]:
+            - img [ref=e60]:
+              - img [ref=e61]
+            - generic [ref=e63]: 测试配置
+        - menuitem "bank 后台管理" [ref=e64] [cursor=pointer]:
+          - generic [ref=e66]:
+            - img "bank" [ref=e68]:
+              - img [ref=e69]
+            - generic [ref=e71]: 后台管理
+        - menuitem "tool 实用工具" [ref=e72] [cursor=pointer]:
+          - generic [ref=e74]:
+            - img "tool" [ref=e76]:
+              - img [ref=e77]
+            - generic [ref=e79]: 实用工具
+        - menuitem "持续集成" [ref=e80] [cursor=pointer]:
+          - link "持续集成" [ref=e82]:
+            - /url: "#/ci"
+            - generic [ref=e83]:
+              - img [ref=e85]:
+                - img [ref=e86]
+              - generic [ref=e88]: 持续集成
+        - menuitem "精准测试" [ref=e89] [cursor=pointer]:
+          - link "精准测试" [ref=e91]:
+            - /url: "#/precise"
+            - generic [ref=e92]:
+              - img [ref=e94]:
+                - img [ref=e95]
+              - generic [ref=e97]: 精准测试
+        - menuitem "数据工厂" [ref=e98] [cursor=pointer]:
+          - link "数据工厂" [ref=e100]:
+            - /url: "#/datafactory"
+            - generic [ref=e101]:
+              - img [ref=e103]:
+                - img [ref=e104]
+              - generic [ref=e106]: 数据工厂
+        - menuitem "book 帮助文档" [ref=e107] [cursor=pointer]:
+          - link "book 帮助文档" [ref=e109]:
+            - /url: "#/knowledge"
+            - generic [ref=e110]:
+              - img "book" [ref=e112]:
+                - img [ref=e113]
+              - generic [ref=e115]: 帮助文档
+  - generic [ref=e116]:
+    - main [ref=e117]:
+      - main [ref=e118]:
+        - generic [ref=e119]:
+          - generic [ref=e120]:
+            - button "Toggle Sidebar" [ref=e121] [cursor=pointer]:
+              - img "menu" [ref=e122]:
+                - img [ref=e123]
+            - navigation [ref=e125]:
+              - list [ref=e126]:
+                - listitem [ref=e127]: 帮助文档
+                - listitem [ref=e128]: ">"
+                - listitem [ref=e129]: 编辑文档
+          - generic [ref=e131]:
+            - img "bell" [ref=e134] [cursor=pointer]:
+              - img [ref=e135]
+            - img "bg-colors" [ref=e138] [cursor=pointer]:
+              - img [ref=e139]
+            - generic [ref=e141] [cursor=pointer]:
+              - img "avatar" [ref=e143]
+              - generic [ref=e144]: 张砚程
+        - generic [ref=e751]:
+          - generic [ref=e754]: 编辑知识库文档
+          - generic [ref=e758]:
+            - textbox "请输入文档标题" [ref=e760]
+            - generic [ref=e762] [cursor=pointer]:
+              - generic [ref=e764]:
+                - combobox [ref=e766]
+                - generic: 请选择文档分类
+              - generic:
+                - img:
+                  - img
+            - textbox "请输入文档摘要（可选）" [ref=e768]
+            - img [ref=e772]
+            - generic [ref=e776]:
+              - button "arrow-left 返回" [ref=e777] [cursor=pointer]:
+                - img "arrow-left" [ref=e779]:
+                  - img [ref=e780]
+                - generic [ref=e782]: 返回
+              - button "保 存" [ref=e783] [cursor=pointer]:
+                - generic [ref=e784]: 保 存
+    - generic [ref=e569]:
+      - text: "@ 2026 zyc个人出品"
+      - link "浙ICP备18035865号-2" [ref=e570] [cursor=pointer]:
+        - /url: https://beian.miit.gov.cn

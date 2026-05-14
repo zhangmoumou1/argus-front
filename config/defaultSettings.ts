@@ -17,7 +17,7 @@ const Settings: LayoutSettings & {
   fixedHeader: true,
   fixSiderbar: true,
   colorWeak: false,
-  title: 'Argus测试平台',
+  title: 'Argus Testplatform',
   pwa: false,
   logo: '/logo.ico',
   iconfontUrl: '//at.alicdn.com/t/font_915840_kom9s5w2t6k.js',

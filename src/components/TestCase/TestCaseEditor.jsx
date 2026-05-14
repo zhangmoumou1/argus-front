@@ -91,7 +91,7 @@ const TestCaseEditor = ({
       name="addCase"
       initialValues={caseInfo}
     >
-      <Card title={<span className={styles.caseTitle}>场景信息</span>}
+      <Card title={<span className={styles.caseTitle}>接口信息</span>}
             extra={
               create ? null :
                 <>

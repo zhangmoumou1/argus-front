@@ -4,7 +4,7 @@ import { PageContainer } from '@ant-design/pro-components';
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { history, useModel, useParams } from '@umijs/max';
 import { listKnowledge } from '@/services/configure';
-import { ensureHtml } from './store';
+import { highlightKnowledgeHtml } from './store';
 import './index.less';
 
 const ViewPage = () => {
@@ -66,7 +66,10 @@ const ViewPage = () => {
             }
           >
             <div className="knowledge-viewer">
-              <div className="knowledge-viewer-content w-e-text" dangerouslySetInnerHTML={{ __html: ensureHtml(doc?.content || '') }} />
+              <div
+                className="knowledge-viewer-content w-e-text"
+                dangerouslySetInnerHTML={{ __html: highlightKnowledgeHtml(doc?.content || '') }}
+              />
             </div>
           </Card>
         </Spin>

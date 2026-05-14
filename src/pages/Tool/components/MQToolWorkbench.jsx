@@ -146,6 +146,15 @@ const MQToolWorkbench = ({ gconfig, dispatch, loading: modelLoading, mqType, pag
     }
   }, [rows]);
 
+  useEffect(() => {
+    if (!isKafka) return;
+    if (!selectedConfigId || current?.id === selectedConfigId) return;
+    const target = rows.find((item) => item.id === selectedConfigId);
+    if (target) {
+      onConnect(target);
+    }
+  }, [isKafka, selectedConfigId, rows]);
+
   const initWorkspaceForms = (record) => {
     publishForm.resetFields();
     consumeForm.resetFields();

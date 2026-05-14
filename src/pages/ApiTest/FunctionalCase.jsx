@@ -3019,6 +3019,24 @@ const FunctionalCase = ({ project, dispatch }) => {
           <Menu.Item key="move" icon={<ExportOutlined />} onClick={() => openMoveModal('case', node.raw)}>
             移动/排序
           </Menu.Item>
+          <Menu.Item
+            key="delete-case"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              Modal.confirm({
+                title: '确认删除该用例吗？',
+                okText: '删除',
+                cancelText: '取消',
+                okButtonProps: { danger: true },
+                onOk: async () => {
+                  await deleteCaseById(node.id);
+                },
+              });
+            }}
+          >
+            删除用例
+          </Menu.Item>
         </Menu>
       );
     }
@@ -3029,6 +3047,25 @@ const FunctionalCase = ({ project, dispatch }) => {
         </Menu.Item>
         <Menu.Item key="move" icon={<ExportOutlined />} onClick={() => openMoveModal('directory', node)}>
           移动/排序
+        </Menu.Item>
+        <Menu.Item
+          key="delete-directory"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={() => {
+            Modal.confirm({
+              title: '确认删除目录吗？',
+              content: '会连同子目录和用例一起删除',
+              okText: '删除',
+              cancelText: '取消',
+              okButtonProps: { danger: true },
+              onOk: async () => {
+                await handleDeleteDirectory(node.id);
+              },
+            });
+          }}
+        >
+          删除目录
         </Menu.Item>
       </Menu>
     );
@@ -3083,36 +3120,6 @@ const FunctionalCase = ({ project, dispatch }) => {
         <Dropdown overlay={treeMenu(node)} trigger={['click']}>
           <MoreOutlined className="icon-right" onClick={(e) => e.stopPropagation()} />
         </Dropdown>
-        {node.nodeType === 'directory' ? (
-          <Popconfirm
-            title="确认删除目录吗？"
-            description="会连同子目录和用例一起删除"
-            okText="删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-            onConfirm={(event) => {
-              event?.stopPropagation?.();
-              handleDeleteDirectory(node.id);
-            }}
-            onCancel={(event) => event?.stopPropagation?.()}
-          >
-            <DeleteOutlined className="icon-delete" onClick={(event) => event.stopPropagation()} />
-          </Popconfirm>
-        ) : (
-          <Popconfirm
-            title="确认删除该用例吗？"
-            okText="删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-            onConfirm={(event) => {
-              event?.stopPropagation?.();
-              deleteCaseById(node.id);
-            }}
-            onCancel={(event) => event?.stopPropagation?.()}
-          >
-            <DeleteOutlined className="icon-delete" onClick={(event) => event.stopPropagation()} />
-          </Popconfirm>
-        )}
       </span>
     </div>
       );
