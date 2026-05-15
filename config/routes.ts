@@ -143,15 +143,43 @@ export default [
         component: './ApiTest/TestPlan',
       },
       {
-        path: '/run/report',
-        name: '测试报告',
-        component: './BuildHistory/ReportList',
+        path: '/run/api-report',
+        name: '接口报告',
+        component: './BuildHistory/ApiReportList',
       },
       {
-        path: '/run/report/:id',
+        path: '/run/api-report/:id',
         hideInMenu: true,
-        name: '测试报告详情',
+        name: '接口报告详情',
         component: './BuildHistory/ReportDetail',
+      },
+    ],
+  },
+  {
+    path: '/performance',
+    icon: 'areaChart',
+    name: '性能测试',
+    routes: [
+      {
+        path: '/performance/plan',
+        name: '测试计划',
+        component: './Performance/PlanList',
+      },
+        {
+          path: '/performance/run',
+          name: '执行记录',
+          component: './Performance/ActivityHub',
+        },
+        {
+          path: '/performance/report',
+          name: '性能报告',
+          component: './Performance/ActivityHub',
+        },
+      {
+        path: '/performance/report/:id',
+        hideInMenu: true,
+        name: '性能报告详情',
+        component: './Performance/ReportDetail',
       },
     ],
   },
@@ -208,12 +236,22 @@ export default [
   {
     path: '/record/list',
     hideInMenu: true,
-    redirect: '/run/report',
+    redirect: '/run/api-report',
   },
   {
     path: '/record/report/:id',
     hideInMenu: true,
-    redirect: '/run/report/:id',
+    redirect: '/run/api-report/:id',
+  },
+  {
+    path: '/run/report',
+    hideInMenu: true,
+    redirect: '/run/api-report',
+  },
+  {
+    path: '/run/report/:id',
+    hideInMenu: true,
+    redirect: '/run/api-report/:id',
   },
   {
     path: '/notification',

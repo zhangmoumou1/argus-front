@@ -14,6 +14,7 @@ import routesConfig from '../config/routes';
 import { Breadcrumb, ConfigProvider, Empty, message, Spin } from 'antd';
 import {
   BankOutlined,
+  AreaChartOutlined,
   HistoryOutlined,
   MacCommandOutlined,
   MenuOutlined,
@@ -317,6 +318,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     if (icon === 'macCommand' || icon === 'MacCommand') return <MacCommandOutlined />;
     if (icon === 'history' || icon === 'History') return <HistoryOutlined />;
     if (icon === 'bank' || icon === 'Bank') return <BankOutlined />;
+    if (icon === 'areaChart' || icon === 'AreaChart' || icon === 'barChart' || icon === 'BarChart') return <AreaChartOutlined />;
     return icon;
   };
 
