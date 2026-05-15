@@ -18,7 +18,10 @@ import {
   Descriptions,
   Drawer,
   Empty,
+  Form,
   Input,
+  message,
+  Modal,
   Popconfirm,
   Row,
   Select,
@@ -32,6 +35,8 @@ import {
 } from 'antd';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  manualInputApiEndpointSample,
+  clearApiEndpointSample,
   compareApiEndpointVersion,
   deprecateApiEndpoint,
   getApiEndpointSample,
@@ -81,6 +86,19 @@ const StatusTag = ({ value }) => (
   value === 'deprecated' ? <Tag color="red">废弃</Tag> : <Tag color="green">可用</Tag>
 );
 
+const SampleSourceTag = ({ value }) => {
+  if (value === 'manual_input') {
+    return <Tag color="purple">手动录入</Tag>;
+  }
+  if (value === 'manual_associate' || value === 'manual') {
+    return <Tag color="gold">手动关联</Tag>;
+  }
+  if (value === 'record') {
+    return <Tag color="blue">自动关联</Tag>;
+  }
+  return <Tag>无实例</Tag>;
+};
+
 const JsonBlock = ({ title, text, compact = false }) => {
   const value = parseJsonText(text);
   return (
@@ -95,13 +113,10 @@ const JsonBlock = ({ title, text, compact = false }) => {
 };
 
 const SampleDetail = ({ sample }) => {
-  if (!sample) {
-    return <Empty description="暂无录制实例数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-  }
   return (
     <div className="interface-version-detail">
       <Descriptions bordered column={2} size="small" className="interface-version-desc">
-        <Descriptions.Item label="样本来源">{sample.sample_source || 'record'}</Descriptions.Item>
+        <Descriptions.Item label="样本来源"><SampleSourceTag value={sample.sample_source} /></Descriptions.Item>
         <Descriptions.Item label="录制时间">{sample.recorded_at || '-'}</Descriptions.Item>
         <Descriptions.Item label="状态码">{sample.status_code || '-'}</Descriptions.Item>
         <Descriptions.Item label="请求路径">{sample.request_path || '-'}</Descriptions.Item>
@@ -124,6 +139,144 @@ const SampleDetail = ({ sample }) => {
           <JsonBlock title="Response" text={sample.response_body} />
         </Col>
       </Row>
+    </div>
+  );
+};
+
+const SamplePanel = ({ endpoint, sample, editing, onEdit, onCancelEdit, onSubmit, submitting }) => {
+  const hasSample = !!sample;
+  const showEditor = editing || !hasSample;
+  return (
+    <div className="interface-sample-panel">
+      {(hasSample || showEditor) ? (
+        <div
+          className="interface-sample-panel__toolbar"
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <MethodTag value={endpoint?.method} />
+          {hasSample && !showEditor ? <Button onClick={onEdit}>编辑</Button> : null}
+          {showEditor ? <Button onClick={onCancelEdit}>{hasSample ? '取消编辑' : '取消'}</Button> : null}
+        </div>
+      ) : null}
+      {showEditor ? (
+        <ManualSampleEditor
+          endpoint={endpoint}
+          sample={sample}
+          onSubmit={onSubmit}
+          submitting={submitting}
+        />
+      ) : (
+        <SampleDetail sample={sample} />
+      )}
+    </div>
+  );
+};
+
+const ManualSampleEditor = ({ endpoint, sample, onSubmit, submitting }) => {
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    form.setFieldsValue({
+      sample_name: sample?.sample_name || '',
+      request_url: sample?.request_url || endpoint?.full_url || endpoint?.path || '',
+      request_path: sample?.request_path || endpoint?.path || '',
+      request_query: parseJsonText(sample?.request_query || '{}'),
+      request_headers: parseJsonText(sample?.request_headers || '{}'),
+      request_body: parseJsonText(sample?.request_body || ''),
+      response_headers: parseJsonText(sample?.response_headers || '{}'),
+      response_body: parseJsonText(sample?.response_body || ''),
+      status_code: sample?.status_code ?? 200,
+      recorded_at: sample?.recorded_at || '',
+    });
+  }, [endpoint, form, sample]);
+
+  return (
+    <div className="interface-manual-sample">
+      <div
+        style={{
+          marginBottom: 16,
+          padding: '12px 14px',
+          borderRadius: 12,
+          background: 'linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%)',
+          border: '1px solid #dbeafe',
+          color: '#4b5b76',
+          lineHeight: 1.7,
+          fontSize: 13,
+        }}
+      >
+        手动录入后会覆盖当前接口历史样本，并锁定为手动录入。只有清除实例数据后，录制请求才会重新自动关联。
+      </div>
+
+      <Descriptions bordered size="small" column={2} className="interface-version-desc">
+        <Descriptions.Item label="接口名称">{endpoint?.name || '-'}</Descriptions.Item>
+        <Descriptions.Item label="当前版本">{endpoint?.current_version_no || '-'}</Descriptions.Item>
+        <Descriptions.Item label="接口路径">{endpoint?.path || '-'}</Descriptions.Item>
+        <Descriptions.Item label="完整地址">{endpoint?.full_url || '-'}</Descriptions.Item>
+      </Descriptions>
+
+      <Form form={form} layout="vertical" onFinish={onSubmit} className="interface-manual-sample__form">
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="样本名称" name="sample_name">
+              <Input placeholder="例如：手动录入-数据源列表" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="状态码" name="status_code">
+              <Input type="number" min={0} placeholder="200" />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="请求地址" name="request_url">
+              <Input placeholder="默认使用当前接口完整地址" />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="请求路径" name="request_path">
+              <Input placeholder="默认使用当前接口路径" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="录入时间" name="recorded_at">
+              <Input placeholder="留空则使用当前时间" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="请求 Query(JSON)" name="request_query">
+              <Input.TextArea rows={4} placeholder='例如：{"page":1}' />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="请求 Headers(JSON)" name="request_headers">
+              <Input.TextArea rows={6} placeholder='例如：{"Authorization":"Bearer xxx"}' />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="返回 Headers(JSON)" name="response_headers">
+              <Input.TextArea rows={6} placeholder='例如：{"Content-Type":"application/json"}' />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="请求 Body" name="request_body">
+              <Input.TextArea rows={8} placeholder="支持 JSON 或普通文本" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="响应 Body" name="response_body">
+              <Input.TextArea rows={8} placeholder="支持 JSON 或普通文本" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <div className="interface-manual-sample__actions">
+          <Button type="primary" htmlType="submit" loading={submitting}>保存为手动录入</Button>
+        </div>
+      </Form>
     </div>
   );
 };
@@ -324,6 +477,8 @@ const InterfaceEndpoint = () => {
   const [rightVersionId, setRightVersionId] = useState(null);
   const [compareResult, setCompareResult] = useState(null);
   const [sampleDetail, setSampleDetail] = useState(null);
+  const [sampleSubmitting, setSampleSubmitting] = useState(false);
+  const [sampleEditing, setSampleEditing] = useState(false);
 
   const fetchList = async (overrides = {}) => {
     if (!service_id) return;
@@ -368,8 +523,73 @@ const InterfaceEndpoint = () => {
   );
 
   const onDeprecate = async (record) => {
-    const res = await deprecateApiEndpoint({ endpoint_id: record.id });
-    if (auth.response(res, true)) {
+    Modal.confirm({
+      title: '确认废弃接口',
+      content: '废弃后该接口会标记为不可用，不再参与正常接口维护流程。确认继续吗？',
+      okText: '确认废弃',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      width: 460,
+      onOk: async () => {
+        const res = await deprecateApiEndpoint({ endpoint_id: record.id });
+        if (auth.response(res, true)) {
+          fetchList();
+        }
+      },
+    });
+  };
+
+  const onClearSample = async (record) => {
+    Modal.confirm({
+      title: '确认清除实例数据',
+      content: '清除后该接口当前实例样本会被删除，后续录制命中时会重新自动关联。',
+      okText: '确认清除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      width: 480,
+      onOk: async () => {
+        const res = await clearApiEndpointSample({ endpoint_id: record.id });
+        if (auth.response(res, true)) {
+          if (current?.id === record.id) {
+            setSampleDetail(null);
+            setSampleEditing(true);
+          }
+          fetchList();
+        }
+      },
+    });
+  };
+
+  const onManualInputSample = async (values) => {
+    if (!current?.id) return;
+    const parseField = (textValue, fallback) => {
+      const text = String(textValue || '').trim();
+      if (!text) return fallback;
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        return text;
+      }
+    };
+    setSampleSubmitting(true);
+    const res = await manualInputApiEndpointSample({
+      endpoint_id: current.id,
+      sample_name: values.sample_name,
+      request_url: values.request_url,
+      request_path: values.request_path,
+      request_query: parseField(values.request_query, {}),
+      request_headers: parseField(values.request_headers, {}),
+      request_body: values.request_body || '',
+      response_headers: parseField(values.response_headers, {}),
+      response_body: values.response_body || '',
+      status_code: values.status_code || 200,
+      recorded_at: values.recorded_at || '',
+    });
+    setSampleSubmitting(false);
+    if (auth.response(res, false)) {
+      setSampleDetail(res.data || null);
+      setSampleEditing(false);
+      message.success('实例数据已保存为手动录入，后续录制不会自动覆盖');
       fetchList();
     }
   };
@@ -380,6 +600,7 @@ const InterfaceEndpoint = () => {
     setDetailVersionId(null);
     setCompareResult(null);
     setSampleDetail(null);
+    setSampleEditing(false);
     setVersionOpen(true);
     const [versionRes, sampleRes] = await Promise.all([
       listApiEndpointVersions({ endpoint_id: record.id }),
@@ -394,7 +615,9 @@ const InterfaceEndpoint = () => {
       setRightVersionId(firstId);
     }
     if (auth.response(sampleRes, false)) {
-      setSampleDetail(sampleRes.data || null);
+      const nextSample = sampleRes.data || null;
+      setSampleDetail(nextSample);
+      setSampleEditing(!nextSample);
     }
   };
 
@@ -487,10 +710,10 @@ const InterfaceEndpoint = () => {
     },
     {
       title: '实例数据',
-      dataIndex: 'sample_available',
-      key: 'sample_available',
-      width: 110,
-      render: (value) => (value ? '有实例' : '无实例'),
+      dataIndex: 'sample_source',
+      key: 'sample_source',
+      width: 130,
+      render: (_, record) => <SampleSourceTag value={record.sample_available ? record.sample_source : ''} />,
     },
     {
       title: '实例时间',
@@ -504,14 +727,15 @@ const InterfaceEndpoint = () => {
     {
       title: '操作',
       key: 'op',
-      width: 180,
+      width: 260,
       render: (_, record) => (
-        <Space>
-          <a onClick={() => openVersions(record)}>版本工作台</a>
+        <Space size={12} wrap={false}>
+          <a onClick={() => openVersions(record)}>详情</a>
+          {record.sample_available ? (
+            <a onClick={() => onClearSample(record)}>清除实例</a>
+          ) : null}
           {record.endpoint_status !== 'deprecated' ? (
-            <Popconfirm title="确认将该接口废弃吗？" onConfirm={() => onDeprecate(record)}>
-              <a>废弃</a>
-            </Popconfirm>
+            <a onClick={() => onDeprecate(record)}>废弃</a>
           ) : null}
         </Space>
       ),
@@ -610,11 +834,21 @@ const InterfaceEndpoint = () => {
                     label: '版本快照',
                     children: <VersionDetail detail={detailData} />,
                   },
-                    {
-                      key: 'sample',
-                      label: '实例样本',
-                      children: <SampleDetail sample={sampleDetail} />,
-                    },
+                  {
+                    key: 'sample',
+                    label: '实例样本',
+                    children: (
+                      <SamplePanel
+                        endpoint={detailData || current}
+                        sample={sampleDetail}
+                        editing={sampleEditing}
+                        onEdit={() => setSampleEditing(true)}
+                        onCancelEdit={() => setSampleEditing(false)}
+                        onSubmit={onManualInputSample}
+                        submitting={sampleSubmitting}
+                      />
+                    ),
+                  },
                     {
                       key: 'compare',
                       label: (

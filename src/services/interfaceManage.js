@@ -90,6 +90,30 @@ export async function getApiEndpointSample(params) {
   });
 }
 
+export async function associateApiEndpointSample(data) {
+  return request(`${CONFIG.URL}/interface-management/endpoint/sample/associate`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function clearApiEndpointSample(data) {
+  return request(`${CONFIG.URL}/interface-management/endpoint/sample/clear`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function manualInputApiEndpointSample(data) {
+  return request(`${CONFIG.URL}/interface-management/endpoint/sample/manual-input`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
 export async function getApiEndpointVersionDetail(params) {
   return request(`${CONFIG.URL}/interface-management/endpoint/version/detail`, {
     method: 'GET',

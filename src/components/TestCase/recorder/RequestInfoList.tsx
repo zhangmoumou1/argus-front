@@ -32,6 +32,11 @@ import {
   SettingOutlined
 } from "@ant-design/icons";
 import Highlighter from 'react-highlight-words';
+import {
+  associateApiEndpointSample,
+  listApiEndpoints,
+  listApiServices,
+} from '@/services/interfaceManage';
 
 const IGNORE_RULES_KEY = 'recorder.ignore.rules';
 
@@ -318,6 +323,13 @@ const RequestInfoList: React.FC<RequestInfoProps> = ({dataSource, dispatch, load
   const [ignoreVisible, setIgnoreVisible] = useState(false);
   const [ignoreRulesText, setIgnoreRulesText] = useState('');
   const [ignoreRules, setIgnoreRules] = useState<string[]>(() => readStorageArray(IGNORE_RULES_KEY));
+  const [associateVisible, setAssociateVisible] = useState(false);
+  const [associateSubmitting, setAssociateSubmitting] = useState(false);
+  const [serviceOptions, setServiceOptions] = useState<any[]>([]);
+  const [endpointOptions, setEndpointOptions] = useState<any[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState<number | undefined>(undefined);
+  const [selectedEndpointId, setSelectedEndpointId] = useState<number | undefined>(undefined);
+  const [associateRecord, setAssociateRecord] = useState<any>(null);
   const searchInput = useRef<InputRef>(null);
   const groupedCacheRef = useRef<{ source: any[]; tree: any[]; nodeMap: Map<string, any> }>({
     source: [],
@@ -394,6 +406,10 @@ const RequestInfoList: React.FC<RequestInfoProps> = ({dataSource, dispatch, load
   })), [filteredRecords]);
   const tableDataSource = viewMode === 'group' ? groupedDataSource : flatDataSource;
   const hostOptions = useMemo(() => Array.from(new Set(normalizedRecords.map(item => item.__host))).sort(), [normalizedRecords]);
+  const selectedEndpointOption = useMemo(
+    () => endpointOptions.find((item) => item.value === selectedEndpointId),
+    [endpointOptions, selectedEndpointId],
+  );
 
   const handleSearch = (
     selectedKeys: string[],
@@ -495,6 +511,72 @@ const RequestInfoList: React.FC<RequestInfoProps> = ({dataSource, dispatch, load
     setIgnoreVisible(false);
   }
 
+  const resetAssociateState = () => {
+    setAssociateVisible(false);
+    setAssociateSubmitting(false);
+    setSelectedServiceId(undefined);
+    setSelectedEndpointId(undefined);
+    setEndpointOptions([]);
+    setAssociateRecord(null);
+  }
+
+  const loadServiceOptions = async () => {
+    const res = await listApiServices({});
+    if (res?.code === 0) {
+      setServiceOptions(Array.isArray(res.data) ? res.data : []);
+    }
+  }
+
+  const loadEndpointOptions = async (serviceId) => {
+    if (!serviceId) {
+      setEndpointOptions([]);
+      return;
+    }
+    const res = await listApiEndpoints({ service_id: serviceId });
+    if (res?.code === 0) {
+      setEndpointOptions((res.data?.list || []).map((item) => ({
+        ...item,
+        label: `${item.method || 'GET'} ${item.name} · ${item.path}`,
+        value: item.id,
+      })));
+    }
+  }
+
+  const openAssociateModal = async (record) => {
+    setAssociateRecord(record);
+    setAssociateVisible(true);
+    setSelectedServiceId(undefined);
+    setSelectedEndpointId(undefined);
+    setEndpointOptions([]);
+    if (!serviceOptions.length) {
+      await loadServiceOptions();
+    }
+  }
+
+  const submitAssociateSample = async () => {
+    if (!associateRecord || !selectedEndpointId) {
+      message.warning('请选择要关联的接口');
+      return;
+    }
+    setAssociateSubmitting(true);
+    const res = await associateApiEndpointSample({
+      endpoint_id: selectedEndpointId,
+      url: getDisplayRequestAddress(associateRecord),
+      request_method: associateRecord.request_method,
+      request_headers: safeJsonParse(associateRecord.request_headers, {}),
+      body: associateRecord.body || '',
+      response_headers: safeJsonParse(associateRecord.response_headers, {}),
+      response_content: associateRecord.response_content || '',
+      status_code: associateRecord.status_code || 0,
+      created_at: associateRecord.created_at || '',
+    });
+    setAssociateSubmitting(false);
+    if (res?.code === 0) {
+      message.success('实例数据已手动关联，后续录制不会自动覆盖该接口样本');
+      resetAssociateState();
+    }
+  }
+
   const selectionProps = restProps.rowSelection ? {
     ...restProps.rowSelection,
     getCheckboxProps: (record) => ({
@@ -585,6 +667,7 @@ const RequestInfoList: React.FC<RequestInfoProps> = ({dataSource, dispatch, load
         </Space>
       ) : <Space size={12}>
         <a onClick={() => setDetailRecord(record)}>详情</a>
+        <a onClick={() => openAssociateModal(record)}>关联实例</a>
         <Tooltip title="删除当前录制接口"><DeleteTwoTone twoToneColor="#F56C6C" onClick={() => {
           onRemoveRecord(record.index)
         }}/></Tooltip>
@@ -760,6 +843,89 @@ const RequestInfoList: React.FC<RequestInfoProps> = ({dataSource, dispatch, load
           placeholder={'例如：\n/health\n\\.js$\ntracking'}
         />
       </Modal>
+      <Modal
+        title="手动关联实例数据"
+        open={associateVisible}
+        confirmLoading={associateSubmitting}
+        onOk={submitAssociateSample}
+        onCancel={resetAssociateState}
+        okText="确认关联"
+        cancelText="取消"
+        width={680}
+        centered
+        okButtonProps={{ size: 'large' }}
+        cancelButtonProps={{ size: 'large' }}
+      >
+        <div className="associate-sample-modal">
+          <div className="associate-sample-modal__banner">
+            <div className="associate-sample-modal__banner-title">手动样本会覆盖当前接口的历史实例数据</div>
+            <div className="associate-sample-modal__banner-desc">
+              关联成功后，该接口样本将锁定为手动关联。只有在接口管理中清除实例数据后，新的录制请求才会重新自动补位。
+            </div>
+          </div>
+
+          <div className="associate-sample-modal__section">
+            <div className="associate-sample-modal__label">当前录制请求</div>
+            <div className="associate-sample-modal__request">
+              <div className="associate-sample-modal__method">
+                {associateRecord?.request_method || 'GET'}
+              </div>
+              <div className="associate-sample-modal__request-body">
+                <div className="associate-sample-modal__request-url">
+                  {associateRecord ? getDisplayRequestAddress(associateRecord) : '-'}
+                </div>
+                <div className="associate-sample-modal__request-meta">
+                  <span>状态码 {associateRecord?.status_code || '-'}</span>
+                  <span>录制时间 {associateRecord?.created_at || '-'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="associate-sample-modal__section">
+            <div className="associate-sample-modal__label">目标接口</div>
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <div className="associate-sample-modal__field">
+                <div className="associate-sample-modal__field-label">选择接口服务</div>
+                <Select
+                  showSearch
+                  size="large"
+                  placeholder="先选择服务"
+                  value={selectedServiceId}
+                  options={serviceOptions.map((item) => ({
+                    label: item.name,
+                    value: item.id,
+                  }))}
+                  onChange={async (value) => {
+                    setSelectedServiceId(value);
+                    setSelectedEndpointId(undefined);
+                    await loadEndpointOptions(value);
+                  }}
+                  optionFilterProp="label"
+                />
+              </div>
+              <div className="associate-sample-modal__field">
+                <div className="associate-sample-modal__field-label">选择服务下的接口</div>
+                <Select
+                  showSearch
+                  size="large"
+                  placeholder="再选择具体接口"
+                  value={selectedEndpointId}
+                  options={endpointOptions}
+                  onChange={setSelectedEndpointId}
+                  optionFilterProp="label"
+                />
+              </div>
+              <div className="associate-sample-modal__field">
+                <div className="associate-sample-modal__field-label">关联的最新版本</div>
+                <div className="associate-sample-modal__version">
+                  {selectedEndpointOption?.current_version_no || '-'}
+                </div>
+              </div>
+            </Space>
+          </div>
+        </div>
+      </Modal>
       <style>{`
         .recorder-toolbar {
           margin-bottom: 16px;
@@ -785,6 +951,99 @@ const RequestInfoList: React.FC<RequestInfoProps> = ({dataSource, dispatch, load
         @keyframes recorderFlash {
           0% { background: #fff7e6; }
           100% { background: transparent; }
+        }
+        .associate-sample-modal {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          padding-top: 4px;
+        }
+        .associate-sample-modal__banner {
+          padding: 14px 16px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #f7fbff 0%, #edf5ff 100%);
+          border: 1px solid #d7e8ff;
+        }
+        .associate-sample-modal__banner-title {
+          color: #144a87;
+          font-size: 14px;
+          font-weight: 600;
+          margin-bottom: 6px;
+        }
+        .associate-sample-modal__banner-desc {
+          color: #5b6b82;
+          line-height: 1.7;
+          font-size: 13px;
+        }
+        .associate-sample-modal__section {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .associate-sample-modal__label {
+          color: #1f2937;
+          font-size: 13px;
+          font-weight: 600;
+        }
+        .associate-sample-modal__request {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 14px 16px;
+          border-radius: 14px;
+          border: 1px solid #e8edf5;
+          background: #fbfcfe;
+        }
+        .associate-sample-modal__method {
+          min-width: 72px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: #eaf3ff;
+          color: #1554ad;
+          font-weight: 700;
+          text-align: center;
+          font-size: 12px;
+          letter-spacing: 0.4px;
+        }
+        .associate-sample-modal__request-body {
+          flex: 1;
+          min-width: 0;
+        }
+        .associate-sample-modal__request-url {
+          color: #1f2937;
+          font-size: 14px;
+          line-height: 1.6;
+          word-break: break-all;
+        }
+        .associate-sample-modal__request-meta {
+          margin-top: 8px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+          color: #7b8798;
+          font-size: 12px;
+        }
+        .associate-sample-modal__field {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .associate-sample-modal__field-label {
+          color: #5b6472;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        .associate-sample-modal__version {
+          min-height: 48px;
+          display: flex;
+          align-items: center;
+          padding: 0 14px;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+          background: #f9fafb;
+          color: #1f2937;
+          font-size: 14px;
+          font-weight: 600;
         }
       `}</style>
     </>
