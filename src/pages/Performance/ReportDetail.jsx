@@ -116,6 +116,8 @@ const normalizeRequestRecord = (item, index) => {
   };
 };
 
+const getStepKey = (step, index) => `${step?.case_id || 'step'}-${step?.timestamp || index}-${index}`;
+
 const thresholdColumns = [
   { title: '指标', dataIndex: 'name', key: 'name' },
   { title: '期望值', dataIndex: 'expected', key: 'expected' },
@@ -293,6 +295,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
   const [sampleFilter, setSampleFilter] = useState('all');
   const [activeSample, setActiveSample] = useState(null);
   const [activeDrawerTab, setActiveDrawerTab] = useState('request');
+  const [activeStepKey, setActiveStepKey] = useState(null);
 
   const { envMap = {} } = gconfig || {};
 
@@ -309,6 +312,17 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
     dispatch({ type: 'gconfig/fetchEnvList', payload: { page: 1, size: 1000, exactly: true } });
     fetchReport();
   }, [id]);
+
+  useEffect(() => {
+    if (!activeSample) {
+      setActiveStepKey(null);
+      setActiveDrawerTab('request');
+      return;
+    }
+    const steps = activeSample.steps || activeSample.request_sample?.steps || [];
+    setActiveStepKey(steps.length ? getStepKey(steps[0], 0) : null);
+    setActiveDrawerTab('request');
+  }, [activeSample]);
 
   const derived = useMemo(() => {
     if (!payload) {
@@ -574,7 +588,16 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
     onOpenAssertions: (record) => openSampleDrawer(record, 'assertion'),
   });
   const activeRequest = activeSample?.request_sample?.request || activeSample?.request_sample || {};
-  const activeSteps = activeSample?.steps || activeSample?.request_sample?.steps || [];
+  const activeSteps = (activeSample?.steps || activeSample?.request_sample?.steps || []).map((step, index) => ({
+    ...step,
+    __stepKey: getStepKey(step, index),
+  }));
+  const selectedStep = activeSteps.find((item) => item.__stepKey === activeStepKey) || activeSteps[0] || null;
+  const drawerRequest = selectedStep?.request || activeRequest;
+  const drawerResponse = selectedStep?.response_sample || activeSample?.response_sample || '';
+  const drawerAssertions = selectedStep?.assertion_results?.length
+    ? selectedStep.assertion_results
+    : activeSample?.assertion_results || [];
   const configuredAssertions = summaryData.assertions_config || [];
   return (
     <PageContainer title={false} breadcrumb={null}>
@@ -1057,7 +1080,30 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                   size="small"
                   dataSource={activeSteps}
                   renderItem={(step, index) => (
-                    <List.Item>
+                    <List.Item
+                      onClick={() => setActiveStepKey(step.__stepKey)}
+                      style={{
+                        cursor: 'pointer',
+                        borderRadius: 12,
+                        padding: '12px 14px',
+                        marginBottom: 8,
+                        border: step.__stepKey === activeStepKey ? '1px solid #60a5fa' : '1px solid transparent',
+                        background: step.__stepKey === activeStepKey ? '#eff6ff' : '#fff',
+                      }}
+                      actions={[
+                        <Button
+                          key="view-step"
+                          type={step.__stepKey === activeStepKey ? 'primary' : 'link'}
+                          size="small"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setActiveStepKey(step.__stepKey);
+                          }}
+                        >
+                          查看此接口
+                        </Button>,
+                      ]}
+                    >
                       <Space direction="vertical" size={6} style={{ width: '100%' }}>
                         <Space wrap>
                           <Tag color="blue">{`步骤 ${index + 1}`}</Tag>
@@ -1078,6 +1124,15 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
               </Card>
             ) : null}
 
+            {selectedStep ? (
+              <Alert
+                type="info"
+                showIcon
+                message={`当前查看：${selectedStep.name || `接口#${selectedStep.case_id || '-'}`}`}
+                description={`${selectedStep.request?.method || '-'} ${selectedStep.request?.url || '-'} · HTTP ${selectedStep.status_code ?? '-'} · ${selectedStep.response_time_ms || 0} ms`}
+              />
+            ) : null}
+
             <Tabs
               activeKey={activeDrawerTab}
               onChange={setActiveDrawerTab}
@@ -1088,22 +1143,17 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                   children: (
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
                       <Card size="small" title="请求 Headers" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeRequest.headers || {})}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(drawerRequest.headers || {})}</pre>
                       </Card>
                       <Card size="small" title="请求 Query 参数" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeRequest.query || {})}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(drawerRequest.query || {})}</pre>
                       </Card>
                       <Card size="small" title="请求 Body" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeRequest.body || '')}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(drawerRequest.body || '')}</pre>
                       </Card>
                       <Card size="small" title="变量快照" style={performancePanelStyle}>
                         <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSample.request_sample?.variables || {})}</pre>
                       </Card>
-                      {activeSteps.length ? (
-                        <Card size="small" title="链路 / 预置步骤请求" style={performancePanelStyle}>
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSteps)}</pre>
-                        </Card>
-                      ) : null}
                     </Space>
                   ),
                 },
@@ -1113,32 +1163,22 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                   children: (
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
                       <Card size="small" title="响应内容" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSample.response_sample || '')}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(drawerResponse || '')}</pre>
                       </Card>
-                      {activeSteps.length ? (
-                        <Card size="small" title="链路 / 预置步骤响应" style={performancePanelStyle}>
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSteps.map((item) => ({
-                            name: item.name,
-                            status: item.status,
-                            status_code: item.status_code,
-                            response_time_ms: item.response_time_ms,
-                            response_sample: item.response_sample,
-                          })))}</pre>
-                        </Card>
-                      ) : null}
                     </Space>
                   ),
                 },
                 {
                   key: 'assertion',
                   label: '断言结果',
-                  children: activeSample.assertion_results?.length ? (
+                  children: drawerAssertions?.length ? (
                     <Table
                       rowKey={(_, index) => index}
                       pagination={false}
-                      dataSource={activeSample.assertion_results}
+                      dataSource={drawerAssertions}
                       columns={[
                         { title: '断言类型', dataIndex: 'type', key: 'type', width: 120 },
+                        { title: '断言项', dataIndex: 'name', key: 'name', width: 140, ellipsis: true },
                         { title: '结果', dataIndex: 'passed', key: 'passed', width: 100, render: (value) => value ? <Tag color="success">通过</Tag> : <Tag color="error">失败</Tag> },
                         { title: '路径/字段', key: 'field', render: (_, record) => record.path || record.header || '-' },
                         { title: '实际值', dataIndex: 'actual', key: 'actual', ellipsis: true },
