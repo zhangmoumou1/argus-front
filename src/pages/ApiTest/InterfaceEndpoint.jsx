@@ -11,7 +11,6 @@ import {
 import { PageContainer } from '@ant-design/pro-components';
 import { connect, useParams } from '@umijs/max';
 import {
-  Badge,
   Button,
   Card,
   Col,
@@ -54,10 +53,12 @@ const FIELD_LABELS = {
   module_name: '功能模块',
   path: '接口路径',
   full_url: '完整地址',
-  request_headers: '请求头',
-  request_params: '请求参数',
-  response_body: '响应内容',
+  request_headers: 'Headers',
+  request_params: 'Params / Body',
+  response_body: 'Response',
 };
+
+const COMPARE_FIELDS = ['method', 'path', 'request_headers', 'request_params', 'response_body'];
 
 const METHOD_COLORS = {
   GET: 'blue',
@@ -75,6 +76,48 @@ const parseJsonText = (value) => {
   } catch (e) {
     return text;
   }
+};
+
+const formatCompareValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (e) {
+      return String(value);
+    }
+  }
+  const text = String(value).trim();
+  if (!text) return '';
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch (e) {
+    return String(value);
+  }
+};
+
+const buildCompareLines = (leftValue, rightValue) => {
+  const leftLines = String(leftValue || '').split('\n');
+  const rightLines = String(rightValue || '').split('\n');
+  const max = Math.max(leftLines.length, rightLines.length, 1);
+  return Array.from({ length: max }).map((_, index) => {
+    const leftLine = leftLines[index];
+    const rightLine = rightLines[index];
+    let status = 'same';
+    if (leftLine === undefined && rightLine !== undefined) {
+      status = 'added';
+    } else if (leftLine !== undefined && rightLine === undefined) {
+      status = 'removed';
+    } else if (leftLine !== rightLine) {
+      status = 'changed';
+    }
+    return {
+      index,
+      leftLine,
+      rightLine,
+      status,
+    };
+  });
 };
 
 const MethodTag = ({ value }) => {
@@ -145,25 +188,23 @@ const SampleDetail = ({ sample }) => {
 
 const SamplePanel = ({ endpoint, sample, editing, onEdit, onCancelEdit, onSubmit, submitting }) => {
   const hasSample = !!sample;
-  const showEditor = editing || !hasSample;
+  const showEditor = editing;
   return (
     <div className="interface-sample-panel">
-      {(hasSample || showEditor) ? (
-        <div
-          className="interface-sample-panel__toolbar"
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 16,
-          }}
-        >
-          <MethodTag value={endpoint?.method} />
-          {hasSample && !showEditor ? <Button onClick={onEdit}>编辑</Button> : null}
-          {showEditor ? <Button onClick={onCancelEdit}>{hasSample ? '取消编辑' : '取消'}</Button> : null}
-        </div>
-      ) : null}
+      <div
+        className="interface-sample-panel__toolbar"
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        <MethodTag value={endpoint?.method} />
+        {!showEditor ? <Button onClick={onEdit}>编辑</Button> : null}
+        {showEditor ? <Button onClick={onCancelEdit}>取消</Button> : null}
+      </div>
       {showEditor ? (
         <ManualSampleEditor
           endpoint={endpoint}
@@ -171,8 +212,19 @@ const SamplePanel = ({ endpoint, sample, editing, onEdit, onCancelEdit, onSubmit
           onSubmit={onSubmit}
           submitting={submitting}
         />
-      ) : (
+      ) : hasSample ? (
         <SampleDetail sample={sample} />
+      ) : (
+        <div
+          style={{
+            padding: '32px 0 24px',
+          }}
+        >
+          <Empty
+            description="当前接口还没有实例样本，可点击右上角“编辑”进行手动录入。"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        </div>
       )}
     </div>
   );
@@ -317,25 +369,71 @@ const VersionTimeline = ({ versions, activeId, onSelect }) => {
   );
 };
 
-const DiffFieldCard = ({ field, rows }) => {
+const DiffFieldCard = ({ field, rows, leftValue, rightValue, leftLabel, rightLabel, points = [] }) => {
   const changed = Array.isArray(rows) && rows.length > 0;
+  const leftText = formatCompareValue(leftValue);
+  const rightText = formatCompareValue(rightValue);
+  const lineRows = buildCompareLines(leftText, rightText);
   return (
     <Card
       size="small"
       className={changed ? 'interface-diff-card changed' : 'interface-diff-card'}
       title={(
         <Space>
-          <Badge status={changed ? 'warning' : 'success'} />
           <span>{FIELD_LABELS[field] || field}</span>
         </Space>
       )}
       extra={<Tag color={changed ? 'orange' : 'green'}>{changed ? '有变更' : '无差异'}</Tag>}
     >
+      {points.length ? (
+        <div className="interface-diff-card__points">
+          <Space wrap size={[8, 8]}>
+            {points.map((point) => (
+              <Tag key={`${field}-${point}`}>{point}</Tag>
+            ))}
+          </Space>
+        </div>
+      ) : null}
+      <div className="interface-git-diff">
+        <div className="interface-git-diff__panel">
+          <div className="interface-git-diff__panel-head old">
+            <span>{leftLabel || '旧版本'}</span>
+          </div>
+          <div className="interface-git-diff__code">
+            {lineRows.map((row) => {
+              const rowClass = row.status === 'changed' || row.status === 'removed' ? 'old' : '';
+              return (
+                <div className={`interface-git-diff__line ${rowClass}`} key={`left-${field}-${row.index}`}>
+                  <span className="interface-git-diff__line-no">{row.index + 1}</span>
+                  <span className="interface-git-diff__line-text">{row.leftLine ?? ''}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="interface-git-diff__panel">
+          <div className="interface-git-diff__panel-head new">
+            <span>{rightLabel || '新版本'}</span>
+          </div>
+          <div className="interface-git-diff__code">
+            {lineRows.map((row) => {
+              const rowClass = row.status === 'changed' || row.status === 'added' ? 'new' : '';
+              return (
+                <div className={`interface-git-diff__line ${rowClass}`} key={`right-${field}-${row.index}`}>
+                  <span className="interface-git-diff__line-no">{row.index + 1}</span>
+                  <span className="interface-git-diff__line-text">{row.rightLine ?? ''}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
       {changed ? (
-        <pre className="interface-json-block compact">{JSON.stringify(rows, null, 2)}</pre>
-      ) : (
-        <Text type="secondary">两个版本在该字段完全一致</Text>
-      )}
+        <details className="interface-diff-card__details">
+          <summary>查看结构化变动明细</summary>
+          <pre className="interface-json-block compact">{JSON.stringify(rows, null, 2)}</pre>
+        </details>
+      ) : null}
     </Card>
   );
 };
@@ -402,7 +500,12 @@ const VersionCompare = ({
     value: item.id,
   }));
   const changedFields = compareResult?.changed_fields || [];
+  const changePoints = compareResult?.change_points || {};
   const diff = compareResult?.diff || {};
+  const leftValues = compareResult?.left_values || {};
+  const rightValues = compareResult?.right_values || {};
+  const leftVersion = versions.find((item) => item.id === leftVersionId);
+  const rightVersion = versions.find((item) => item.id === rightVersionId);
 
   return (
     <div className="interface-version-compare">
@@ -433,9 +536,29 @@ const VersionCompare = ({
         <Empty description={compareResult.error} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <>
+          {changedFields.length ? (
+            <Card size="small" style={{ marginBottom: 16 }} title="变动点">
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                {changedFields.map((field) => (
+                  <div key={field}>
+                    <Space wrap size={[8, 8]}>
+                      <Tag color="orange">{FIELD_LABELS[field] || field}</Tag>
+                      {(changePoints[field] || []).length ? (
+                        (changePoints[field] || []).map((point) => (
+                          <Tag key={`${field}-${point}`}>{point}</Tag>
+                        ))
+                      ) : (
+                        <Text type="secondary">检测到字段有变更，未提取到具体路径</Text>
+                      )}
+                    </Space>
+                  </div>
+                ))}
+              </Space>
+            </Card>
+          ) : null}
           <Row gutter={[16, 16]} className="interface-compare-summary">
             <Col span={8}>
-              <Statistic title="变更字段" value={changedFields.length} suffix={`/ ${Object.keys(FIELD_LABELS).length}`} />
+              <Statistic title="变更维度" value={changedFields.length} suffix={`/ ${COMPARE_FIELDS.length}`} />
             </Col>
             <Col span={16}>
               <div className="interface-compare-tags">
@@ -446,9 +569,17 @@ const VersionCompare = ({
             </Col>
           </Row>
           <Row gutter={[16, 16]}>
-            {Object.keys(FIELD_LABELS).map((field) => (
-              <Col span={field.includes('response') || field.includes('request') ? 24 : 12} key={field}>
-                <DiffFieldCard field={field} rows={diff[field] || []} />
+            {COMPARE_FIELDS.map((field) => (
+              <Col span={24} key={field}>
+                <DiffFieldCard
+                  field={field}
+                  rows={diff[field] || []}
+                  points={changePoints[field] || []}
+                  leftValue={leftValues[field]}
+                  rightValue={rightValues[field]}
+                  leftLabel={leftVersion ? `${leftVersion.version_no} · 旧版本` : '旧版本'}
+                  rightLabel={rightVersion ? `${rightVersion.version_no} · 新版本` : '新版本'}
+                />
               </Col>
             ))}
           </Row>
@@ -552,7 +683,7 @@ const InterfaceEndpoint = () => {
         if (auth.response(res, true)) {
           if (current?.id === record.id) {
             setSampleDetail(null);
-            setSampleEditing(true);
+            setSampleEditing(false);
           }
           fetchList();
         }
@@ -617,7 +748,7 @@ const InterfaceEndpoint = () => {
     if (auth.response(sampleRes, false)) {
       const nextSample = sampleRes.data || null;
       setSampleDetail(nextSample);
-      setSampleEditing(!nextSample);
+      setSampleEditing(false);
     }
   };
 

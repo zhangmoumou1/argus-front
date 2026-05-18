@@ -100,7 +100,7 @@ export const MetricHeroCard = ({ label, value, hint, accent = performancePalette
 export const PerformanceHero = ({ eyebrow, title, description, actions, metrics }) => (
   <Card
     bordered={false}
-    bodyStyle={{ padding: 28 }}
+    bodyStyle={{ padding: 36 }}
     style={{
       ...performancePanelStyle,
       background: 'linear-gradient(135deg, #ffffff 0%, #f7fbff 55%, #eef6ff 100%)',

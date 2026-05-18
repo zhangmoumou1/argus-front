@@ -121,3 +121,10 @@ export async function queryPerformanceRunLogs(params) {
     headers: auth.headers(),
   });
 }
+
+export async function queryPerformanceMonitorConfig() {
+  return request(`${CONFIG.URL}/performance/monitor/config`, {
+    method: 'GET',
+    headers: auth.headers(),
+  });
+}

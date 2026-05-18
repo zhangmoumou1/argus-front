@@ -17,7 +17,11 @@ import {
   Tag,
 } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { listPerformanceReport, queryPerformanceRunLogs } from '@/services/performance';
+import {
+  listPerformanceReport,
+  queryPerformanceMonitorConfig,
+  queryPerformanceRunLogs,
+} from '@/services/performance';
 import auth from '@/utils/auth';
 import UserLink from '@/components/Button/UserLink';
 import {
@@ -135,7 +139,7 @@ const runColumnsFactory = ({ userMap, onOpenLogs }) => [
   },
 ];
 
-const reportColumnsFactory = ({ userMap }) => [
+const reportColumnsFactory = ({ userMap, monitorUrl }) => [
   {
     title: '报告ID',
     dataIndex: 'id',
@@ -222,7 +226,14 @@ const reportColumnsFactory = ({ userMap }) => [
   {
     title: '操作',
     key: 'operation',
-    render: (_, record) => <a href={`/#/performance/report/${record.id}`}>查看报告</a>,
+    render: (_, record) => (
+      <Space split={<span style={{ color: '#d1d5db' }}>|</span>}>
+        <a href={`/#/performance/report/${record.id}`}>查看报告</a>
+        {monitorUrl ? (
+          <a onClick={() => window.open(monitorUrl, '_blank', 'noopener,noreferrer')}>监控</a>
+        ) : null}
+      </Space>
+    ),
   },
 ];
 
@@ -236,6 +247,7 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
   const [logVisible, setLogVisible] = useState(false);
   const [logRows, setLogRows] = useState([]);
   const [activeRunId, setActiveRunId] = useState(null);
+  const [monitorUrl, setMonitorUrl] = useState('');
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -277,17 +289,25 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
     }
   };
 
+  const fetchMonitorConfig = async () => {
+    const res = await queryPerformanceMonitorConfig();
+    if (auth.response(res)) {
+      setMonitorUrl(res.data?.grafana_url || '');
+    }
+  };
+
   useEffect(() => {
     dispatch({ type: 'user/fetchUserList' });
     form.setFieldsValue({ date: [moment().startOf('week'), moment().endOf('week')] });
     fetchList(1, resolvedDefaultTab);
+    fetchMonitorConfig();
   }, [resolvedDefaultTab, planId]);
 
   const columns = useMemo(
     () => (isReportView
-      ? reportColumnsFactory({ userMap })
+      ? reportColumnsFactory({ userMap, monitorUrl })
       : runColumnsFactory({ userMap, onOpenLogs: openLogs })),
-    [isReportView, userMap],
+    [isReportView, userMap, monitorUrl],
   );
 
   return (

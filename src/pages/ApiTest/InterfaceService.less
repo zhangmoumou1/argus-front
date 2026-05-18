@@ -392,3 +392,94 @@
     background: linear-gradient(135deg, rgba(251, 146, 60, 0.06), #fff 36%);
   }
 }
+
+.interface-diff-card__points {
+  margin-bottom: 12px;
+}
+
+.interface-diff-card__details {
+  margin-top: 12px;
+
+  summary {
+    color: #2563eb;
+    cursor: pointer;
+    user-select: none;
+  }
+}
+
+.interface-git-diff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.interface-git-diff__panel {
+  min-width: 0;
+  border: 1px solid #e5eaf3;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.interface-git-diff__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475467;
+  border-bottom: 1px solid #e5eaf3;
+
+  &.old {
+    background: linear-gradient(180deg, #fff3f2 0%, #fff8f7 100%);
+  }
+
+  &.new {
+    background: linear-gradient(180deg, #ecfdf3 0%, #f6fff9 100%);
+  }
+}
+
+.interface-git-diff__code {
+  max-height: 420px;
+  overflow: auto;
+  background: #f8fafc;
+}
+
+.interface-git-diff__line {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 28px;
+  border-bottom: 1px solid #eef2f7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #243044;
+
+  &.old {
+    background: #fff1f0;
+  }
+
+  &.new {
+    background: #edfdf3;
+  }
+}
+
+.interface-git-diff__line-no {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 4px 10px 4px 8px;
+  color: #98a2b3;
+  background: rgba(15, 23, 42, 0.03);
+  border-right: 1px solid #eef2f7;
+  user-select: none;
+}
+
+.interface-git-diff__line-text {
+  padding: 4px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

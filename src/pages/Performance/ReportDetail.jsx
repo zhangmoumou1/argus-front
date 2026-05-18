@@ -2,12 +2,39 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
 import { connect, useParams } from '@umijs/max';
 import { Area, Column } from '@ant-design/charts';
-import { Alert, Button, Card, Col, Descriptions, Drawer, Empty, List, Progress, Row, Segmented, Space, Statistic, Table, Tabs, Tag } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Drawer,
+  Empty,
+  List,
+  Progress,
+  Row,
+  Segmented,
+  Space,
+  Statistic,
+  Table,
+  Tabs,
+  Tag,
+} from 'antd';
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  FieldTimeOutlined,
+  ThunderboltOutlined,
+  WarningOutlined,
+  ApiOutlined,
+  DashboardOutlined,
+} from '@ant-design/icons';
 import { queryPerformanceReport } from '@/services/performance';
 import auth from '@/utils/auth';
 import {
   performancePalette,
   performancePanelStyle,
+  PerformanceHero,
 } from './ModuleShell';
 
 const parseSummary = (value) => {
@@ -110,23 +137,24 @@ const timelineColumns = [
   { title: '平均耗时(ms)', dataIndex: 'avg_rt_ms', key: 'avg_rt_ms', width: 130 },
 ];
 
-const metricCardStyle = {
-  borderRadius: 18,
-  border: '1px solid #e8eef8',
-  boxShadow: '0 10px 24px rgba(15, 23, 42, 0.04)',
+const sectionCardStyle = {
+  ...performancePanelStyle,
+  marginBottom: 0,
 };
 
-const softCardStyle = {
-  ...metricCardStyle,
+const chartCardStyle = {
+  ...performancePanelStyle,
   overflow: 'hidden',
-  background: 'linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)',
+  marginBottom: 0,
 };
 
 const chainNodeStyle = {
-  padding: '14px 16px',
-  borderRadius: 16,
-  border: '1px solid #e6edf7',
+  padding: '16px 20px',
+  borderRadius: 18,
+  border: '1px solid rgba(148, 163, 184, 0.18)',
   background: 'linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)',
+  boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)',
+  transition: 'box-shadow 0.2s, border-color 0.2s',
 };
 
 const buildSampleColumns = ({ onOpenRequest, onOpenResponse, onOpenAssertions }) => [
@@ -231,11 +259,12 @@ const buildSampleColumns = ({ onOpenRequest, onOpenResponse, onOpenAssertions })
 const areaChartConfig = {
   smooth: true,
   autoFit: true,
-  height: 300,
+  height: 320,
+  animation: { appear: { animation: 'wave-in', duration: 800 } },
   xAxis: {
     tickCount: 6,
-    line: { style: { stroke: '#cbd5e1' } },
-    label: { style: { fill: '#475569' } },
+    line: { style: { stroke: performancePalette.border } },
+    label: { style: { fill: performancePalette.subtle } },
   },
   yAxis: {
     grid: { line: { style: { stroke: '#e2e8f0', lineDash: [4, 4] } } },
@@ -244,19 +273,17 @@ const areaChartConfig = {
   tooltip: {
     domStyles: {
       'g2-tooltip': {
-        borderRadius: '14px',
+        borderRadius: '16px',
         boxShadow: '0 18px 40px rgba(15, 23, 42, 0.16)',
+        padding: '12px 16px',
       },
     },
   },
 };
 
-const reportTabStyle = {
-  background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,251,255,0.98) 100%)',
-  borderRadius: 24,
-  border: '1px solid rgba(148, 163, 184, 0.16)',
-  boxShadow: '0 20px 48px rgba(15, 23, 42, 0.08)',
-  padding: 12,
+const tabsContainerStyle = {
+  ...performancePanelStyle,
+  padding: 16,
 };
 
 const ReportDetail = ({ dispatch, gconfig, loading }) => {
@@ -551,80 +578,100 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
   const configuredAssertions = summaryData.assertions_config || [];
   return (
     <PageContainer title={false} breadcrumb={null}>
-      <div style={{ padding: '8px 0 24px', background: performancePalette.page, minHeight: 'calc(100vh - 120px)' }}>
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card loading={fetching} style={{ ...softCardStyle, background: 'linear-gradient(180deg, #ffffff 0%, #f7fbff 100%)' }}>
-          <Row gutter={[24, 24]} align="middle">
-            <Col span={16}>
-              <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                <Space size={8} wrap>
-                  <span style={{ fontSize: 24, fontWeight: 700 }}>{report.plan_name}</span>
-                  <Tag color="blue">{sourceType}</Tag>
-                  <Tag color="purple">{formatLoadMode(summaryData.load_mode)}</Tag>
-                  {isChainReport ? <Tag color="cyan">{`链路步骤 ${chainPreview.length}`}</Tag> : null}
-                  {reportPassed ? <Tag color="success">报告通过</Tag> : <Tag color="error">报告未通过</Tag>}
-                </Space>
-                <span style={{ color: '#64748b' }}>{report.request_method} {report.request_url}</span>
-                <Descriptions column={3} size="small">
-                  <Descriptions.Item label="报告ID">#{report.id}</Descriptions.Item>
-                  <Descriptions.Item label="开始时间">{startedAt}</Descriptions.Item>
-                  <Descriptions.Item label="结束时间">{finishedAt}</Descriptions.Item>
-                  <Descriptions.Item label="执行环境">{envName}</Descriptions.Item>
-                  <Descriptions.Item label="耗时">{report.cost || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="总请求">{report.total_requests || 0}</Descriptions.Item>
-                </Descriptions>
+      <div style={{ padding: '8px 16px 24px', background: performancePalette.page, minHeight: 'calc(100vh - 120px)' }}>
+        <Space direction="vertical" size={20} style={{ width: '100%' }}>
+
+        <PerformanceHero
+          eyebrow={sourceType}
+          title={report.plan_name}
+          description={
+            <Space direction="vertical" size={4}>
+              <Space size={8} wrap>
+                <Tag color="blue">{sourceType}</Tag>
+                <Tag color="purple">{formatLoadMode(summaryData.load_mode)}</Tag>
+                {isChainReport ? <Tag color="cyan">{`链路步骤 ${chainPreview.length}`}</Tag> : null}
+                {reportPassed
+                  ? <Tag icon={<CheckCircleOutlined />} color="success">报告通过</Tag>
+                  : <Tag icon={<CloseCircleOutlined />} color="error">报告未通过</Tag>}
               </Space>
-            </Col>
-            <Col span={8}>
-              <Row gutter={12}>
-                <Col span={12}>
-                  <Card bordered={false} style={{ borderRadius: 16, background: 'linear-gradient(180deg, #f3f8ff 0%, #ffffff 100%)' }}>
-                    <Statistic title="成功率" value={successRate} suffix="%" />
-                    <Progress percent={successRate} showInfo={false} strokeColor="#1677ff" />
-                  </Card>
-                </Col>
-                <Col span={12}>
-                  <Card bordered={false} style={{ borderRadius: 16, background: 'linear-gradient(180deg, #fff7eb 0%, #ffffff 100%)' }}>
-                    <Statistic title="阈值通过率" value={thresholdPassRate} suffix="%" />
-                    <Progress percent={thresholdPassRate} showInfo={false} strokeColor={reportPassed ? '#2f9f3d' : '#ec9a08'} />
-                  </Card>
-                </Col>
-              </Row>
-            </Col>
-          </Row>
-        </Card>
+              <span style={{ color: '#64748b', fontSize: 13 }}>{report.request_method} {report.request_url}</span>
+              <Descriptions column={3} size="small" style={{ marginTop: 4 }}>
+                <Descriptions.Item label="报告ID">#{report.id}</Descriptions.Item>
+                <Descriptions.Item label="开始时间">{startedAt}</Descriptions.Item>
+                <Descriptions.Item label="结束时间">{finishedAt}</Descriptions.Item>
+                <Descriptions.Item label="执行环境">{envName}</Descriptions.Item>
+                <Descriptions.Item label="耗时">{report.cost || '-'}</Descriptions.Item>
+                <Descriptions.Item label="总请求">{report.total_requests || 0}</Descriptions.Item>
+              </Descriptions>
+            </Space>
+          }
+          actions={
+            <Row gutter={12}>
+              <Col>
+                <div style={{ padding: 16, minWidth: 130, textAlign: 'center' }}>
+                  <Statistic title="成功率" value={successRate} suffix="%" valueStyle={{ fontSize: 28, fontWeight: 700, color: successRate >= 99 ? '#22c55e' : successRate >= 90 ? '#f59e0b' : '#ef4444' }} />
+                  <Progress percent={successRate} showInfo={false} strokeColor={successRate >= 99 ? '#22c55e' : successRate >= 90 ? '#f59e0b' : '#ef4444'} size="small" />
+                </div>
+              </Col>
+              <Col>
+                <div style={{ padding: 16, minWidth: 130, textAlign: 'center' }}>
+                  <Statistic title="阈值通过率" value={thresholdPassRate} suffix="%" valueStyle={{ fontSize: 28, fontWeight: 700, color: reportPassed ? '#22c55e' : '#f59e0b' }} />
+                  <Progress percent={thresholdPassRate} showInfo={false} strokeColor={reportPassed ? '#22c55e' : '#f59e0b'} size="small" />
+                </div>
+              </Col>
+            </Row>
+          }
+        />
 
-        <Row gutter={[16, 16]}>
-          <Col span={4}><Card style={metricCardStyle}><Statistic title="总请求数" value={report.total_requests || 0} /></Card></Col>
-          <Col span={4}><Card style={metricCardStyle}><Statistic title="成功请求数" value={report.success_count || 0} /></Card></Col>
-          <Col span={4}><Card style={metricCardStyle}><Statistic title="失败请求数" value={report.failed_count || 0} /></Card></Col>
-          <Col span={4}><Card style={metricCardStyle}><Statistic title="平均响应时间" value={report.avg_rt_ms || 0} suffix="ms" /></Card></Col>
-          <Col span={4}><Card style={metricCardStyle}><Statistic title="P95" value={report.p95_rt_ms || 0} suffix="ms" /></Card></Col>
-          <Col span={4}><Card style={metricCardStyle}><Statistic title="断言失败数" value={summaryData.assertion_failed_count || 0} /></Card></Col>
-        </Row>
+        <div style={{ ...performancePanelStyle, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, marginBottom: 20 }}>
+          {[
+            { label: '总请求数', value: report.total_requests || 0, hint: '本次压测总请求', color: performancePalette.blue },
+            { label: '成功请求', value: report.success_count || 0, hint: `成功率 ${successRate}%`, color: performancePalette.green },
+            { label: '失败请求', value: report.failed_count || 0, hint: `错误率 ${report.error_rate || 0}%`, color: '#f43f5e' },
+            { label: '平均响应', value: `${report.avg_rt_ms || 0}ms`, hint: `P95: ${report.p95_rt_ms || 0}ms`, color: performancePalette.indigo },
+          ].map((item, idx) => (
+            <div key={item.label} style={{
+              padding: '20px 24px',
+              borderRight: idx < 3 ? '1px solid rgba(148, 163, 184, 0.15)' : 'none',
+            }}>
+              <span style={{ color: '#64748b', fontSize: 12, letterSpacing: 0.3 }}>{item.label}</span>
+              <div style={{ fontSize: 30, lineHeight: 1.2, fontWeight: 700, marginTop: 6, color: performancePalette.text }}>{item.value}</div>
+              <span style={{ color: '#94a3b8', fontSize: 12 }}>{item.hint}</span>
+            </div>
+          ))}
+        </div>
 
-        <Alert type={reportPassed ? 'success' : 'warning'} showIcon message={conclusion} />
+        {conclusion ? (
+          <Alert
+            type={reportPassed ? 'success' : 'warning'}
+            showIcon
+            icon={reportPassed ? <CheckCircleOutlined /> : <WarningOutlined />}
+            message={<span style={{ fontWeight: 600 }}>{reportPassed ? '报告结论：通过' : '报告结论：未通过'}</span>}
+            description={conclusion}
+            style={{ borderRadius: 16 }}
+          />
+        ) : null}
 
         {!reportPassed && failedReasons.length ? (
-          <Card title="通过 / 失败原因" style={metricCardStyle}>
+          <Card title={<><WarningOutlined style={{ color: '#f59e0b', marginRight: 8 }} />通过 / 失败原因</>} style={sectionCardStyle}>
             <List
               size="small"
               dataSource={failedReasons}
-              renderItem={(item, index) => <List.Item>{index + 1}. {item}</List.Item>}
+              renderItem={(item, index) => <List.Item><Tag color="error" style={{ borderRadius: 999 }}>{index + 1}</Tag> {item}</List.Item>}
             />
           </Card>
         ) : null}
 
         <Tabs
           defaultActiveKey="overview"
-          style={reportTabStyle}
+          style={tabsContainerStyle}
           items={[
             {
               key: 'overview',
-              label: '摘要与结论',
+              label: <><DashboardOutlined style={{ marginRight: 6 }} />摘要与结论</>,
               children: (
                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                  <Card title="压测配置" style={metricCardStyle}>
+                  <Card title={<><DashboardOutlined style={{ marginRight: 8, color: performancePalette.blue }} />压测配置</>} style={sectionCardStyle}>
                     <Descriptions column={3}>
                       <Descriptions.Item label="并发数">{loadConfig.concurrency || report.concurrency || '-'}</Descriptions.Item>
                       <Descriptions.Item label="目标QPS">{loadConfig.target_qps || '-'}</Descriptions.Item>
@@ -638,7 +685,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                     </Descriptions>
                   </Card>
                   {isChainReport ? (
-                    <Card title="链路步骤编排" style={metricCardStyle}>
+                    <Card title={<><ApiOutlined style={{ marginRight: 8, color: performancePalette.cyan }} />链路步骤编排</>} style={sectionCardStyle}>
                       <Space direction="vertical" size={12} style={{ width: '100%' }}>
                         {chainStepRows.map((item, index) => (
                           <Row key={item.key} gutter={12} align="middle" wrap={false}>
@@ -683,12 +730,12 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                     </Card>
                   ) : null}
                   {thresholds?.length ? (
-                    <Card title="阈值校验" style={metricCardStyle}>
+                    <Card title="阈值校验" style={sectionCardStyle}>
                       <Table rowKey="name" columns={thresholdColumns} dataSource={thresholds} pagination={false} />
                     </Card>
                   ) : null}
                   {!timeline.length && requestRecords.length ? (
-                    <Card title="采样提示" style={metricCardStyle}>
+                    <Card title="采样提示" style={sectionCardStyle}>
                       <Alert
                         type="warning"
                         showIcon
@@ -697,7 +744,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                       />
                     </Card>
                   ) : null}
-                  <Card title="优化建议" style={metricCardStyle}>
+                  <Card title={<><CheckCircleOutlined style={{ marginRight: 8, color: performancePalette.green }} />优化建议</>} style={sectionCardStyle}>
                     <List
                       size="small"
                       dataSource={suggestions}
@@ -709,12 +756,12 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
             },
               {
                 key: 'trends',
-                label: isChainReport ? '趋势与链路' : '趋势分析',
+                label: <><FieldTimeOutlined style={{ marginRight: 6 }} />{isChainReport ? '趋势与链路' : '趋势分析'}</>,
                 children: (
                   <Space direction="vertical" size={16} style={{ width: '100%' }}>
                     <Row gutter={[16, 16]}>
                       <Col span={isChainReport ? 15 : 14}>
-                        <Card title="吞吐趋势" style={softCardStyle}>
+                        <Card title="吞吐趋势" style={chartCardStyle}>
                           {throughputSeries.length ? (
                             <Area
                             data={throughputSeries}
@@ -729,7 +776,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                       </Card>
                       </Col>
                       <Col span={isChainReport ? 9 : 10}>
-                        <Card title="响应耗时趋势" style={softCardStyle}>
+                        <Card title="响应耗时趋势" style={chartCardStyle}>
                           {latencySeries.length ? (
                             <Area
                             data={latencySeries}
@@ -747,7 +794,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
 
                     <Row gutter={[16, 16]}>
                       <Col span={isChainReport ? 10 : 24}>
-                        <Card title="错误类型分布" style={softCardStyle}>
+                        <Card title="错误类型分布" style={chartCardStyle}>
                           {errorDistribution.length ? (
                             <Column
                             data={errorDistribution}
@@ -774,7 +821,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                   </Row>
 
                   {isChainReport ? (
-                    <Card title="链路步骤健康明细" style={metricCardStyle}>
+                    <Card title="链路步骤健康明细" style={sectionCardStyle}>
                       <Table
                         rowKey="key"
                         pagination={false}
@@ -795,7 +842,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                   ) : null}
 
                   {isChainReport && apiRankings.length ? (
-                    <Card title="步骤执行排行明细" style={metricCardStyle}>
+                    <Card title="步骤执行排行明细" style={sectionCardStyle}>
                       <Table
                         rowKey="key"
                         pagination={false}
@@ -813,7 +860,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                     </Card>
                   ) : null}
 
-                  <Card title="时间片明细" style={metricCardStyle}>
+                  <Card title="时间片明细" style={sectionCardStyle}>
                     <Table rowKey="label" columns={timelineColumns} dataSource={timeline || []} pagination={false} scroll={{ y: 320 }} />
                   </Card>
                 </Space>
@@ -821,15 +868,23 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
             },
               {
                 key: 'errors',
-                label: '请求样本',
+                label: <><ThunderboltOutlined style={{ marginRight: 6 }} />请求样本</>,
                 children: (
                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                  <Row gutter={[16, 16]}>
-                    <Col span={6}><Card style={metricCardStyle}><Statistic title="全部样本" value={sampleStats.all} /></Card></Col>
-                    <Col span={6}><Card style={metricCardStyle}><Statistic title="成功样本" value={sampleStats.success} /></Card></Col>
-                    <Col span={6}><Card style={metricCardStyle}><Statistic title="错误样本" value={sampleStats.error} /></Card></Col>
-                    <Col span={6}><Card style={metricCardStyle}><Statistic title="断言失败样本" value={sampleStats.assertion_failed} /></Card></Col>
-                  </Row>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, borderRadius: 20, border: '1px solid rgba(148, 163, 184, 0.18)', background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,251,255,0.98) 100%)' }}>
+                    {[
+                      { label: '全部样本', value: sampleStats.all, hint: '全部采样记录' },
+                      { label: '成功样本', value: sampleStats.success, hint: '请求成功' },
+                      { label: '错误样本', value: sampleStats.error, hint: '请求失败' },
+                      { label: '断言失败', value: sampleStats.assertion_failed, hint: '断言未通过' },
+                    ].map((item, idx) => (
+                      <div key={item.label} style={{ padding: '20px 24px', borderRight: idx < 3 ? '1px solid rgba(148, 163, 184, 0.15)' : 'none' }}>
+                        <span style={{ color: '#64748b', fontSize: 12 }}>{item.label}</span>
+                        <div style={{ fontSize: 28, fontWeight: 700, marginTop: 6, color: performancePalette.text }}>{item.value}</div>
+                        <span style={{ color: '#94a3b8', fontSize: 12 }}>{item.hint}</span>
+                      </div>
+                    ))}
+                  </div>
 
                   <Card
                     title="请求样本列表"
@@ -845,7 +900,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                         ]}
                       />
                     )}
-                    style={metricCardStyle}
+                    style={sectionCardStyle}
                   >
                     {requestRecordMeta.unsampledErrorMessage ? (
                       <Alert
@@ -885,7 +940,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                     />
                   </Card>
 
-                  <Card title="断言配置" style={metricCardStyle}>
+                  <Card title="断言配置" style={sectionCardStyle}>
                     {configuredAssertions.length ? (
                       <List
                         size="small"
@@ -912,34 +967,34 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
             },
             {
               key: 'snapshots',
-              label: '快照与日志',
+              label: <><ApiOutlined style={{ marginRight: 6 }} />快照与日志</>,
               children: (
                 <Row gutter={[16, 16]}>
                   <Col span={12}>
-                    <Card title="环境与请求快照" style={metricCardStyle}>
+                    <Card title="环境与请求快照" style={sectionCardStyle}>
                       <Descriptions column={1} size="small">
                         <Descriptions.Item label="环境">{envName}</Descriptions.Item>
                         {isChainReport ? (
                           <Descriptions.Item label="链路快照">
-                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(chainPreview)}</pre>
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 360, overflow: 'auto' }}>{stringifyBlock(chainPreview)}</pre>
                           </Descriptions.Item>
                         ) : null}
                         {summaryData.setup_snapshot?.enabled ? (
                           <Descriptions.Item label="预置快照">
-                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(summaryData.setup_snapshot)}</pre>
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 360, overflow: 'auto' }}>{stringifyBlock(summaryData.setup_snapshot)}</pre>
                           </Descriptions.Item>
                         ) : null}
                         <Descriptions.Item label="参数快照">
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(parameterSnapshot)}</pre>
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 360, overflow: 'auto' }}>{stringifyBlock(parameterSnapshot)}</pre>
                         </Descriptions.Item>
                         <Descriptions.Item label="请求快照">
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(requestSnapshot)}</pre>
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 360, overflow: 'auto' }}>{stringifyBlock(requestSnapshot)}</pre>
                         </Descriptions.Item>
                       </Descriptions>
                     </Card>
                   </Col>
                   <Col span={12}>
-                    <Card title="执行日志" style={metricCardStyle}>
+                    <Card title="执行日志" style={sectionCardStyle}>
                       <List
                         size="small"
                         dataSource={payload.logs || []}
@@ -952,7 +1007,7 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                                 <span>{item.message}</span>
                               </Space>
                               <span style={{ color: '#64748b', fontSize: 12 }}>{item.created_at}</span>
-                              {item.detail ? <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{item.detail}</pre> : null}
+                              {item.detail ? <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 360, overflow: 'auto' }}>{item.detail}</pre> : null}
                             </Space>
                           </List.Item>
                         )}
@@ -969,9 +1024,13 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
 
       <Drawer
         title="请求样本详情"
-        width={820}
+        width={860}
         open={!!activeSample}
         onClose={() => setActiveSample(null)}
+        styles={{
+          body: { background: 'linear-gradient(180deg, #f8fbff 0%, #f2f7fd 100%)' },
+          header: { borderBottom: '1px solid rgba(148, 163, 184, 0.18)' },
+        }}
       >
         {activeSample ? (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -1029,20 +1088,20 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                   children: (
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
                       <Card size="small" title="请求 Headers" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(activeRequest.headers || {})}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeRequest.headers || {})}</pre>
                       </Card>
                       <Card size="small" title="请求 Query 参数" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(activeRequest.query || {})}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeRequest.query || {})}</pre>
                       </Card>
                       <Card size="small" title="请求 Body" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(activeRequest.body || '')}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeRequest.body || '')}</pre>
                       </Card>
                       <Card size="small" title="变量快照" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(activeSample.request_sample?.variables || {})}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSample.request_sample?.variables || {})}</pre>
                       </Card>
                       {activeSteps.length ? (
                         <Card size="small" title="链路 / 预置步骤请求" style={performancePanelStyle}>
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(activeSteps)}</pre>
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSteps)}</pre>
                         </Card>
                       ) : null}
                     </Space>
@@ -1054,11 +1113,11 @@ const ReportDetail = ({ dispatch, gconfig, loading }) => {
                   children: (
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
                       <Card size="small" title="响应内容" style={performancePanelStyle}>
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(activeSample.response_sample || '')}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSample.response_sample || '')}</pre>
                       </Card>
                       {activeSteps.length ? (
                         <Card size="small" title="链路 / 预置步骤响应" style={performancePanelStyle}>
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyBlock(activeSteps.map((item) => ({
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#ffffff', padding: 12, borderRadius: 10, border: '1px solid #e8eef8', fontSize: 12, lineHeight: 1.6, maxHeight: 400, overflow: 'auto' }}>{stringifyBlock(activeSteps.map((item) => ({
                             name: item.name,
                             status: item.status,
                             status_code: item.status_code,
