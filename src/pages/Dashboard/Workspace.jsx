@@ -36,11 +36,11 @@ const calculatePercent = (report) =>
   );
 
 const MetricCard = ({ icon, label, value, suffix }) => (
-  <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
-    <div className="flex items-center justify-center w-12 h-12 bg-brand-50 rounded-xl text-brand-500 text-xl">
+  <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-5">
+    <div className="flex items-center justify-center w-10 h-10 bg-brand-50 rounded-lg text-brand-500 text-lg">
       {icon}
     </div>
-    <div className="mt-5">
+    <div className="mt-3.5">
       <span className="text-sm text-gray-500">{label}</span>
       <h4 className="mt-2 font-bold text-gray-800 text-title-sm">
         {value}
@@ -54,8 +54,45 @@ const MetricCard = ({ icon, label, value, suffix }) => (
   </div>
 );
 
+const SplitMetricCard = ({
+  icon,
+  label,
+  total,
+  apiValue,
+  functionalValue,
+  suffix = '',
+}) => (
+  <div className="rounded-2xl border border-gray-200 bg-white p-3.5 md:p-4">
+    <div className="flex items-center justify-center w-10 h-10 bg-brand-50 rounded-lg text-brand-500 text-lg">
+      {icon}
+    </div>
+    <div className="mt-3">
+      <span className="text-theme-sm text-gray-500">{label}</span>
+      <h4 className="mt-1.5 font-bold text-gray-800 text-title-sm">
+        {total}
+        {suffix ? (
+          <span className="ml-1 text-base font-medium text-gray-400">
+            {suffix}
+          </span>
+        ) : null}
+      </h4>
+      <div className="mt-2.5 flex items-center gap-3 text-theme-xs text-gray-500">
+        <span>
+          接口：
+          <span className="ml-1 font-semibold text-gray-800">{apiValue}</span>
+        </span>
+        <span className="text-gray-300">|</span>
+        <span>
+          功能：
+          <span className="ml-1 font-semibold text-gray-800">{functionalValue}</span>
+        </span>
+      </div>
+    </div>
+  </div>
+);
+
 const WelcomeBanner = ({ currentUser }) => (
-  <div className="rounded-2xl bg-brand-500 p-6 md:p-8">
+  <div className="rounded-2xl bg-brand-500 p-5 md:p-6">
     <div className="flex items-center gap-4">
       <img
         src={getAvatarByUser(currentUser)}
@@ -63,7 +100,7 @@ const WelcomeBanner = ({ currentUser }) => (
         className="w-16 h-16 rounded-full bg-white/20 ring-2 ring-white/30"
       />
       <div>
-        <div className="text-xl font-semibold text-white">
+        <div className="text-[16px] font-semibold text-white">
           {getWelcome(currentUser?.name || '同学')}
         </div>
         <div className="mt-1 text-sm text-white/80">
@@ -75,11 +112,14 @@ const WelcomeBanner = ({ currentUser }) => (
   </div>
 );
 
-const WeeklyChart = ({ weeklyCase = [] }) => {
-  const categories = weeklyCase.map((item) => item?.date || '');
-  const data = weeklyCase.map((item) => Number(item?.count || 0));
+const WeeklyCaseChart = ({ weekCase = [] }) => {
+  const categories = weekCase.map((item) => item?.date || '');
+  const apiData = weekCase.map((item) => Number(item?.api_case_count || item?.api_count || 0));
+  const functionalData = weekCase.map((item) =>
+    Number(item?.functional_case_count || item?.functional_count || 0),
+  );
   const options = {
-    colors: ['#465fff'],
+    colors: ['#465fff', '#12b76a'],
     chart: {
       fontFamily: 'Outfit, sans-serif',
       type: 'bar',
@@ -109,7 +149,12 @@ const WeeklyChart = ({ weeklyCase = [] }) => {
         },
       },
     },
-    legend: { show: false },
+    legend: {
+      show: true,
+      position: 'top',
+      horizontalAlign: 'left',
+      labels: { colors: '#667085' },
+    },
     yaxis: { title: { text: undefined } },
     grid: { yaxis: { lines: { show: true } } },
     fill: { opacity: 1 },
@@ -119,7 +164,7 @@ const WeeklyChart = ({ weeklyCase = [] }) => {
   return (
     <Card padding="px-5 pt-5 sm:px-6 sm:pt-6 pb-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-800">最近7天编写用例</h3>
+        <h3 className="text-[16px] font-semibold text-gray-800">最近7天编写用例</h3>
         <button
           type="button"
           onClick={() => history.push('/apiTest/testcase')}
@@ -133,8 +178,11 @@ const WeeklyChart = ({ weeklyCase = [] }) => {
           <ApexChart
             type="bar"
             options={options}
-            series={[{ name: '新增用例', data }]}
-            height={220}
+            series={[
+              { name: '接口用例', data: apiData },
+              { name: '功能用例', data: functionalData },
+            ]}
+            height={205}
           />
         </div>
       </div>
@@ -285,9 +333,14 @@ const Workspace = ({ user, dispatch }) => {
   const {
     project_count,
     case_count,
+    api_case_count,
+    functional_case_count,
+    weekly_new_api_case,
+    weekly_new_functional_case,
     user_rank,
     total_user,
     weekly_case,
+    month_case,
     followPlan = [],
   } = user;
 
@@ -299,14 +352,16 @@ const Workspace = ({ user, dispatch }) => {
     dispatch({ type: 'user/queryFollowTestPlanData' });
   }, []);
 
-  const weeklyTotal = useMemo(
-    () =>
-      (weekly_case || []).reduce(
-        (sum, item) => sum + Number(item?.count || 0),
-        0,
-      ),
-    [weekly_case],
-  );
+  const normalizedWeekCase = useMemo(() => {
+    if (Array.isArray(weekly_case) && weekly_case.length > 0) return weekly_case;
+    // backward fallback for older payloads
+    if (Array.isArray(month_case) && month_case.length > 0) return month_case.slice(-7);
+    return [];
+  }, [weekly_case, month_case]);
+
+  const weeklyApi = Number(weekly_new_api_case || 0);
+  const weeklyFunctional = Number(weekly_new_functional_case || 0);
+  const weeklyTotal = weeklyApi + weeklyFunctional;
 
   return (
     <PageContainer title={false} breadcrumb={null}>
@@ -322,32 +377,37 @@ const Workspace = ({ user, dispatch }) => {
             value={project_count || 0}
           />
           <MetricCard
-            icon={<FileDoneOutlined />}
-            label="用例数量"
-            value={case_count || 0}
-          />
-          <MetricCard
             icon={<TeamOutlined />}
             label="团队排名"
             value={user_rank === 0 ? '-' : user_rank}
             suffix={`/ ${total_user || 0}`}
           />
-          <MetricCard
+          <SplitMetricCard
+            icon={<FileDoneOutlined />}
+            label="用例数量（接口/功能）"
+            total={Number(case_count || 0)}
+            apiValue={Number(api_case_count || 0)}
+            functionalValue={Number(functional_case_count || 0)}
+            suffix="条"
+          />
+          <SplitMetricCard
             icon={<EditOutlined />}
-            label="近7天新增用例"
-            value={weeklyTotal}
+            label="最近7天新增（接口/功能）"
+            total={weeklyTotal}
+            apiValue={weeklyApi}
+            functionalValue={weeklyFunctional}
             suffix="条"
           />
         </div>
 
         <div className="col-span-12">
-          <WeeklyChart weeklyCase={weekly_case} />
+          <WeeklyCaseChart weekCase={normalizedWeekCase} />
         </div>
 
         <div className="col-span-12">
           <div className="mb-4 flex items-center gap-2">
             <RocketOutlined className="text-brand-500" />
-            <h3 className="text-lg font-semibold text-gray-800">
+            <h3 className="text-[16px] font-semibold text-gray-800">
               关注中的测试计划
             </h3>
             <Badge size="sm" color="primary">

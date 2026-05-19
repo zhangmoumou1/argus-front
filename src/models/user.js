@@ -44,6 +44,11 @@ const UserModel = {
     user_rank: 0,
     total_user: 0,
     weekly_case: [],
+    month_case: [],
+    api_case_count: 0,
+    functional_case_count: 0,
+    weekly_new_api_case: 0,
+    weekly_new_functional_case: 0,
     // 关注的测试计划数据
     followPlan: [],
   },
@@ -159,14 +164,22 @@ const UserModel = {
     * queryUserStatistics(_, {call, put}) {
       const response = yield call(queryUserStatistics);
       if (auth.response(response)) {
+        const data = response.data || {};
         yield put({
           type: 'save',
           payload: {
-            project_count: response.data.project_count,
-            case_count: response.data.case_count,
-            user_rank: response.data.user_rank,
-            total_user: response.data.total_user,
-            weekly_case: response.data.weekly_case,
+            project_count: data.project_count || 0,
+            case_count: data.case_count || 0,
+            user_rank: data.user_rank || 0,
+            total_user: data.total_user || 0,
+            weekly_case: data.weekly_case || [],
+            // New workspace metric fields. Keep backward compatibility:
+            // if month_case is missing, fallback to weekly_case.
+            month_case: data.month_case || data.weekly_case || [],
+            api_case_count: data.api_case_count || 0,
+            functional_case_count: data.functional_case_count || 0,
+            weekly_new_api_case: data.weekly_new_api_case || 0,
+            weekly_new_functional_case: data.weekly_new_functional_case || 0,
 
           },
         });
