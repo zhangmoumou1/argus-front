@@ -154,7 +154,7 @@ const RankingTable = ({ rows = [], userMap = {}, emptyText }) => {
           </TableCell>
           <TableCell
             isHeader
-            className="py-3 font-medium text-gray-500 text-end text-theme-xs"
+            className="py-3 pr-4 font-medium text-gray-500 text-end text-theme-xs"
           >
             新增用例数
           </TableCell>
@@ -177,7 +177,7 @@ const RankingTable = ({ rows = [], userMap = {}, emptyText }) => {
                     />
                   </div>
                 </TableCell>
-                <TableCell className="py-3 text-end">
+                <TableCell className="py-3 pr-4 text-end">
                   <span className="text-theme-sm font-semibold text-gray-800">
                     {record.count || 0}
                   </span>
@@ -384,23 +384,23 @@ const Statistics = ({ user, dispatch }) => {
         {/* Filter toolbar */}
         <div className="col-span-12">
           <Card>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-800">
+                <h3 className="text-[16px] font-semibold text-gray-800">
                   接口与功能用例统计
                 </h3>
-                <p className="mt-1 text-theme-sm text-gray-500">
+                <p className="mt-0.5 text-[13px] text-gray-500">
                   当前区间：{currentRangeText}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <div className="flex items-center gap-0.5 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 p-0.5 shadow-theme-xs">
                   {PERIOD_OPTIONS.map((item) => (
                     <button
                       key={item.key}
                       type="button"
                       onClick={() => handlePresetClick(item.key)}
-                      className={`appearance-none rounded-md border-0 px-3 py-2 text-theme-sm font-medium outline-none transition focus:outline-none ${
+                      className={`appearance-none rounded-md border-0 px-2.5 py-1.5 text-theme-sm font-medium outline-none transition focus:outline-none ${
                         period === item.key
                           ? 'bg-white text-gray-900 shadow-theme-xs'
                           : 'text-gray-500 hover:text-gray-900'
@@ -411,7 +411,7 @@ const Statistics = ({ user, dispatch }) => {
                   ))}
                 </div>
                 <RangePicker
-                  size="large"
+                  size="small"
                   className="statistics-range-picker"
                   value={range}
                   onChange={(value) => {
@@ -422,7 +422,7 @@ const Statistics = ({ user, dispatch }) => {
                 <button
                   type="button"
                   onClick={handleApplyCustomRange}
-                  className="appearance-none rounded-lg border-0 bg-brand-500 px-4 py-2 text-theme-sm font-medium text-white outline-none transition hover:bg-brand-600 focus:outline-none"
+                  className="appearance-none rounded-lg border-0 bg-brand-500 px-3.5 py-1.5 text-theme-sm font-medium text-white outline-none transition hover:bg-brand-600 focus:outline-none"
                 >
                   应用时间段
                 </button>
@@ -473,7 +473,7 @@ const Statistics = ({ user, dispatch }) => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <LineChartOutlined className="text-brand-500" />
-                <h3 className="text-lg font-semibold text-gray-800">
+                <h3 className="text-[16px] font-semibold text-gray-800">
                   用例数趋势
                 </h3>
                 <Tooltip title="按当前区间展示接口用例与功能用例的每日变化">
@@ -528,12 +528,12 @@ const Statistics = ({ user, dispatch }) => {
               </div>
             </div>
             {filledTrend.length > 0 ? (
-              <div className="mt-3">
+              <div className="mt-2.5">
                 <ApexChart
                   type="area"
                   options={trendOptions}
                   series={trendSeries}
-                  height={320}
+                  height={356}
                 />
               </div>
             ) : (
@@ -546,11 +546,11 @@ const Statistics = ({ user, dispatch }) => {
 
         {/* Ranking */}
         <div className="col-span-12 xl:col-span-4">
-          <Card>
+          <Card className="xl:h-[478px] xl:flex xl:flex-col">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <TrophyOutlined className="text-brand-500" />
-                <h3 className="text-lg font-semibold text-gray-800">
+                <h3 className="text-[16px] font-semibold text-gray-800">
                   用例排行榜
                 </h3>
               </div>
@@ -579,15 +579,17 @@ const Statistics = ({ user, dispatch }) => {
                 功能用例数
               </button>
             </div>
-            <RankingTable
-              rows={rankingRows}
-              userMap={userMap}
-              emptyText={
-                rankingTab === 'api'
-                  ? '暂无接口用例排行数据'
-                  : '暂无功能用例排行数据'
-              }
-            />
+            <div className="mt-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+              <RankingTable
+                rows={rankingRows}
+                userMap={userMap}
+                emptyText={
+                  rankingTab === 'api'
+                    ? '暂无接口用例排行数据'
+                    : '暂无功能用例排行数据'
+                }
+              />
+            </div>
           </Card>
         </div>
       </div>

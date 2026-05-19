@@ -82,11 +82,11 @@ const StatCard = ({ icon, label, value, sparkData = [], color = '#465fff', chang
 
   return (
     <div className="h-full rounded-xl border border-gray-200 bg-white p-4 shadow-theme-xs">
-      <div className="flex min-h-[124px] flex-col justify-between">
+      <div className="flex min-h-[104px] flex-col justify-between">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-700">{label}</h3>
-            <div className={`mt-1.5 flex items-center gap-1.5 text-sm font-medium ${change.colorClass}`}>
+            <h3 className="text-[16px] font-semibold text-gray-700">{label}</h3>
+            <div className={`mt-1.5 flex items-center gap-1.5 text-[12px] font-medium ${change.colorClass}`}>
               <change.Icon />
               <span>{change.value}</span>
               <span className="font-normal text-gray-500">vs 上个时间段</span>
@@ -99,14 +99,14 @@ const StatCard = ({ icon, label, value, sparkData = [], color = '#465fff', chang
             {icon}
           </div>
         </div>
-        <div className="mt-5 flex min-h-[44px] items-end justify-between gap-4">
-          <h2 className="mb-0 text-3xl font-semibold leading-none text-gray-800">{value}</h2>
-          <div className="mb-0 h-[44px] w-[158px] shrink-0 self-end">
+        <div className="mt-2.5 flex min-h-[30px] items-end justify-between gap-3">
+          <h2 className="mb-0 text-[16px] font-semibold leading-none text-gray-800">{value}</h2>
+          <div className="mb-0 h-[30px] w-[132px] shrink-0 self-end">
             <ApexChart
               type="area"
               options={options}
               series={[{ name: label, data }]}
-              height={44}
+              height={30}
             />
           </div>
         </div>
