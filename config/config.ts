@@ -15,6 +15,15 @@ export default defineConfig({
    */
   hash: true,
 
+  /**
+   * @name 额外的 PostCSS 插件
+   * @description 接入 Tailwind CSS（用于 TailAdmin 风格的 Dashboard 页面）
+   */
+  extraPostCSSPlugins: [
+    require('tailwindcss'),
+    require('autoprefixer'),
+  ],
+
   title: 'pity',
 
   history: {

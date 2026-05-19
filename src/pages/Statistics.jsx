@@ -1,80 +1,192 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
 import { connect } from '@umijs/max';
-import {
-  Button,
-  Card,
-  Col,
-  DatePicker,
-  Empty,
-  Row,
-  Skeleton,
-  Space,
-  Table,
-  Tabs,
-} from 'antd';
+import { DatePicker } from 'antd';
 import {
   ApiOutlined,
   BarChartOutlined,
   CheckCircleOutlined,
-  FileDoneOutlined,
   FunctionOutlined,
   LineChartOutlined,
+  QuestionCircleOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons';
-import { Line, TinyArea } from '@ant-design/charts';
-import moment from 'moment';
+import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { queryStatistics } from '@/services/statistics';
 import auth from '@/utils/auth';
 import UserLink from '@/components/Button/UserLink';
-import './Statistics.less';
+import Card from '@/components/tailadmin/Card';
+import ApexChart from '@/components/tailadmin/ApexChart';
+import StatCard from '@/components/tailadmin/StatCard';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from '@/components/tailadmin/Table';
+import { Tooltip } from 'antd';
 
 const { RangePicker } = DatePicker;
-const { TabPane } = Tabs;
+
+dayjs.extend(isoWeek);
+dayjs.extend(isSameOrBefore);
+dayjs.extend(quarterOfYear);
 
 const PERIOD_OPTIONS = [
-  { key: 'week', label: '本周', getRange: () => [moment().startOf('isoWeek'), moment()] },
-  { key: 'month', label: '本月', getRange: () => [moment().startOf('month'), moment()] },
-  { key: 'quarter', label: '本季度', getRange: () => [moment().startOf('quarter'), moment()] },
-  { key: 'year', label: '本年', getRange: () => [moment().startOf('year'), moment()] },
+  {
+    key: 'week',
+    label: '本周',
+    getRange: () => [dayjs().startOf('isoWeek'), dayjs()],
+  },
+  {
+    key: 'month',
+    label: '本月',
+    getRange: () => [dayjs().startOf('month'), dayjs()],
+  },
+  {
+    key: 'quarter',
+    label: '本季度',
+    getRange: () => [dayjs().startOf('quarter'), dayjs()],
+  },
+  {
+    key: 'year',
+    label: '本年',
+    getRange: () => [dayjs().startOf('year'), dayjs()],
+  },
 ];
 
 const getPresetRange = (period) => {
-  const matched = PERIOD_OPTIONS.find((item) => item.key === period) || PERIOD_OPTIONS[0];
+  const matched =
+    PERIOD_OPTIONS.find((item) => item.key === period) || PERIOD_OPTIONS[0];
   return matched.getRange();
 };
 
-const buildTrendSource = (trend = []) => {
+const formatPercent = (value) => {
+  const normalized = Number(value || 0);
+  const display = normalized > 1 ? normalized : normalized * 100;
+  return `${display.toFixed(2)}%`;
+};
+
+const buildSparkline = (trend = [], field) =>
+  (trend || []).map((item) => Number(item?.[field] || 0));
+
+const formatAxisDate = (value) => {
+  if (!value) return '';
+  const text = String(value);
+  const matched = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!matched) return text;
+  return `${matched[2]}/${matched[3]}`;
+};
+
+const buildFilledTrend = (range = {}, trend = []) => {
+  const startSource = Array.isArray(range) ? range[0] : range?.start_date;
+  const endSource = Array.isArray(range) ? range[1] : range?.end_date;
+  const start = startSource ? dayjs(startSource) : null;
+  const end = endSource ? dayjs(endSource) : null;
+  if (!start || !end || !start.isValid() || !end.isValid()) {
+    return trend || [];
+  }
+
+  const trendMap = new Map(
+    (trend || []).map((item) => [String(item?.date || ''), item || {}]),
+  );
   const result = [];
-  trend.forEach((item) => {
+  let cursor = start.clone().startOf('day');
+  const finalDay = end.clone().startOf('day');
+
+  while (cursor.isSameOrBefore(finalDay, 'day')) {
+    const date = cursor.format('YYYY-MM-DD');
+    const current = trendMap.get(date) || {};
     result.push({
-      date: item.date,
-      type: '接口用例',
-      count: item.api_case_count || 0,
+      date,
+      api_case_count: Number(current?.api_case_count || 0),
+      functional_case_count: Number(current?.functional_case_count || 0),
     });
-    result.push({
-      date: item.date,
-      type: '功能用例',
-      count: item.functional_case_count || 0,
-    });
-  });
+    cursor = cursor.add(1, 'day');
+  }
+
   return result;
 };
 
-const buildSparkline = (trend = [], field) => (
-  (trend || []).map((item) => Number(item?.[field] || 0))
-);
-
-const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
-
-const RankUser = ({ record, userMap = {} }) => {
-  const matchedUser = userMap[record.user_id] || userMap[String(record.user_id)];
+const RankBadge = ({ rank }) => {
+  const map = {
+    1: 'bg-warning-100 text-warning-700',
+    2: 'bg-gray-200 text-gray-700',
+    3: 'bg-orange-100 text-orange-700',
+  };
+  const cls = map[rank] || 'bg-gray-100 text-gray-500';
   return (
-    <div className="statistics-rank-user">
-      <UserLink user={matchedUser} size={30} marginLeft={6} />
-      <div className="statistics-rank-user__meta">
-        {!matchedUser ? <div className="statistics-rank-user__name">{record.name}</div> : null}
-        <div className="statistics-rank-user__email">{record.email || matchedUser?.email || '-'}</div>
+    <span
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-theme-xs font-semibold ${cls}`}
+    >
+      {rank}
+    </span>
+  );
+};
+
+const RankingTable = ({ rows = [], userMap = {}, emptyText }) => {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="py-10 text-center text-theme-sm text-gray-400">
+        {emptyText}
       </div>
+    );
+  }
+  return (
+    <div className="max-w-full overflow-x-auto">
+      <Table>
+        <TableHeader className="border-y border-gray-100">
+          <TableCell
+            isHeader
+            className="py-3 font-medium text-gray-500 text-start text-theme-xs"
+          >
+            排名
+          </TableCell>
+          <TableCell
+            isHeader
+            className="py-3 font-medium text-gray-500 text-start text-theme-xs"
+          >
+            测试人员
+          </TableCell>
+          <TableCell
+            isHeader
+            className="py-3 font-medium text-gray-500 text-end text-theme-xs"
+          >
+            新增用例数
+          </TableCell>
+        </TableHeader>
+        <TableBody className="divide-y divide-gray-100">
+          {rows.map((record) => {
+            const matchedUser =
+              userMap[record.user_id] || userMap[String(record.user_id)];
+            return (
+              <TableRow key={`${record.user_id}-${record.rank}`}>
+                <TableCell className="py-3">
+                  <RankBadge rank={record.rank} />
+                </TableCell>
+                <TableCell className="py-3">
+                  <div className="flex items-center">
+                    <UserLink
+                      user={matchedUser}
+                      size={30}
+                      marginLeft={8}
+                    />
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 text-end">
+                  <span className="text-theme-sm font-semibold text-gray-800">
+                    {record.count || 0}
+                  </span>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 };
@@ -84,14 +196,16 @@ const Statistics = ({ user, dispatch }) => {
   const [period, setPeriod] = useState('week');
   const [range, setRange] = useState(getPresetRange('week'));
   const [loading, setLoading] = useState(false);
+  const [rankingTab, setRankingTab] = useState('api');
+  const [trendVisibility, setTrendVisibility] = useState({
+    api: true,
+    functional: true,
+  });
   const [statistics, setStatistics] = useState({
     range: {},
     overview: {},
     trend: [],
-    ranking: {
-      api_case: [],
-      functional_case: [],
-    },
+    ranking: { api_case: [], functional_case: [] },
   });
 
   const fetchStatistics = async (nextPeriod, nextRange) => {
@@ -113,85 +227,131 @@ const Statistics = ({ user, dispatch }) => {
     fetchStatistics(period, range);
   }, []);
 
-  const trendData = useMemo(() => buildTrendSource(statistics.trend || []), [statistics.trend]);
+  const overview = statistics.overview || {};
+  const overviewChange = statistics.overview_change || {};
+  const trend = statistics.trend || [];
+  const filledTrend = useMemo(
+    () => buildFilledTrend(range, trend),
+    [range, trend],
+  );
 
-  const trendConfig = {
-    data: trendData,
-    xField: 'date',
-    yField: 'count',
-    seriesField: 'type',
-    smooth: true,
-    color: ['#246BFD', '#12B886'],
-    animation: false,
-    legend: {
-      position: 'top',
+  const trendDates = useMemo(
+    () => filledTrend.map((item) => item.date),
+    [filledTrend],
+  );
+  const sparkApi = useMemo(
+    () => buildSparkline(filledTrend, 'api_case_count'),
+    [filledTrend],
+  );
+  const sparkFunctional = useMemo(
+    () => buildSparkline(filledTrend, 'functional_case_count'),
+    [filledTrend],
+  );
+  const sparkCoverage = useMemo(
+    () => {
+      const values = filledTrend.map((item) => {
+        const apiCount = Number(item?.api_case_count || 0);
+        const functionalCount = Number(item?.functional_case_count || 0);
+        return functionalCount > 0
+          ? Number(((apiCount / functionalCount) * 100).toFixed(2))
+          : 0;
+      });
+
+      // When the selected range only has a single day, the overview percentage
+      // can still be meaningful even if the daily denominator is zero.
+      if (
+        values.length === 1 &&
+        values[0] === 0 &&
+        Number(overview.api_coverage_rate || 0) > 0
+      ) {
+        const overviewValue = Number(overview.api_coverage_rate || 0);
+        return [overviewValue > 1 ? overviewValue : Number((overviewValue * 100).toFixed(2))];
+      }
+
+      return values;
     },
-    point: {
-      size: 3,
-      shape: 'circle',
-    },
-    tooltip: {
-      formatter: (datum) => ({
-        name: datum.type,
-        value: `${datum.count}`,
+    [filledTrend, overview.api_coverage_rate],
+  );
+  const sparkPass = useMemo(
+    () =>
+      filledTrend.map((item) => {
+        const apiCount = Number(item?.api_case_count || 0);
+        const functionalCount = Number(item?.functional_case_count || 0);
+        return apiCount > 0
+          ? Number(
+              (
+                (Math.min(functionalCount, apiCount) / apiCount) *
+                100
+              ).toFixed(2),
+            )
+          : 0;
       }),
+    [filledTrend],
+  );
+
+  const trendOptions = {
+    legend: { show: false },
+    colors: ['#465FFF', '#12b76a'],
+    chart: {
+      fontFamily: 'Outfit, sans-serif',
+      type: 'area',
+      toolbar: { show: false },
+      zoom: { enabled: false },
     },
-    yAxis: {
-      nice: true,
+    stroke: {
+      curve: 'smooth',
+      width: [2, 2],
+      lineCap: 'round',
+    },
+    fill: {
+      type: 'gradient',
+      gradient: {
+        opacityFrom: 0.58,
+        opacityTo: 0.14,
+        shadeIntensity: 0.4,
+        stops: [0, 78, 100],
+      },
+    },
+    markers: {
+      size: 3,
+      strokeWidth: 2,
+      hover: { size: 4 },
+    },
+    grid: {
+      xaxis: { lines: { show: false } },
+      yaxis: { lines: { show: true } },
+      borderColor: '#E5E7EB',
+    },
+    dataLabels: { enabled: false },
+    tooltip: {
+      enabled: true,
+      theme: 'light',
+      x: { show: false },
+    },
+    xaxis: {
+      type: 'category',
+      categories: trendDates,
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+      labels: {
+        style: { fontSize: '12px', colors: '#667085' },
+        formatter: formatAxisDate,
+      },
+    },
+    yaxis: {
+      labels: { style: { fontSize: '12px', colors: ['#6B7280'] } },
+      min: 0,
+      forceNiceScale: true,
     },
   };
-
-  const rankingColumns = [
-    {
-      title: '排名',
-      dataIndex: 'rank',
-      width: 80,
-      render: (value) => <span className={`statistics-rank-badge rank-${value}`}>{value}</span>,
-    },
-    {
-      title: '测试人员',
-      dataIndex: 'name',
-      render: (_, record) => <RankUser record={record} userMap={userMap} />,
-    },
-    {
-      title: '新增用例数',
-      dataIndex: 'count',
-      width: 120,
-      align: 'right',
-      render: (value) => <strong>{value || 0}</strong>,
-    },
-  ];
-
-  const overview = statistics.overview || {};
-  const sparkApi = useMemo(() => buildSparkline(statistics.trend, 'api_case_count'), [statistics.trend]);
-  const sparkFunctional = useMemo(() => buildSparkline(statistics.trend, 'functional_case_count'), [statistics.trend]);
-  const sparkCoverage = useMemo(() => (
-    (statistics.trend || []).map((item) => {
-      const apiCount = Number(item?.api_case_count || 0);
-      const functionalCount = Number(item?.functional_case_count || 0);
-      return functionalCount > 0 ? Number((apiCount / functionalCount * 100).toFixed(2)) : 0;
-    })
-  ), [statistics.trend]);
-  const sparkPass = useMemo(() => (
-    (statistics.trend || []).map((item) => {
-      const apiCount = Number(item?.api_case_count || 0);
-      const functionalCount = Number(item?.functional_case_count || 0);
-      return apiCount > 0 ? Number((Math.min(functionalCount, apiCount) / apiCount * 100).toFixed(2)) : 0;
-    })
-  ), [statistics.trend]);
-
-  const renderSparkline = (data, color, fill) => (
-    <TinyArea
-      height={56}
-      autoFit
-      smooth
-      animation={false}
-      data={data && data.length > 0 ? data : [0]}
-      line={{ color, lineWidth: 1.5 }}
-      areaStyle={{ fill }}
-      tooltip={false}
-    />
-  );
+  const trendSeries = [
+    trendVisibility.api
+      ? { name: '接口用例', data: sparkApi }
+      : null,
+    trendVisibility.functional
+      ? { name: '功能用例', data: sparkFunctional }
+      : null,
+  ].filter(Boolean);
 
   const handlePresetClick = (nextPeriod) => {
     const nextRange = getPresetRange(nextPeriod);
@@ -206,179 +366,230 @@ const Statistics = ({ user, dispatch }) => {
     fetchStatistics('custom', range);
   };
 
+  const rankingRows =
+    rankingTab === 'api'
+      ? statistics.ranking?.api_case
+      : statistics.ranking?.functional_case;
+  const currentRangeText =
+    Array.isArray(range) && range.length === 2
+      ? `${range[0]?.format?.('YYYY-MM-DD') || '-'} 至 ${range[1]?.format?.('YYYY-MM-DD') || '-'}`
+      : '-';
+
   return (
     <PageContainer title={false} breadcrumb={null}>
-      <div className="statistics-board">
-        <Card className="statistics-filter-card" bordered={false}>
-          <div className="statistics-filter-card__content">
-            <div>
-              <div className="statistics-filter-card__title">接口与功能用例统计</div>
-              <div className="statistics-filter-card__desc">
-                当前区间：{statistics.range?.start_date || '-'} 至 {statistics.range?.end_date || '-'}
+      <div
+        className="tailadmin-scope grid grid-cols-12 gap-4 md:gap-6"
+        style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .2s' }}
+      >
+        {/* Filter toolbar */}
+        <div className="col-span-12">
+          <Card>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  接口与功能用例统计
+                </h3>
+                <p className="mt-1 text-theme-sm text-gray-500">
+                  当前区间：{currentRangeText}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-0.5 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 p-0.5 shadow-theme-xs">
+                  {PERIOD_OPTIONS.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => handlePresetClick(item.key)}
+                      className={`appearance-none rounded-md border-0 px-3 py-2 text-theme-sm font-medium outline-none transition focus:outline-none ${
+                        period === item.key
+                          ? 'bg-white text-gray-900 shadow-theme-xs'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <RangePicker
+                  size="large"
+                  className="statistics-range-picker"
+                  value={range}
+                  onChange={(value) => {
+                    if (value && value.length === 2) setRange(value);
+                  }}
+                  allowClear={false}
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCustomRange}
+                  className="appearance-none rounded-lg border-0 bg-brand-500 px-4 py-2 text-theme-sm font-medium text-white outline-none transition hover:bg-brand-600 focus:outline-none"
+                >
+                  应用时间段
+                </button>
               </div>
             </div>
-            <Space size={12} wrap className="statistics-filter-toolbar">
-              {PERIOD_OPTIONS.map((item) => (
-                <Button
-                  key={item.key}
-                  type={period === item.key ? 'primary' : 'default'}
-                  onClick={() => handlePresetClick(item.key)}
-                >
-                  {item.label}
-                </Button>
-              ))}
-              <RangePicker
-                value={range}
-                onChange={(value) => {
-                  if (value && value.length === 2) {
-                    setRange(value);
-                  }
-                }}
-                allowClear={false}
-              />
-              <Button onClick={handleApplyCustomRange}>应用时间段</Button>
-            </Space>
-          </div>
-        </Card>
+          </Card>
+        </div>
 
-        <Row gutter={[16, 16]} className="statistics-overview-row">
-          <Col xs={24} sm={12} xl={6}>
-            <Skeleton loading={loading} active paragraph={false}>
-              <Card className="statistics-overview-card api" bordered={false}>
-                <div className="statistics-overview-card__head">
-                  <div>
-                    <div className="statistics-overview-card__label">接口用例总数</div>
-                    <div className="statistics-overview-card__value">{overview.api_case_total || 0}</div>
-                    <div className="statistics-overview-card__hint">按所选时间段统计新增接口用例</div>
-                  </div>
-                  <div className="statistics-overview-card__icon api">
-                    <ApiOutlined />
-                  </div>
-                </div>
-                <div className="statistics-overview-card__chart">
-                  {renderSparkline(sparkApi, '#1f9d68', 'l(270) 0:#dff7ec 1:rgba(223,247,236,0.05)')}
-                </div>
-              </Card>
-            </Skeleton>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <Skeleton loading={loading} active paragraph={false}>
-              <Card className="statistics-overview-card functional" bordered={false}>
-                <div className="statistics-overview-card__head">
-                  <div>
-                    <div className="statistics-overview-card__label">功能用例总数</div>
-                    <div className="statistics-overview-card__value">{overview.functional_case_total || 0}</div>
-                    <div className="statistics-overview-card__hint">按所选时间段统计新增功能用例</div>
-                  </div>
-                  <div className="statistics-overview-card__icon functional">
-                    <FunctionOutlined />
-                  </div>
-                </div>
-                <div className="statistics-overview-card__chart">
-                  {renderSparkline(sparkFunctional, '#0ea5a6', 'l(270) 0:#def7f4 1:rgba(222,247,244,0.05)')}
-                </div>
-              </Card>
-            </Skeleton>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <Skeleton loading={loading} active paragraph={false}>
-              <Card className="statistics-overview-card coverage" bordered={false}>
-                <div className="statistics-overview-card__head">
-                  <div>
-                    <div className="statistics-overview-card__label">接口覆盖率</div>
-                    <div className="statistics-overview-card__value">{formatPercent(overview.api_coverage_rate || 0)}</div>
-                    <div className="statistics-overview-card__hint">接口用例总数 / 高优先级功能用例总数</div>
-                  </div>
-                  <div className="statistics-overview-card__icon coverage">
-                    <BarChartOutlined />
-                  </div>
-                </div>
-                <div className="statistics-overview-card__chart">
-                  {renderSparkline(sparkCoverage, '#2f7df4', 'l(270) 0:#deebff 1:rgba(222,235,255,0.05)')}
-                </div>
-              </Card>
-            </Skeleton>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <Skeleton loading={loading} active paragraph={false}>
-              <Card className="statistics-overview-card pass" bordered={false}>
-                <div className="statistics-overview-card__head">
-                  <div>
-                    <div className="statistics-overview-card__label">接口通过率</div>
-                    <div className="statistics-overview-card__value">{formatPercent(overview.api_pass_rate || 0)}</div>
-                    <div className="statistics-overview-card__hint">按所选时间段统计已完成报告通过率</div>
-                  </div>
-                  <div className="statistics-overview-card__icon pass">
-                    <CheckCircleOutlined />
-                  </div>
-                </div>
-                <div className="statistics-overview-card__chart">
-                  {renderSparkline(sparkPass, '#f59e0b', 'l(270) 0:#fff1d6 1:rgba(255,241,214,0.05)')}
-                </div>
-              </Card>
-            </Skeleton>
-          </Col>
-        </Row>
+        {/* Overview cards */}
+        <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
+          <StatCard
+            icon={<ApiOutlined />}
+            label="接口用例总数"
+            value={overview.api_case_total || 0}
+            sparkData={sparkApi}
+            color="#12b76a"
+            changeMeta={overviewChange.api_case_total}
+          />
+          <StatCard
+            icon={<FunctionOutlined />}
+            label="功能用例总数"
+            value={overview.functional_case_total || 0}
+            sparkData={sparkFunctional}
+            color="#0ba5ec"
+            changeMeta={overviewChange.functional_case_total}
+          />
+          <StatCard
+            icon={<BarChartOutlined />}
+            label="接口覆盖率"
+            value={formatPercent(overview.api_coverage_rate)}
+            sparkData={sparkCoverage}
+            color="#465fff"
+            changeMeta={overviewChange.api_coverage_rate}
+          />
+          <StatCard
+            icon={<CheckCircleOutlined />}
+            label="接口通过率"
+            value={formatPercent(overview.api_pass_rate)}
+            sparkData={sparkPass}
+            color="#f79009"
+            changeMeta={overviewChange.api_pass_rate}
+          />
+        </div>
 
-        <Row gutter={[16, 16]} className="statistics-main-row">
-          <Col xs={24} xl={16}>
-            <Skeleton loading={loading} active>
-              <Card
-                className="statistics-panel-card statistics-trend-card"
-                bordered={false}
-                title={(
-                  <div className="statistics-panel-card__header">
-                    <div className="statistics-panel-card__title">
-                      <LineChartOutlined />
-                      <span>用例数趋势</span>
-                    </div>
-                  </div>
-                )}
-              >
-                {trendData.length > 0 ? <Line {...trendConfig} /> : <Empty description="暂无趋势数据" />}
-              </Card>
-            </Skeleton>
-          </Col>
-          <Col xs={24} xl={8}>
-            <Skeleton loading={loading} active>
-              <Card
-                className="statistics-panel-card statistics-ranking-card"
-                bordered={false}
-                title={(
-                  <span className="statistics-panel-card__title">
-                    <FileDoneOutlined />
-                    <span>用例排行榜</span>
+        {/* Trend chart */}
+        <div className="col-span-12 xl:col-span-8">
+          <Card padding="px-5 pt-5 sm:px-6 sm:pt-6 pb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <LineChartOutlined className="text-brand-500" />
+                <h3 className="text-lg font-semibold text-gray-800">
+                  用例数趋势
+                </h3>
+                <Tooltip title="按当前区间展示接口用例与功能用例的每日变化">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 text-[11px] text-gray-400">
+                    <QuestionCircleOutlined />
                   </span>
-                )}
-              >
-                <Tabs defaultActiveKey="api">
-                  <TabPane tab="接口用例数" key="api">
-                    <Table
-                      rowKey={(record) => `api-${record.user_id}-${record.rank}`}
-                      columns={rankingColumns}
-                      dataSource={statistics.ranking?.api_case || []}
-                      pagination={false}
-                      locale={{ emptyText: <Empty description="暂无接口用例排行数据" /> }}
-                    />
-                  </TabPane>
-                  <TabPane tab="功能用例数" key="functional">
-                    <Table
-                      rowKey={(record) => `functional-${record.user_id}-${record.rank}`}
-                      columns={rankingColumns}
-                      dataSource={statistics.ranking?.functional_case || []}
-                      pagination={false}
-                      locale={{ emptyText: <Empty description="暂无功能用例排行数据" /> }}
-                    />
-                  </TabPane>
-                </Tabs>
-              </Card>
-            </Skeleton>
-          </Col>
-        </Row>
+                </Tooltip>
+              </div>
+              <div className="flex items-center gap-4 text-theme-sm sm:ml-auto sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setTrendVisibility((prev) => ({ ...prev, api: !prev.api }))}
+                  className={`flex items-center gap-2 border-0 bg-transparent p-0 shadow-none appearance-none transition outline-none focus:outline-none focus-visible:outline-none ${
+                    trendVisibility.api ? 'text-gray-600' : 'text-gray-300'
+                  }`}
+                  style={{
+                    appearance: 'none',
+                    backgroundColor: 'transparent',
+                    border: 0,
+                    padding: 0,
+                    boxShadow: 'none',
+                    borderRadius: 0,
+                  }}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: trendVisibility.api ? '#465FFF' : '#D0D5DD' }}
+                  />
+                  <span>接口用例</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendVisibility((prev) => ({ ...prev, functional: !prev.functional }))}
+                  className={`flex items-center gap-2 border-0 bg-transparent p-0 shadow-none appearance-none transition outline-none focus:outline-none focus-visible:outline-none ${
+                    trendVisibility.functional ? 'text-gray-600' : 'text-gray-300'
+                  }`}
+                  style={{
+                    appearance: 'none',
+                    backgroundColor: 'transparent',
+                    border: 0,
+                    padding: 0,
+                    boxShadow: 'none',
+                    borderRadius: 0,
+                  }}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: trendVisibility.functional ? '#12b76a' : '#D0D5DD' }}
+                  />
+                  <span>功能用例</span>
+                </button>
+              </div>
+            </div>
+            {filledTrend.length > 0 ? (
+              <div className="mt-3">
+                <ApexChart
+                  type="area"
+                  options={trendOptions}
+                  series={trendSeries}
+                  height={320}
+                />
+              </div>
+            ) : (
+              <div className="py-16 text-center text-theme-sm text-gray-400">
+                暂无趋势数据
+              </div>
+            )}
+          </Card>
+        </div>
 
-        <Row gutter={[16, 16]} className="statistics-footnote-row">
-          <Col span={24} />
-        </Row>
+        {/* Ranking */}
+        <div className="col-span-12 xl:col-span-4">
+          <Card>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TrophyOutlined className="text-brand-500" />
+                <h3 className="text-lg font-semibold text-gray-800">
+                  用例排行榜
+                </h3>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-0.5 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 p-0.5 shadow-theme-xs">
+              <button
+                type="button"
+                onClick={() => setRankingTab('api')}
+                className={`w-full appearance-none rounded-md border-0 px-3 py-2 text-theme-sm font-medium outline-none transition focus:outline-none ${
+                  rankingTab === 'api'
+                    ? 'bg-white text-gray-900 shadow-theme-xs'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                接口用例数
+              </button>
+              <button
+                type="button"
+                onClick={() => setRankingTab('functional')}
+                className={`w-full appearance-none rounded-md border-0 px-3 py-2 text-theme-sm font-medium outline-none transition focus:outline-none ${
+                  rankingTab === 'functional'
+                    ? 'bg-white text-gray-900 shadow-theme-xs'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                功能用例数
+              </button>
+            </div>
+            <RankingTable
+              rows={rankingRows}
+              userMap={userMap}
+              emptyText={
+                rankingTab === 'api'
+                  ? '暂无接口用例排行数据'
+                  : '暂无功能用例排行数据'
+              }
+            />
+          </Card>
+        </div>
       </div>
     </PageContainer>
   );

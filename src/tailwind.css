@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Root wrapper for the TailAdmin-styled dashboard pages. */
+.tailadmin-scope {
+  font-family: 'Outfit', sans-serif;
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: #e4e7ec;
+  }
+}
+
+/* ApexCharts cosmetic overrides ported from TailAdmin */
+.tailadmin-scope .apexcharts-legend-text {
+  color: #344054 !important;
+  padding-left: 20px !important;
+}
+.tailadmin-scope .apexcharts-text {
+  fill: #344054 !important;
+}
+.tailadmin-scope .apexcharts-gridline {
+  stroke: #f2f4f7 !important;
+}
+.tailadmin-scope .apexcharts-tooltip.apexcharts-theme-light {
+  border-radius: 8px !important;
+  border-color: #e4e7ec !important;
+  box-shadow: 0px 1px 3px 0px rgba(16, 24, 40, 0.1),
+    0px 1px 2px 0px rgba(16, 24, 40, 0.06) !important;
+}

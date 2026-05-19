@@ -7,12 +7,43 @@
       "Bash(cd /e/github_argus/argus-end && find app -type f -name \"*.py\" | head -60)",
       "Bash(echo \"test\")",
       "Bash(rm /e/github_argus/argus-end/app/models/test_file.py)",
-      "Bash(cat > *)"
+      "Bash(cat > *)",
+      "Read(//e/github_argus/free-react-tailwind-admin-dashboard-main/**)",
+      "Read(//e/github_argus/free-react-tailwind-admin-dashboard-main/src/**)",
+      "Bash(find \"E:/github_argus/argus-front/src/matdash\")",
+      "Bash(find \"E:/github_argus/argus-front/src/styles\" -type f)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('deps:', Object.keys\\(p.dependencies||{}\\).filter\\(k=>/tailwind|apex|swiper|simplebar|flatpickr|react-dnd|jsvectormap/.test\\(k\\)\\).join\\(', '\\)\\); console.log\\('postcss:', !!p.devDependencies?.postcss, 'autoprefixer:', !!p.devDependencies?.autoprefixer\\);\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.dependencies,null,1\\)\\); console.log\\('---DEV---'\\); console.log\\(JSON.stringify\\(p.devDependencies,null,1\\)\\);\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); const d={...p.dependencies,...p.devDependencies}; console.log\\('tailwind/apex/postcss related:'\\); Object.keys\\(d\\).filter\\(k=>/tailwind|apex|postcss|autoprefixer|jvectormap|swiper|flatpickr|react-dnd|dropzone|fullcalendar|helmet/.test\\(k\\)\\).forEach\\(k=>console.log\\(' ',k,d[k]\\)\\); console.log\\('umi:',d['@umijs/max']\\); console.log\\('react:',d['react']\\);\")",
+      "Bash(xargs grep -l \"query_user_follow_test_plan\")",
+      "Bash(xargs grep -l \"class PityReport\")",
+      "Bash(xargs grep -l \"query_weekly_user_case\")",
+      "Bash(npm install *)",
+      "Bash(sed -n '1,20p' utils/common.js)",
+      "Bash(sed -n '1,20p' utils/common.ts)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('apexcharts',p.dependencies.apexcharts,'react-apexcharts',p.dependencies['react-apexcharts']\\);\")",
+      "Bash(cd \"E:/github_argus/argus-front\" && head -40 \"C:/Users/bytde/AppData/Local/npm-cache/_logs/2026-05-18T08_04_59_795Z-eresolve-report.txt\")",
+      "Read(//c/Users/bytde/AppData/Local/npm-cache/_logs/**)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('apexcharts',p.dependencies.apexcharts,'| react-apexcharts',p.dependencies['react-apexcharts']\\);\")",
+      "Bash(ls node_modules/apexcharts node_modules/react-apexcharts -d)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,1\\)\\);\")",
+      "Bash(npm start *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);const d={...p.dependencies,...p.devDependencies};console.log\\(Object.keys\\(d\\).filter\\(k=>k.includes\\('wangeditor'\\)\\)\\)\")",
+      "Bash(grep -c \"wangeditor\" package-lock.json)",
+      "Bash(git log *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/)",
+      "Bash(ls -d node_modules/file-loader)",
+      "Bash(ls -d node_modules/.cache/mfsu src/.mfsu .mfsu node_modules/.cache)",
+      "Bash(node -e \"const d=require\\('./package.json'\\).dependencies; ['apexcharts','react-apexcharts','@wangeditor/editor','@wangeditor/editor-for-react','@monaco-editor/react','ace-builds','jszip','numeral','simple-mind-map'].forEach\\(k=>console.log\\(\\(d[k]?'  OK ':'MISS '\\)+k+' '+\\(d[k]||''\\)\\)\\);\")",
+      "Bash(sed -n '155,175p' app/crud/project/ProjectDao.py)",
+      "Bash(sed -n '439,495p' app/crud/test_case/TestCaseDao.py)"
     ],
     "additionalDirectories": [
       "E:\\github_argus\\argus-end\\app\\models",
       "e:\\github_argus\\argus-end\\app\\schema",
-      "e:\\github_argus\\argus-end\\app\\routers\\config"
+      "e:\\github_argus\\argus-end\\app\\routers\\config",
+      "E:\\github_argus\\argus-end\\app\\crud\\project",
+      "E:\\github_argus\\argus-end\\app\\routers\\workspace"
     ]
   }
 }
