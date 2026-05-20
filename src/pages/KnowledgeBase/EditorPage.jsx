@@ -1,8 +1,7 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Input, Select, Space, Spin, message } from 'antd';
-import { PageContainer } from '@ant-design/pro-components';
+import { Button, Input, Select, Space, Spin, message } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { history, useModel, useParams } from '@umijs/max';
+import { history, useLocation, useModel, useParams } from '@umijs/max';
 import { insertKnowledge, listKnowledge, listKnowledgeCategory, updateKnowledge } from '@/services/configure';
 import { ensureHtml, getPlainText } from './store';
 import './index.less';
@@ -11,11 +10,11 @@ const RichEditor = lazy(() => import('./RichEditor'));
 
 const EditorPage = () => {
   const { initialState } = useModel('@@initialState');
+  const location = useLocation();
   const isSuperAdmin = initialState?.currentUser?.role === 2;
   const params = useParams();
   const docId = params?.id;
   const isEdit = Boolean(docId);
-  const [editor, setEditor] = useState(null);
   const [docs, setDocs] = useState([]);
   const [categories, setCategories] = useState([]);
   const [categoryLoading, setCategoryLoading] = useState(false);
@@ -60,19 +59,20 @@ const EditorPage = () => {
 
   useEffect(() => {
     const fetchDoc = async () => {
-      if (!isEdit) return;
       setLoading(true);
       try {
         const res = await listKnowledge({ page: 1, size: 10000 });
         if (res?.code === 0) {
           const list = Array.isArray(res.data) ? res.data : [];
-          const found = list.find((item) => String(item.id) === String(docId));
-          if (!found) {
-            message.warning('文档不存在');
-            history.replace('/knowledge');
-            return;
-          }
           setDocs(list);
+          if (isEdit) {
+            const found = list.find((item) => String(item.id) === String(docId));
+            if (!found) {
+              message.warning('文档不存在');
+              history.replace('/knowledge');
+              return;
+            }
+          }
         } else {
           message.error(res?.msg || '获取文档失败');
         }
@@ -82,14 +82,7 @@ const EditorPage = () => {
     };
 
     fetchDoc();
-  }, [docId, isEdit]);
-
-  useEffect(
-    () => () => {
-      if (editor) editor.destroy();
-    },
-    [editor],
-  );
+  }, [docId, isEdit, location.search]);
 
   const handleSave = async () => {
     if (!draft.title.trim()) {
@@ -123,9 +116,24 @@ const EditorPage = () => {
   };
 
   return (
-    <PageContainer title={false} breadcrumb={null}>
+    <div className="knowledge-hub-page">
+      <header className="knowledge-hub-topbar">
+        <div className="knowledge-hub-topbar__brand">
+          <span className="knowledge-hub-topbar__title">Argus Docs</span>
+          <span className="knowledge-hub-topbar__label">{isEdit ? '编辑文档' : '新增文档'}</span>
+        </div>
+        <div className="knowledge-hub-topbar__actions">
+          <Button icon={<ArrowLeftOutlined />} onClick={() => history.push('/knowledge')}>
+            返回文档页
+          </Button>
+          <Button type="primary" loading={saving} onClick={handleSave}>
+            保存
+          </Button>
+        </div>
+      </header>
+
       <div className="knowledge-editor-page">
-        <Card className="knowledge-editor-layout" title={isEdit ? '编辑知识库文档' : '新增知识库文档'}>
+        <div className="knowledge-editor-layout">
           <Spin spinning={loading}>
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Input
@@ -154,25 +162,15 @@ const EditorPage = () => {
               />
               <Suspense fallback={<Spin tip="编辑器加载中..." />}>
                 <RichEditor
-                  editor={editor}
-                  setEditor={setEditor}
                   value={draft.content}
                   onChange={(content) => setDraft((prev) => ({ ...prev, content }))}
                 />
               </Suspense>
-              <div className="knowledge-page-actions">
-                <Button icon={<ArrowLeftOutlined />} onClick={() => history.push('/knowledge')}>
-                  返回
-                </Button>
-                <Button type="primary" loading={saving} onClick={handleSave}>
-                  保存
-                </Button>
-              </div>
             </Space>
           </Spin>
-        </Card>
+        </div>
       </div>
-    </PageContainer>
+    </div>
   );
 };
 

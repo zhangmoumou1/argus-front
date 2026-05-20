@@ -81,7 +81,10 @@ const normalizePath = (path = '') => {
   return cleanPath || '/';
 };
 
-const isKnowledgePath = (pathname = '') => normalizePath(pathname) === '/knowledge';
+const isKnowledgePath = (pathname = '') => {
+  const path = normalizePath(pathname);
+  return path === '/knowledge' || path.startsWith('/knowledge/');
+};
 
 const isPublicKnowledgeShare = (locationLike?: { pathname?: string; search?: string }) => {
   const pathname = normalizePath(locationLike?.pathname || '');

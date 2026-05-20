@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Empty, Space, Spin, Tag, message } from 'antd';
+import { Button, Card, Empty, Modal, Space, Spin, Tag, message } from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { history, useModel, useParams } from '@umijs/max';
@@ -13,6 +13,7 @@ const ViewPage = () => {
   const params = useParams();
   const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [previewImage, setPreviewImage] = useState('');
 
   useEffect(() => {
     const fetchDoc = async () => {
@@ -68,12 +69,29 @@ const ViewPage = () => {
             <div className="knowledge-viewer">
               <div
                 className="knowledge-viewer-content w-e-text"
+                onClick={(event) => {
+                  const target = event.target;
+                  if (target && target.tagName === 'IMG') {
+                    const src = target.getAttribute('src') || '';
+                    if (src) setPreviewImage(src);
+                  }
+                }}
                 dangerouslySetInnerHTML={{ __html: highlightKnowledgeHtml(doc?.content || '') }}
               />
             </div>
           </Card>
         </Spin>
       </div>
+      <Modal
+        open={Boolean(previewImage)}
+        footer={null}
+        onCancel={() => setPreviewImage('')}
+        width={960}
+        centered
+        destroyOnClose
+      >
+        <img src={previewImage} alt="preview" style={{ width: '100%', height: 'auto', display: 'block' }} />
+      </Modal>
     </PageContainer>
   );
 };

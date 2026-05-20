@@ -75,6 +75,7 @@ const KnowledgeBase = () => {
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categoryFormLoading, setCategoryFormLoading] = useState(false);
   const [categoryForm] = Form.useForm();
+  const [previewImage, setPreviewImage] = useState('');
 
   const fetchDocs = async (title = '') => {
     setLoading(true);
@@ -367,6 +368,13 @@ const KnowledgeBase = () => {
                 <article className="knowledge-viewer knowledge-hub__article-body">
                   <div
                     className="knowledge-viewer-content w-e-text"
+                    onClick={(event) => {
+                      const target = event.target;
+                      if (target && target.tagName === 'IMG') {
+                        const src = target.getAttribute('src') || '';
+                        if (src) setPreviewImage(src);
+                      }
+                    }}
                     dangerouslySetInnerHTML={{ __html: highlightedContent }}
                   />
                 </article>
@@ -377,6 +385,17 @@ const KnowledgeBase = () => {
       </div>
 
       {/* 分类管理弹窗 */}
+      <Modal
+        open={Boolean(previewImage)}
+        footer={null}
+        onCancel={() => setPreviewImage('')}
+        width={960}
+        centered
+        destroyOnClose
+      >
+        <img src={previewImage} alt="preview" style={{ width: '100%', height: 'auto', display: 'block' }} />
+      </Modal>
+
       <Modal
         title="分类管理"
         open={categoryModalVisible}

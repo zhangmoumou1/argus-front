@@ -355,6 +355,18 @@ export async function uploadFile(params) {
   });
 }
 
+export async function uploadKnowledgeFile(params) {
+  const formData = new FormData();
+  formData.append('file', params.file);
+  formData.append('kind', params.kind || 'file');
+  return request(`${CONFIG.URL}/config/knowledge/upload`, {
+    method: 'POST',
+    data: formData,
+    requestType: 'form',
+    headers: auth.headers(false),
+  });
+}
+
 export async function listFile() {
   return request(`${CONFIG.URL}/oss/list`, {
     method: 'GET',
