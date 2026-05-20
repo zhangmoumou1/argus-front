@@ -49,6 +49,8 @@ const UserModel = {
     functional_case_count: 0,
     weekly_new_api_case: 0,
     weekly_new_functional_case: 0,
+    api_case_distribution: [],
+    functional_case_distribution: [],
     // 关注的测试计划数据
     followPlan: [],
   },
@@ -180,6 +182,8 @@ const UserModel = {
             functional_case_count: data.functional_case_count || 0,
             weekly_new_api_case: data.weekly_new_api_case || 0,
             weekly_new_functional_case: data.weekly_new_functional_case || 0,
+            api_case_distribution: data.api_case_distribution || [],
+            functional_case_distribution: data.functional_case_distribution || [],
 
           },
         });
