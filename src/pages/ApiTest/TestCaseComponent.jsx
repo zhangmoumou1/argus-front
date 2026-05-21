@@ -14,6 +14,7 @@ import UserLink from "@/components/Button/UserLink";
 import TestCaseBottom from "@/components/TestCase/TestCaseBottom";
 import NoPermission from '@/assets/NoPermission.svg';
 import {CASE_TYPE, REQUEST_METHOD, REQUEST_TYPE} from "@/components/Common/global";
+import {listApiEndpoints, listApiServices} from "@/services/interfaceManage";
 
 
 const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
@@ -47,6 +48,8 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
   const [headers, setHeaders] = useState([]);
   const [formData, setFormData] = useState([]);
   const [suffix, setSuffix] = useState(false);
+  const [apiServiceName, setApiServiceName] = useState('');
+  const [apiEndpointName, setApiEndpointName] = useState('');
 
   const fetchTestCaseInfo = () => {
     if (case_id) {
@@ -107,12 +110,59 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
   }, [])
 
   useEffect(() => {
+    const normalizedCaseInfo = {
+      ...caseInfo,
+      status: caseInfo?.status !== undefined && caseInfo?.status !== null ? String(caseInfo.status) : undefined,
+      request_type: caseInfo?.request_type !== undefined && caseInfo?.request_type !== null ? String(caseInfo.request_type) : undefined,
+      api_service_id: Number(caseInfo?.api_service_id || 0) > 0 ? caseInfo.api_service_id : undefined,
+      api_endpoint_id: Number(caseInfo?.api_endpoint_id || 0) > 0 ? caseInfo.api_endpoint_id : undefined,
+      api_version_id: Number(caseInfo?.api_version_id || 0) > 0 ? caseInfo.api_version_id : undefined,
+    };
     form.resetFields();
-    form.setFieldsValue(caseInfo);
+    form.setFieldsValue(normalizedCaseInfo);
     setHeaders(common.parseHeaders(caseInfo.request_headers))
     setBody(caseInfo.body);
     setBodyType(caseInfo.body_type)
   }, [caseInfo, editing])
+
+  useEffect(() => {
+    const loadApiAssetNames = async () => {
+      const serviceId = Number(caseInfo?.api_service_id || 0);
+      const endpointId = Number(caseInfo?.api_endpoint_id || 0);
+      if (!serviceId) {
+        setApiServiceName('');
+        setApiEndpointName('');
+        return;
+      }
+
+      const projectId = Number(localStorage.getItem('project_id') || 0);
+      const serviceRes = await listApiServices(projectId ? {project_id: projectId} : {});
+      if (auth.response(serviceRes, false)) {
+        const services = serviceRes.data || [];
+        const matchedService = services.find((item) => Number(item.id) === serviceId);
+        setApiServiceName(matchedService?.name || '');
+      } else {
+        setApiServiceName('');
+      }
+
+      if (!endpointId) {
+        setApiEndpointName('');
+        return;
+      }
+      const endpointRes = await listApiEndpoints({service_id: serviceId});
+      if (auth.response(endpointRes, false)) {
+        const endpoints = endpointRes.data?.list || [];
+        const matchedEndpoint = endpoints.find((item) => Number(item.id) === endpointId);
+        setApiEndpointName(
+          matchedEndpoint ? `${matchedEndpoint.method || ''} ${matchedEndpoint.path || ''}`.trim() : '',
+        );
+      } else {
+        setApiEndpointName('');
+      }
+    };
+
+    loadApiAssetNames();
+  }, [caseInfo?.api_service_id, caseInfo?.api_endpoint_id]);
 
 
   const load = !!(loading.effects['testcase/queryTestcaseDirectory']
@@ -295,10 +345,13 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
                           label='创建人'><UserLink size={16} user={userMap[caseInfo.create_user]}/></Descriptions.Item>
                         <Descriptions.Item
                           label='更新人'><UserLink size={16} user={userMap[caseInfo.update_user]}/></Descriptions.Item>
-                        <Descriptions.Item label='接口版本'>{caseInfo.api_version_no || '-'}</Descriptions.Item>
-                        <Descriptions.Item label='版本状态'>
-                          {Number(caseInfo.api_pending_update) === 1 ? <Tag color="orange">待更新</Tag> : <Tag color="green">已同步</Tag>}
+                        <Descriptions.Item label='接口资产'>
+                          {apiServiceName || '-'}
                         </Descriptions.Item>
+                        <Descriptions.Item label='接口'>
+                          {apiEndpointName || '-'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label='接口版本'>{caseInfo.api_version_no || '-'}</Descriptions.Item>
                         <Descriptions.Item label='创建时间'>{caseInfo.created_at}</Descriptions.Item>
                         <Descriptions.Item label='更新时间'>{caseInfo.updated_at}</Descriptions.Item>
                       </Descriptions>

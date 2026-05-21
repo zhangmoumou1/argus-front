@@ -61,6 +61,7 @@ const TestCaseBottom = ({
                           setHeaders,
                           bodyType,
                           setBodyType,
+                          assetQueryParams = [],
                           loading,
                           editable = true,
                         }) => {
@@ -475,7 +476,7 @@ const TestCaseBottom = ({
   ];
 
   return (
-    <Row gutter={8} style={{marginTop: 36, minHeight: 500}}>
+    <Row gutter={8} style={{marginTop: 12, minHeight: 500}}>
       <VariableModal
         open={variableModal}
         gconfig={gconfigVars}
@@ -693,6 +694,7 @@ const TestCaseBottom = ({
                   setHeaders={setHeaders}
                   bodyType={bodyType}
                   setBodyType={setBodyType}
+                  assetQueryParams={assetQueryParams}
                   bordered={false}
                   save={onSubmit}
                   editable={editable}

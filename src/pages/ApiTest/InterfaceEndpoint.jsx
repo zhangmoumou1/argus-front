@@ -26,6 +26,7 @@ import {
   Select,
   Space,
   Statistic,
+  Spin,
   Table,
   Tabs,
   Tag,
@@ -33,12 +34,14 @@ import {
   Typography,
 } from 'antd';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Graph } from '@antv/x6';
 import {
   manualInputApiEndpointSample,
   clearApiEndpointSample,
   compareApiEndpointVersion,
   deprecateApiEndpoint,
   getApiEndpointSample,
+  getApiEndpointLineage,
   listApiEndpointVersions,
   listApiEndpoints,
 } from '@/services/interfaceManage';
@@ -134,10 +137,10 @@ const SampleSourceTag = ({ value }) => {
     return <Tag color="purple">手动录入</Tag>;
   }
   if (value === 'manual_associate' || value === 'manual') {
-    return <Tag color="gold">手动关联</Tag>;
+    return <Tag color="gold">录制手动关联</Tag>;
   }
   if (value === 'record') {
-    return <Tag color="blue">自动关联</Tag>;
+    return <Tag color="blue">录制自动关联</Tag>;
   }
   return <Tag>无实例</Tag>;
 };
@@ -610,6 +613,11 @@ const InterfaceEndpoint = () => {
   const [sampleDetail, setSampleDetail] = useState(null);
   const [sampleSubmitting, setSampleSubmitting] = useState(false);
   const [sampleEditing, setSampleEditing] = useState(false);
+  const [lineageOpen, setLineageOpen] = useState(false);
+  const [lineageLoading, setLineageLoading] = useState(false);
+  const [lineageData, setLineageData] = useState(null);
+  const lineageGraphRef = useRef(null);
+  const lineageGraphInstanceRef = useRef(null);
 
   const fetchList = async (overrides = {}) => {
     if (!service_id) return;
@@ -766,6 +774,202 @@ const InterfaceEndpoint = () => {
     }
   };
 
+  const openLineage = async (record) => {
+    if (!record.case_total) {
+      return;
+    }
+    setLineageOpen(true);
+    setLineageLoading(true);
+    setLineageData(null);
+    const res = await getApiEndpointLineage({ endpoint_id: record.id });
+    setLineageLoading(false);
+    if (auth.response(res, false)) {
+      setLineageData(res.data || null);
+    } else {
+      setLineageOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!lineageOpen || lineageLoading || !lineageData || !lineageGraphRef.current) {
+      return undefined;
+    }
+    if (lineageGraphInstanceRef.current) {
+      lineageGraphInstanceRef.current.dispose();
+      lineageGraphInstanceRef.current = null;
+    }
+
+    const graph = new Graph({
+      container: lineageGraphRef.current,
+      background: { color: '#ffffff' },
+      interacting: true,
+      panning: {
+        enabled: true,
+        eventTypes: ['leftMouseDown'],
+      },
+      mousewheel: {
+        enabled: true,
+        modifiers: ['ctrl', 'meta'],
+      },
+      grid: {
+        size: 16,
+        visible: true,
+      },
+    });
+    lineageGraphInstanceRef.current = graph;
+
+    const endpoint = lineageData.endpoint || {};
+    const cases = lineageData.cases || [];
+    const rootId = `endpoint-${endpoint.id || 'root'}`;
+    const rootX = 60;
+    const rootY = 120;
+    const caseX = 420;
+    const caseGapY = 130;
+    const caseWidth = 320;
+    const caseHeight = 92;
+
+    graph.addNode({
+      id: rootId,
+      x: rootX,
+      y: rootY,
+      width: 300,
+      height: 132,
+      attrs: {
+        body: {
+          fill: '#eff6ff',
+          stroke: '#60a5fa',
+          strokeWidth: 1.2,
+          rx: 16,
+          ry: 16,
+        },
+        label: {
+          text: `${endpoint.name || '-'}\n${endpoint.method || 'GET'} ${endpoint.full_url || endpoint.path || '-'}`,
+          fill: '#0f172a',
+          fontSize: 14,
+          fontWeight: 600,
+          lineHeight: 22,
+          textWrap: {
+            width: 260,
+            height: 100,
+            ellipsis: true,
+          },
+        },
+      },
+    });
+
+    cases.forEach((item, index) => {
+      const nodeId = `case-${item.id}`;
+      const nodeY = 60 + index * caseGapY;
+      graph.addNode({
+        id: nodeId,
+        x: caseX,
+        y: nodeY,
+        width: caseWidth,
+        height: caseHeight,
+        attrs: {
+          body: {
+            fill: {
+              type: 'linearGradient',
+              attrs: {
+                x1: '0%',
+                y1: '0%',
+                x2: '100%',
+                y2: '100%',
+              },
+              stops: [
+                { offset: '0%', color: '#f8fbff' },
+                { offset: '100%', color: '#eef4ff' },
+              ],
+            },
+            cursor: 'pointer',
+            stroke: '#cfd8e3',
+            strokeWidth: 1.1,
+            rx: 12,
+            ry: 12,
+          },
+          label: {
+            text: `用例名称：${item.name || '-'}\n所在目录：${item.directory_path || '-'}\n创建人：${item.create_user_name || item.creator_name || '-'}`,
+            fill: '#111827',
+            fontSize: 12,
+            fontWeight: 500,
+            lineHeight: 18,
+            textWrap: {
+              width: 286,
+              height: 78,
+              ellipsis: true,
+            },
+          },
+        },
+        data: {
+          nodeType: 'case',
+          caseId: item.id,
+          directory_id: item.directory_id,
+          caseName: item.name,
+        },
+      });
+      graph.addEdge({
+        source: rootId,
+        target: nodeId,
+        router: {
+          name: 'manhattan',
+        },
+        connector: {
+          name: 'rounded',
+          args: { radius: 8 },
+        },
+        attrs: {
+          line: {
+            stroke: '#60a5fa',
+            strokeWidth: 1.6,
+            targetMarker: {
+              name: 'block',
+              width: 8,
+              height: 6,
+            },
+          },
+        },
+      });
+    });
+
+    graph.on('node:click', ({ node }) => {
+      const data = node.getData() || {};
+      if (data.nodeType === 'case' && data.directory_id && data.caseId) {
+        window.open(`/#/scenario/testcase/${data.directory_id}/${data.caseId}`, '_blank');
+      }
+    });
+    graph.on('node:mouseenter', ({ node }) => {
+      const data = node.getData() || {};
+      if (data.nodeType === 'case' && lineageGraphRef.current) {
+        lineageGraphRef.current.style.cursor = 'pointer';
+        node.attr('body/stroke', '#3b82f6');
+        node.attr('body/strokeWidth', 1.6);
+        node.attr('body/filter', 'drop-shadow(0px 8px 20px rgba(59, 130, 246, 0.14))');
+      }
+    });
+    graph.on('node:mouseleave', ({ node }) => {
+      const data = node.getData() || {};
+      if (data.nodeType === 'case' && lineageGraphRef.current) {
+        lineageGraphRef.current.style.cursor = 'grab';
+        node.attr('body/stroke', '#cfd8e3');
+        node.attr('body/strokeWidth', 1.1);
+        node.attr('body/filter', 'none');
+      }
+    });
+
+    graph.zoomToFit({
+      maxScale: 1,
+      minScale: 0.85,
+      padding: 24,
+    });
+
+    return () => {
+      if (lineageGraphInstanceRef.current) {
+        lineageGraphInstanceRef.current.dispose();
+        lineageGraphInstanceRef.current = null;
+      }
+    };
+  }, [lineageOpen, lineageLoading, lineageData]);
+
   const onReset = () => {
     setKeyword('');
     setUrlKeyword('');
@@ -858,10 +1062,18 @@ const InterfaceEndpoint = () => {
     {
       title: '操作',
       key: 'op',
-      width: 260,
+      width: 320,
       render: (_, record) => (
         <Space size={12} wrap={false}>
           <a onClick={() => openVersions(record)}>详情</a>
+          <Tooltip title={record.case_total ? '查看接口用例血缘' : '无关联接口用例'}>
+            <a
+              style={!record.case_total ? { color: '#c0c4cc', cursor: 'not-allowed' } : null}
+              onClick={() => record.case_total && openLineage(record)}
+            >
+              血缘
+            </a>
+          </Tooltip>
           {record.sample_available ? (
             <a onClick={() => onClearSample(record)}>清除实例</a>
           ) : null}
@@ -1004,6 +1216,38 @@ const InterfaceEndpoint = () => {
             </Card>
           </Col>
         </Row>
+      </Drawer>
+
+      <Drawer
+        title="接口血缘"
+        open={lineageOpen}
+        onClose={() => setLineageOpen(false)}
+        width={1240}
+        destroyOnClose
+      >
+        {lineageLoading ? (
+          <div style={{ padding: '40px 0', textAlign: 'center' }}>
+            <Spin />
+          </div>
+        ) : lineageData ? (
+          <div style={{ minHeight: 680 }}>
+            {(lineageData.cases || []).length ? (
+              <div
+                ref={lineageGraphRef}
+                style={{
+                  width: '100%',
+                  height: 680,
+                  background: '#ffffff',
+                  cursor: 'grab',
+                }}
+              />
+            ) : (
+              <div style={{ padding: 24 }}>
+                <Empty description="无关联接口用例" />
+              </div>
+            )}
+          </div>
+        ) : null}
       </Drawer>
     </PageContainer>
   );

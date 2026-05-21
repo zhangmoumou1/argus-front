@@ -129,3 +129,11 @@ export async function compareApiEndpointVersion(params) {
     headers: auth.headers(),
   });
 }
+
+export async function getApiEndpointLineage(params) {
+  return request(`${CONFIG.URL}/interface-management/endpoint/lineage`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}

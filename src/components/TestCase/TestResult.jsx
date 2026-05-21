@@ -84,7 +84,17 @@ export default ({ response, caseName, width, modal, setModal, single = true }) =
     if (resp[field] === null || resp[field] === undefined || resp[field] === '{}') {
       return [];
     }
-    const temp = JSON.parse(resp[field]);
+    let temp = resp[field];
+    if (typeof temp === 'string') {
+      try {
+        temp = JSON.parse(temp);
+      } catch (e) {
+        return [];
+      }
+    }
+    if (!temp || typeof temp !== 'object') {
+      return [];
+    }
     return Object.keys(temp).map((key) => ({
       key,
       value: temp[key],
@@ -111,7 +121,17 @@ export default ({ response, caseName, width, modal, setModal, single = true }) =
     if (res.asserts === undefined || !res.asserts) {
       return [];
     }
-    const temp = JSON.parse(res.asserts);
+    let temp = res.asserts;
+    if (typeof temp === 'string') {
+      try {
+        temp = JSON.parse(temp);
+      } catch (e) {
+        return [];
+      }
+    }
+    if (!temp || typeof temp !== 'object') {
+      return [];
+    }
     const result = [];
     Object.keys(temp).forEach((k) => {
       if (typeof temp[k].msg === 'string') {

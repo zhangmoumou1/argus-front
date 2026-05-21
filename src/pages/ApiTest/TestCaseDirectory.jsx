@@ -280,13 +280,6 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       render: (value) => value || '-',
     },
     {
-      title: '版本状态',
-      dataIndex: 'api_pending_update',
-      key: 'api_pending_update',
-      width: 110,
-      render: (value) => (Number(value) === 1 ? <Tag color="orange">待更新</Tag> : <Tag color="green">已同步</Tag>),
-    },
-    {
       title: '创建人',
       dataIndex: 'create_user',
       key: 'create_user',

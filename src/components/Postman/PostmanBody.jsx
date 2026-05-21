@@ -60,7 +60,8 @@ const tabExtra = (response) => {
 const PostmanBody = ({
                        form, gconfig, dispatch, body, setBody, headers, setHeaders,
                        formData, setFormData, caseInfo,
-                       bodyType, setBodyType, save = null, editable = true
+                      bodyType, setBodyType, save = null, editable = true,
+                      assetQueryParams = [],
                      }) => {
   const [rawType, setRawType] = useState('JSON');
   const [method, setMethod] = useState('GET');
@@ -110,12 +111,25 @@ const PostmanBody = ({
 
   const init = async () => {
     setUrl(form.getFieldValue('url'));
-    splitUrl(form.getFieldValue('url'))
+    if (Array.isArray(assetQueryParams) && assetQueryParams.length) {
+      const now = Date.now();
+      const tableRows = assetQueryParams.map((item, idx) => ({
+        id: now + idx + 100,
+        key: item?.key || '',
+        value: item?.value ?? '',
+        description: item?.description || '',
+      }));
+      setParamsData(tableRows);
+      setEditableRowKeys(tableRows.map((item) => item.id));
+      joinUrl(tableRows);
+    } else {
+      splitUrl(form.getFieldValue('url'))
+    }
   }
 
   useEffect(() => {
     init()
-  }, [body])
+  }, [body, assetQueryParams])
 
 
   // 请求url+params

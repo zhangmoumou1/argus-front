@@ -316,6 +316,11 @@ export default [
         name: '用户管理',
         component: './Manager/UserList',
       },
+      {
+        path: '/system/operation-log',
+        name: '操作日志',
+        component: './Manager/OperationLog',
+      },
     ],
   },
   {

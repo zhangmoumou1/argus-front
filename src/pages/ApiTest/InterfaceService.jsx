@@ -1,7 +1,21 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { connect, history } from '@umijs/max';
-import { Button, Card, Col, Dropdown, Form, Input, Menu, Modal, Row, Select, Space, Switch, Tag } from 'antd';
-import React, { useEffect, useState } from 'react';
+import {
+  Button,
+  Card,
+  Col,
+  Dropdown,
+  Form,
+  Input,
+  Menu,
+  Modal,
+  Row,
+  Select,
+  Space,
+  Switch,
+  Tag,
+} from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
 import parser from 'cron-parser';
 import moment from 'moment';
 import {
@@ -25,10 +39,12 @@ import {
 import auth from '@/utils/auth';
 import './InterfaceService.less';
 
-const InterfaceService = ({ project, dispatch }) => {
+const InterfaceService = ({ project, user, dispatch }) => {
   const DEFAULT_SYNC_CRON = '0 0 * * *';
   const projectId = project?.project_id;
   const projects = project?.projects || [];
+  const userList = user?.userList || [];
+  const userMap = user?.userMap || {};
   const [queryProjectId, setQueryProjectId] = useState(undefined);
   const [keyword, setKeyword] = useState('');
   const [cronDate, setCronDate] = useState(null);
@@ -44,6 +60,15 @@ const InterfaceService = ({ project, dispatch }) => {
     swagger: 'Swagger',
     yapi: 'YAPI',
   };
+
+  const userOptions = useMemo(
+    () =>
+      userList.map((item) => ({
+        label: item?.name || item?.nickname || item?.username || `用户${item?.id}`,
+        value: item?.id,
+      })),
+    [userList],
+  );
 
   const cardIcons = [
     <ApiOutlined key="api" />,
@@ -69,6 +94,42 @@ const InterfaceService = ({ project, dispatch }) => {
     } catch (e) {
       return {};
     }
+  };
+
+  const parseTesterValue = (raw) => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      return raw
+        .map((item) => Number(item))
+        .filter((item) => !Number.isNaN(item));
+    }
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((item) => Number(item))
+            .filter((item) => !Number.isNaN(item));
+        }
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const renderTesterNames = (raw) => {
+    const ids = parseTesterValue(raw);
+    if (!ids.length) return '-';
+    return ids
+      .map(
+        (id) =>
+          userMap?.[id]?.name ||
+          userMap?.[id]?.nickname ||
+          userMap?.[id]?.username ||
+          `用户${id}`,
+      )
+      .join('、');
   };
 
   const getNextRunTime = (cronExpr) => {
@@ -99,13 +160,25 @@ const InterfaceService = ({ project, dispatch }) => {
   }, []);
 
   useEffect(() => {
+    if (!userList.length) {
+      dispatch({ type: 'user/fetchUserList' });
+    }
+  }, [userList.length]);
+
+  useEffect(() => {
     fetchServices();
   }, [queryProjectId]);
 
   const onSubmitService = async () => {
     const values = await form.validateFields();
-    const payload = { ...values, project_id: values.project_id };
-    const res = editing ? await updateApiService({ ...payload, id: editing.id }) : await insertApiService(payload);
+    const payload = {
+      ...values,
+      project_id: values.project_id,
+      tester: JSON.stringify(values.tester || []),
+    };
+    const res = editing
+      ? await updateApiService({ ...payload, id: editing.id })
+      : await insertApiService(payload);
     if (auth.response(res, true)) {
       setModalOpen(false);
       setEditing(null);
@@ -115,11 +188,22 @@ const InterfaceService = ({ project, dispatch }) => {
   };
 
   const onServiceFormValuesChange = (changedValues, allValues) => {
-    if (Object.prototype.hasOwnProperty.call(changedValues, 'sync_enabled') && changedValues.sync_enabled && !allValues.sync_cron) {
+    if (
+      Object.prototype.hasOwnProperty.call(changedValues, 'sync_enabled') &&
+      changedValues.sync_enabled &&
+      !allValues.sync_cron
+    ) {
       form.setFieldsValue({ sync_cron: DEFAULT_SYNC_CRON });
     }
-    if (Object.prototype.hasOwnProperty.call(changedValues, 'source_type') && changedValues.source_type === 'manual') {
-      form.setFieldsValue({ sync_enabled: false, sync_cron: undefined, source_config: {} });
+    if (
+      Object.prototype.hasOwnProperty.call(changedValues, 'source_type') &&
+      changedValues.source_type === 'manual'
+    ) {
+      form.setFieldsValue({
+        sync_enabled: false,
+        sync_cron: undefined,
+        source_config: {},
+      });
       setCronDate(null);
     }
   };
@@ -149,6 +233,7 @@ const InterfaceService = ({ project, dispatch }) => {
             ...item,
             source_config: parseSourceConfig(item.source_config),
             sync_enabled: Number(item.sync_enabled) === 1,
+            tester: parseTesterValue(item.tester),
           });
           setCronDate(null);
           setModalOpen(true);
@@ -203,26 +288,52 @@ const InterfaceService = ({ project, dispatch }) => {
             </Space>
           </Col>
           <Col>
-            <Button type="primary" onClick={() => {
-              setEditing(null);
-              form.resetFields();
-              form.setFieldsValue({ project_id: queryProjectId || projectId, source_type: 'manual', sync_enabled: false });
-              setCronDate(null);
-              setModalOpen(true);
-            }}>新建服务</Button>
+            <Button
+              type="primary"
+              onClick={() => {
+                setEditing(null);
+                form.resetFields();
+                form.setFieldsValue({
+                  project_id: queryProjectId || projectId,
+                  source_type: 'manual',
+                  sync_enabled: false,
+                  tester: [],
+                  developer: '',
+                });
+                setCronDate(null);
+                setModalOpen(true);
+              }}
+            >
+              新建服务
+            </Button>
           </Col>
         </Row>
         <Row gutter={[16, 16]} className="interface-service-card-row">
           {(services || []).map((item) => (
             <Col xs={24} md={12} lg={8} xl={6} key={item.id}>
-              <Card className="interface-service-card" hoverable loading={loading} onClick={() => history.push(`/apiTest/interface/${item.id}`)}>
+              <Card
+                className="interface-service-card"
+                hoverable
+                loading={loading}
+                onClick={() => history.push(`/apiTest/interface/${item.id}`)}
+              >
                 <div className="interface-service-card__head">
                   <div className="interface-service-card__main">
-                    <span className="interface-service-card__icon">{getCardIcon(item.id)}</span>
+                    <span className="interface-service-card__icon">
+                      {getCardIcon(item.id)}
+                    </span>
                     <div className="interface-service-card__name-wrap">
-                      <div className="interface-service-card__name" title={item.name}>{item.name}</div>
-                      <div className="interface-service-card__project" title={projects.find((p) => p.id === item.project_id)?.name || item.project_id}>
-                        {projects.find((p) => p.id === item.project_id)?.name || item.project_id}
+                      <div className="interface-service-card__name" title={item.name}>
+                        {item.name}
+                      </div>
+                      <div
+                        className="interface-service-card__project"
+                        title={`${projects.find((p) => p.id === item.project_id)?.name || item.project_id} ｜ 服务路由：${item.base_url || '-'}`}
+                      >
+                        {projects.find((p) => p.id === item.project_id)?.name ||
+                          item.project_id}
+                        {' ｜ '}
+                        服务路由：{item.base_url || '-'}
                       </div>
                     </div>
                   </div>
@@ -231,7 +342,12 @@ const InterfaceService = ({ project, dispatch }) => {
                       {sourceLabelMap[item.source_type] || sourceLabelMap.manual}
                     </Tag>
                     <Dropdown trigger={['click']} overlay={buildCardMenu(item)}>
-                      <Button className="interface-service-card__more" size="small" type="text" icon={<MoreOutlined />} />
+                      <Button
+                        className="interface-service-card__more"
+                        size="small"
+                        type="text"
+                        icon={<MoreOutlined />}
+                      />
                     </Dropdown>
                   </Space>
                 </div>
@@ -242,8 +358,14 @@ const InterfaceService = ({ project, dispatch }) => {
                   </div>
                   <div className="metric-divider" />
                   <div className="metric-meta">
-                    <div><span>开发</span>{item.developer || '-'}</div>
-                    <div><span>测试</span>{item.tester || '-'}</div>
+                    <div>
+                      <span>开发</span>
+                      {item.developer || '-'}
+                    </div>
+                    <div>
+                      <span>测试</span>
+                      {renderTesterNames(item.tester)}
+                    </div>
                   </div>
                 </div>
                 <div className="interface-service-card__sync-bar">
@@ -252,8 +374,16 @@ const InterfaceService = ({ project, dispatch }) => {
                       ? `定时同步：${Number(item.sync_enabled) === 1 ? '开启' : '关闭'}`
                       : '手动服务'}
                   </span>
-                  <span title={Number(item.sync_enabled) === 1 ? getNextRunTime(item.sync_cron) : item.last_sync_at || '-'}>
-                    {Number(item.sync_enabled) === 1 ? `下次执行 ${getNextRunTime(item.sync_cron)}` : `最近同步 ${item.last_sync_at || '-'}`}
+                  <span
+                    title={
+                      Number(item.sync_enabled) === 1
+                        ? getNextRunTime(item.sync_cron)
+                        : item.last_sync_at || '-'
+                    }
+                  >
+                    {Number(item.sync_enabled) === 1
+                      ? `下次执行 ${getNextRunTime(item.sync_cron)}`
+                      : `最近同步 ${item.last_sync_at || '-'}`}
                   </span>
                 </div>
               </Card>
@@ -262,38 +392,88 @@ const InterfaceService = ({ project, dispatch }) => {
         </Row>
       </Card>
 
-      <Modal title={editing ? '编辑服务' : '新建服务'} open={modalOpen} onOk={onSubmitService} onCancel={() => setModalOpen(false)}>
+      <Modal
+        title={editing ? '编辑服务' : '新建服务'}
+        open={modalOpen}
+        onOk={onSubmitService}
+        onCancel={() => setModalOpen(false)}
+      >
         <Form form={form} layout="vertical" onValuesChange={onServiceFormValuesChange}>
-          <Form.Item name="project_id" label="所属项目" rules={[{ required: true, message: '请选择所属项目' }]}>
-            <Select showSearch options={projects.map((item) => ({ label: item.name, value: item.id }))} />
+          <Form.Item
+            name="project_id"
+            label="所属项目"
+            rules={[{ required: true, message: '请选择所属项目' }]}
+          >
+            <Select
+              showSearch
+              options={projects.map((item) => ({ label: item.name, value: item.id }))}
+            />
           </Form.Item>
-          <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}><Input /></Form.Item>
-          <Form.Item name="base_url" label="Base URL"><Input /></Form.Item>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="developer" label="开发人员"><Input placeholder="例如：张三 / 后端组" /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="tester" label="测试人员"><Input placeholder="例如：李四 / 测试组" /></Form.Item>
-            </Col>
-          </Row>
+          <Form.Item
+            name="name"
+            label="服务名称"
+            rules={[{ required: true, message: '请输入服务名称' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="base_url" label="Base URL">
+            <Input />
+          </Form.Item>
+          <Form.Item name="developer" label="开发人员">
+            <Input placeholder="例如：张三 / 后端组" />
+          </Form.Item>
+          <Form.Item name="tester" label="测试人员">
+            <Select
+              mode="multiple"
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              valuePropName="value"
+              maxTagCount="responsive"
+              placeholder="请选择测试人员"
+              options={userOptions}
+            />
+          </Form.Item>
           <Form.Item name="source_type" label="来源类型" initialValue="manual">
-            <Select options={[{ label: '手工', value: 'manual' }, { label: 'Swagger', value: 'swagger' }, { label: 'YAPI', value: 'yapi' }]} />
+            <Select
+              options={[
+                { label: '手工', value: 'manual' },
+                { label: 'Swagger', value: 'swagger' },
+                { label: 'YAPI', value: 'yapi' },
+              ]}
+            />
           </Form.Item>
-              {sourceTypeValue && sourceTypeValue !== 'manual' ? (
-                <>
-              <div style={{ marginBottom: 8, fontWeight: 600, color: '#344054' }}>来源配置</div>
-              <Form.Item name={['source_config', 'source_url']} label={sourceTypeValue === 'swagger' ? 'Swagger地址' : 'YAPI接口地址'}>
-                <Input placeholder={sourceTypeValue === 'swagger' ? 'Swagger/OpenAPI地址' : 'YAPI接口地址（Token自动读取系统设置）'} />
+          {sourceTypeValue && sourceTypeValue !== 'manual' ? (
+            <>
+              <div style={{ marginBottom: 8, fontWeight: 600, color: '#344054' }}>
+                来源配置
+              </div>
+              <Form.Item
+                name={['source_config', 'source_url']}
+                label={sourceTypeValue === 'swagger' ? 'Swagger地址' : 'YAPI接口地址'}
+              >
+                <Input
+                  placeholder={
+                    sourceTypeValue === 'swagger'
+                      ? 'Swagger/OpenAPI地址'
+                      : 'YAPI接口地址（Token自动读取系统设置）'
+                  }
+                />
               </Form.Item>
-              <div style={{ marginBottom: 8, fontWeight: 600, color: '#344054' }}>定时任务</div>
+              <div style={{ marginBottom: 8, fontWeight: 600, color: '#344054' }}>
+                定时任务
+              </div>
               <Form.Item name="sync_enabled" label="开启定时同步" valuePropName="checked">
                 <Switch />
               </Form.Item>
               <Form.Item
                 name="sync_cron"
                 label="cron表达式"
-                extra={<div className="m-input-footer-msg">{cronDate || '* 默认每天凌晨0点执行，cron表达式只支持5位'}</div>}
+                extra={
+                  <div className="m-input-footer-msg">
+                    {cronDate || '* 默认每天凌晨0点执行，cron表达式只支持5位'}
+                  </div>
+                }
                 rules={[
                   ({ getFieldValue }) => ({
                     validator(_, value) {
@@ -307,7 +487,11 @@ const InterfaceService = ({ project, dispatch }) => {
                       }
                       try {
                         const date = parser.parseExpression(value);
-                        setCronDate(`下次运行时间: ${moment(new Date(date.next())).format('YYYY-MM-DD HH:mm:ss')}`);
+                        setCronDate(
+                          `下次运行时间: ${moment(new Date(date.next())).format(
+                            'YYYY-MM-DD HH:mm:ss',
+                          )}`,
+                        );
                         return Promise.resolve();
                       } catch (e) {
                         return Promise.reject(new Error('请输入正确的cron表达式'));
@@ -322,9 +506,8 @@ const InterfaceService = ({ project, dispatch }) => {
           ) : null}
         </Form>
       </Modal>
-
     </PageContainer>
   );
 };
 
-export default connect(({ project }) => ({ project }))(InterfaceService);
+export default connect(({ project, user }) => ({ project, user }))(InterfaceService);
