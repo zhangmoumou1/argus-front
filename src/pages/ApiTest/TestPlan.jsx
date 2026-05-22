@@ -124,7 +124,8 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
     {
       title: '测试计划',
       key: 'name',
-      dataIndex: 'name'
+      dataIndex: 'name',
+      render: (name, record) => <span>{name}{record.pending_review ? <Tag color="red" style={{marginLeft: 8}}>变更</Tag> : null}</span>,
     },
     {
       title: '优先级',

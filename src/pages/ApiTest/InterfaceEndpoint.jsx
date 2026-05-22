@@ -993,6 +993,7 @@ const InterfaceEndpoint = () => {
         <Space direction="vertical" size={2}>
           <Space>
             <Text strong>{value}</Text>
+            {record.pending_review ? <Tag color="red">变更</Tag> : null}
             {record.endpoint_status === 'deprecated' ? <Tag color="red">废弃</Tag> : null}
           </Space>
           <Text type="secondary" ellipsis className="interface-endpoint-path">

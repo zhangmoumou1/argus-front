@@ -50,6 +50,14 @@ export async function queryTestCase(params) {
   });
 }
 
+export async function listPendingReviewCases(params) {
+  return request(`${CONFIG.URL}/testcase/pending-review/list`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
 // 新增断言
 export async function insertTestCaseAsserts(data) {
   return request(`${CONFIG.URL}/testcase/asserts/insert`, {

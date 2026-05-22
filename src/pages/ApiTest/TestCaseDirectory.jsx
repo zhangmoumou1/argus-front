@@ -18,7 +18,9 @@ import {
   Modal,
   Result,
   Row,
+  Segmented,
   Select,
+  Space,
   Spin,
   Table,
   Tag,
@@ -62,8 +64,8 @@ import AddTestCaseComponent from '@/pages/ApiTest/AddTestCaseComponent';
 import RecorderDrawer from '@/components/TestCase/recorder/RecorderDrawer';
 import {Switch} from '@icon-park/react';
 import common from "@/utils/common";
-import {listApiEndpointVersions, listApiEndpoints, listApiServices} from '@/services/interfaceManage';
-import {aiGenerateFlowPreview, aiGenerateFlowSave, copyTestCase, listTestcaseTree as fetchTestcaseDirectoryTree} from '@/services/testcase';
+import {listApiEndpointVersions, listApiEndpoints, listApiServices, reviewApiEndpointCase} from '@/services/interfaceManage';
+import {aiGenerateFlowPreview, aiGenerateFlowSave, copyTestCase, listPendingReviewCases, listTestcaseTree as fetchTestcaseDirectoryTree} from '@/services/testcase';
 import {listFunctionalCaseSkillDocs} from '@/services/functionalCase';
 
 const {Option} = Select;
@@ -106,6 +108,13 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   const [aiSelectedKeys, setAiSelectedKeys] = useState([]);
   const [aiSkillDocs, setAiSkillDocs] = useState([]);
   const [loadingAiSkillDocs, setLoadingAiSkillDocs] = useState(false);
+  const [pendingReviewOpen, setPendingReviewOpen] = useState(false);
+  const [pendingReviewLoading, setPendingReviewLoading] = useState(false);
+  const [pendingReviewRows, setPendingReviewRows] = useState([]);
+  const [pendingReviewQuery, setPendingReviewQuery] = useState({project_id: undefined, url: '', create_user: undefined});
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewingCase, setReviewingCase] = useState(null);
+  const [reviewStatus, setReviewStatus] = useState('no_impact');
   const [aiForm] = Form.useForm();
 
   const [bodyType, setBodyType] = useState(0);
@@ -239,7 +248,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       title: '用例ID',
       dataIndex: 'id',
       key: 'id',
-      width: 100,
+      width: 80,
       fixed: 'left',
     },
     {
@@ -249,7 +258,19 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       // 自动省略多余数据
       ellipsis: true,
       fixed: 'left',
-      width: '20%',
+      width: '28%',
+      render: (value, record) => (
+        <span style={{display: 'flex', alignItems: 'center', minWidth: 0}}>
+          <span style={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1}}>
+            {value}
+          </span>
+          {record.api_pending_update ? (
+            <Tag color="red" style={{marginLeft: 8, flexShrink: 0, whiteSpace: 'nowrap'}}>
+              变更
+            </Tag>
+          ) : null}
+        </span>
+      ),
     },
     {
       title: '请求协议',
@@ -262,7 +283,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       title: '优先级',
       dataIndex: 'priority',
       key: 'priority',
-      width: 90,
+      width: 72,
       render: (priority) => <Tag color={CONFIG.CASE_TAG[priority]}>{priority}</Tag>,
     },
     {
@@ -276,14 +297,14 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       title: '接口版本',
       dataIndex: 'api_version_no',
       key: 'api_version_no',
-      width: 120,
+      width: 96,
       render: (value) => value || '-',
     },
     {
       title: '创建人',
       dataIndex: 'create_user',
       key: 'create_user',
-      width: 160,
+      width: 120,
       ellipsis: true,
       render: (create_user) => <UserLink user={userMap[create_user]}/>,
     },
@@ -296,7 +317,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
     {
       title: '操作',
       dataIndex: 'ops',
-      width: 130,
+      width: 200,
       key: 'ops',
       fixed: 'right',
       render: (_, record) => (
@@ -309,7 +330,9 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
           >
             详情
           </a>
-          <Divider type="vertical"/>
+          {record.api_pending_update ? <Divider type="vertical"/> : null}
+          {record.api_pending_update ? <a onClick={() => openReviewModal(record)}>版本审查</a> : null}
+          {record.api_pending_update ? <Divider type="vertical"/> : <Divider type="vertical"/>}
           <Dropdown overlay={menu(record)}>
             <a
               onClick={(e) => {
@@ -368,10 +391,60 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
     }
   };
 
+  const fetchPendingReviews = async (overrides = {}) => {
+    setPendingReviewLoading(true);
+    const query = {
+      ...pendingReviewQuery,
+      ...overrides,
+    };
+    setPendingReviewQuery(query);
+    const res = await listPendingReviewCases(query);
+    setPendingReviewLoading(false);
+    if (auth.response(res, false)) {
+      setPendingReviewRows(res.data || []);
+    }
+  };
+
+  const openPendingReviewModal = () => {
+    const next = {
+      project_id: undefined,
+      url: '',
+      create_user: undefined,
+    };
+    setPendingReviewOpen(true);
+    fetchPendingReviews(next);
+  };
+
+  const openReviewModal = (caseRecord) => {
+    setReviewingCase(caseRecord);
+    setReviewStatus('no_impact');
+    setReviewModalOpen(true);
+  };
+
+  const submitReview = async () => {
+    if (!reviewingCase?.id) {
+      return;
+    }
+    const res = await reviewApiEndpointCase({
+      case_id: reviewingCase.id,
+      review_status: reviewStatus,
+    });
+    if (auth.response(res, true)) {
+      message.success('审查成功');
+      setReviewModalOpen(false);
+      setReviewingCase(null);
+      await listTestcase();
+      if (pendingReviewOpen) {
+        await fetchPendingReviews({});
+      }
+    }
+  };
+
   useEffect(() => {
     listProjects();
     listUsers();
     listEnv();
+    fetchPendingReviews({project_id: undefined, url: '', create_user: undefined});
   }, []);
 
   useEffect(() => {
@@ -1035,6 +1108,98 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
         width={500}
         formName="move-directory"
       />
+      <Modal
+        title="变更用例"
+        open={pendingReviewOpen}
+        footer={null}
+        width={1040}
+        onCancel={() => setPendingReviewOpen(false)}
+      >
+        <Row gutter={12} style={{marginBottom: 16}}>
+          <Col span={6}>
+            <Select
+              allowClear
+              showSearch
+              value={pendingReviewQuery.project_id}
+              placeholder="选择项目"
+              onChange={(value) => setPendingReviewQuery((prev) => ({...prev, project_id: value}))}
+            >
+              {projects.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}
+            </Select>
+          </Col>
+          <Col span={6}>
+            <Input
+              value={pendingReviewQuery.url}
+              placeholder="接口URL模糊匹配"
+              onChange={(e) => setPendingReviewQuery((prev) => ({...prev, url: e.target.value}))}
+            />
+          </Col>
+          <Col span={6}>
+            <UserSelect
+              users={userList}
+              value={pendingReviewQuery.create_user}
+              onChange={(value) => setPendingReviewQuery((prev) => ({...prev, create_user: value}))}
+            />
+          </Col>
+          <Col span={6}>
+            <Space>
+              <Button type="primary" onClick={() => fetchPendingReviews({})}>查询</Button>
+              <Button onClick={() => {
+                const next = {project_id: undefined, url: '', create_user: undefined};
+                setPendingReviewQuery(next);
+                fetchPendingReviews(next);
+              }}>重置</Button>
+            </Space>
+          </Col>
+        </Row>
+        <Table
+          rowKey="id"
+          loading={pendingReviewLoading}
+          dataSource={pendingReviewRows}
+          pagination={{pageSize: 10, showSizeChanger: false}}
+          columns={[
+            {
+              title: '项目',
+              dataIndex: 'project_id',
+              render: (value) => projects.find((item) => item.id === value)?.name || value,
+            },
+            {title: '服务', dataIndex: 'service_name'},
+            {title: '接口名称', dataIndex: 'endpoint_name'},
+            {title: '接口URL', dataIndex: 'url'},
+            {
+              title: '创建人',
+              dataIndex: 'create_user',
+              render: (value) => <UserLink user={userMap[value]}/>,
+            },
+            {
+              title: '操作',
+              render: (_, row) => <a onClick={() => history.push(`/apiTest/testcase/${row.directory_id}/${row.id}`)}>去处理</a>,
+            },
+          ]}
+        />
+      </Modal>
+      <Modal
+        title="版本审查"
+        open={reviewModalOpen}
+        onOk={submitReview}
+        okText="确认"
+        cancelText="取消"
+        onCancel={() => setReviewModalOpen(false)}
+      >
+        <div style={{marginBottom: 12, color: '#667085'}}>
+          当前接口关联的资产版本变更，请对当前接口进行审查，保证运行正常
+        </div>
+        <Segmented
+          block
+          className="review-segmented"
+          value={reviewStatus}
+          onChange={(value) => setReviewStatus(value)}
+          options={[
+            {label: '无影响', value: 'no_impact'},
+            {label: '已审查', value: 'reviewed'},
+          ]}
+        />
+      </Modal>
       {projects.length === 0 ? (
         <Result
           status="404"
@@ -1107,7 +1272,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
               <ScrollCard className="card" hideOverflowX={true}>
                 <Row gutter={8}>
                   <Col span={24}>
-                    <div style={{height: 40, lineHeight: '40px'}}>
+                    <div style={{height: 40, lineHeight: '40px', overflow: 'visible'}}>
                       {editing ? (
                         <Select
                           style={{marginLeft: 32, width: 150}}
@@ -1134,22 +1299,10 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                         </Select>
                       ) : (
                         <div onClick={() => setEditing(true)}>
-                          <img
-                            src="/project.svg"
-                            alt="project"
-                            style={{
-                              width: 30,
-                              marginLeft: 8,
-                              marginRight: 6,
-                              display: 'inline-block',
-                              objectFit: 'contain',
-                              verticalAlign: 'middle',
-                            }}
-                          />
                           <span
                             style={{
                               display: 'inline-block',
-                              marginLeft: 12,
+                              marginLeft: 8,
                               fontWeight: 400,
                               fontSize: 14,
                             }}
@@ -1162,6 +1315,35 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                             size="16"
                             fill="#7ed321"
                           />
+                          <span style={{display: 'inline-block', paddingTop: 6}}>
+                            <Badge
+                              count={pendingReviewRows.length > 99 ? '99+' : pendingReviewRows.length}
+                              overflowCount={99}
+                              color="red"
+                              offset={[4, 2]}
+                            countStyle={{
+                              minWidth: 17,
+                              height: 17,
+                              lineHeight: '17px',
+                              padding: '0 1px',
+                              fontSize: 8,
+                              borderRadius: 8,
+                              zIndex: 2,
+                            }}
+                              style={{display: pendingReviewRows.length > 0 ? 'inline-block' : 'none'}}
+                            >
+                              <Button
+                                size="small"
+                                style={{marginLeft: 12}}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPendingReviewModal();
+                                }}
+                              >
+                                变更用例
+                              </Button>
+                            </Badge>
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1330,7 +1512,6 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                             saveCase({pagination: {...pagination, current: pg.current}});
                           }}
                           dataSource={testcases}
-                          scroll={{x: 1100}}
                           loading={
                             loading.effects['testcase/listTestcase'] ||
                             loading.effects['testcase/executeTestcase']

@@ -13,6 +13,8 @@ import {
   Select,
   Space,
   Switch,
+  Table,
+  Badge,
   Tag,
 } from 'antd';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -32,6 +34,7 @@ import {
 import {
   deleteApiService,
   insertApiService,
+  listPendingApiAssets,
   listApiServices,
   syncApiService,
   updateApiService,
@@ -52,6 +55,10 @@ const InterfaceService = ({ project, user, dispatch }) => {
   const [services, setServices] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingAssets, setPendingAssets] = useState([]);
+  const [pendingQuery, setPendingQuery] = useState({ service_id: undefined, url: '', tester: undefined });
   const [form] = Form.useForm();
   const sourceTypeValue = Form.useWatch('source_type', form);
 
@@ -68,6 +75,15 @@ const InterfaceService = ({ project, user, dispatch }) => {
         value: item?.id,
       })),
     [userList],
+  );
+
+  const serviceOptions = useMemo(
+    () =>
+      (services || []).map((item) => ({
+        label: item.name,
+        value: item.id,
+      })),
+    [services],
   );
 
   const cardIcons = [
@@ -151,6 +167,21 @@ const InterfaceService = ({ project, user, dispatch }) => {
     }
   };
 
+  const fetchPendingAssets = async (overrides = {}) => {
+    setPendingLoading(true);
+    const nextQuery = {
+      project_id: queryProjectId,
+      ...pendingQuery,
+      ...overrides,
+    };
+    setPendingQuery((prev) => ({ ...prev, ...overrides }));
+    const res = await listPendingApiAssets(nextQuery);
+    setPendingLoading(false);
+    if (auth.response(res, false)) {
+      setPendingAssets(res.data || []);
+    }
+  };
+
   useEffect(() => {
     if (!projects.length) {
       dispatch({
@@ -168,6 +199,10 @@ const InterfaceService = ({ project, user, dispatch }) => {
   useEffect(() => {
     fetchServices();
   }, [queryProjectId]);
+
+  useEffect(() => {
+    fetchPendingAssets({ service_id: undefined, url: '', tester: undefined });
+  }, []);
 
   const onSubmitService = async () => {
     const values = await form.validateFields();
@@ -263,6 +298,31 @@ const InterfaceService = ({ project, user, dispatch }) => {
     />
   );
 
+  const pendingColumns = [
+    {
+      title: '服务',
+      dataIndex: 'service_name',
+      key: 'service_name',
+    },
+    {
+      title: '接口名称',
+      dataIndex: 'endpoint_name',
+      key: 'endpoint_name',
+      render: value => <span>{value}</span>,
+    },
+    {
+      title: '接口URL',
+      dataIndex: 'endpoint_url',
+      key: 'endpoint_url',
+    },
+    {
+      title: '测试人员',
+      dataIndex: 'tester',
+      key: 'tester',
+      render: (value) => renderTesterNames(value),
+    },
+  ];
+
   return (
     <PageContainer title={false} breadcrumb={null}>
       <Card bordered={false}>
@@ -288,24 +348,47 @@ const InterfaceService = ({ project, user, dispatch }) => {
             </Space>
           </Col>
           <Col>
-            <Button
-              type="primary"
-              onClick={() => {
-                setEditing(null);
-                form.resetFields();
-                form.setFieldsValue({
-                  project_id: queryProjectId || projectId,
-                  source_type: 'manual',
-                  sync_enabled: false,
-                  tester: [],
-                  developer: '',
-                });
-                setCronDate(null);
-                setModalOpen(true);
-              }}
-            >
-              新建服务
-            </Button>
+            <Space>
+              <Button onClick={() => {
+                setPendingModalOpen(true);
+                fetchPendingAssets({});
+              }}>
+                <Badge
+                  count={pendingAssets.length > 99 ? '99+' : pendingAssets.length}
+                  overflowCount={99}
+                  color="red"
+                  offset={[10, -6]}
+                  countStyle={{
+                    minWidth: 17,
+                    height: 17,
+                    lineHeight: '17px',
+                    padding: '0 1px',
+                    fontSize: 8,
+                    borderRadius: 8,
+                  }}
+                >
+                  变更资产
+                </Badge>
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => {
+                  setEditing(null);
+                  form.resetFields();
+                  form.setFieldsValue({
+                    project_id: queryProjectId || projectId,
+                    source_type: 'manual',
+                    sync_enabled: false,
+                    tester: [],
+                    developer: '',
+                  });
+                  setCronDate(null);
+                  setModalOpen(true);
+                }}
+              >
+                新建服务
+              </Button>
+            </Space>
           </Col>
         </Row>
         <Row gutter={[16, 16]} className="interface-service-card-row">
@@ -325,6 +408,7 @@ const InterfaceService = ({ project, user, dispatch }) => {
                     <div className="interface-service-card__name-wrap">
                       <div className="interface-service-card__name" title={item.name}>
                         {item.name}
+                        {item.pending_review ? <Tag color="red" style={{ marginLeft: 8 }}>变更</Tag> : null}
                       </div>
                       <div
                         className="interface-service-card__project"
@@ -505,6 +589,54 @@ const InterfaceService = ({ project, user, dispatch }) => {
             </>
           ) : null}
         </Form>
+      </Modal>
+
+      <Modal
+        title="变更资产"
+        open={pendingModalOpen}
+        footer={null}
+        width={980}
+        onCancel={() => setPendingModalOpen(false)}
+      >
+        <Space wrap style={{ marginBottom: 16 }}>
+          <Select
+            allowClear
+            showSearch
+            value={pendingQuery.service_id}
+            style={{ width: 220 }}
+            placeholder="按服务筛选"
+            options={serviceOptions}
+            onChange={(value) => setPendingQuery((prev) => ({ ...prev, service_id: value }))}
+          />
+          <Input
+            value={pendingQuery.url}
+            onChange={(e) => setPendingQuery((prev) => ({ ...prev, url: e.target.value }))}
+            placeholder="接口URL模糊匹配"
+            style={{ width: 220 }}
+          />
+          <Select
+            allowClear
+            showSearch
+            value={pendingQuery.tester}
+            style={{ width: 220 }}
+            placeholder="按测试人员筛选"
+            options={userOptions}
+            onChange={(value) => setPendingQuery((prev) => ({ ...prev, tester: value }))}
+          />
+          <Button type="primary" onClick={() => fetchPendingAssets({})}>查询</Button>
+          <Button onClick={() => {
+            const next = { service_id: undefined, url: '', tester: undefined };
+            setPendingQuery(next);
+            fetchPendingAssets(next);
+          }}>重置</Button>
+        </Space>
+        <Table
+          rowKey={(record) => `${record.service_id}-${record.endpoint_id}`}
+          columns={pendingColumns}
+          dataSource={pendingAssets}
+          loading={pendingLoading}
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+        />
       </Modal>
     </PageContainer>
   );

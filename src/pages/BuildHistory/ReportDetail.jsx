@@ -36,6 +36,7 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
   const [caseName, setCaseName] = useState('');
   const [caseList, setCaseList] = useState([]);
   const [currentCaseList, setCurrentCaseList] = useState([]);
+  const [reportLoading, setReportLoading] = useState(false);
   const {envMap, envList} = gconfig;
   const {userMap, userNameMap} = user;
 
@@ -122,16 +123,20 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
     setCurrentCaseList(temp)
   }
 
-  const load = !!(loading.effects['testcase/retryCase']
-    || loading.effects['gconfig/fetchEnvList'])
+  const load = !!(loading.effects['testcase/retryCase'] || reportLoading)
 
   const getReportResponse = async () => {
-    const res = await queryReport({id: reportId})
-    if (auth.response(res)) {
-      setCaseList(res.data.case_list);
-      setCurrentCaseList(res.data.case_list);
-      setReportDetail(res.data.report);
-      setPlanName(res.data.plan_name);
+    setReportLoading(true);
+    try {
+      const res = await queryReport({id: reportId})
+      if (auth.response(res)) {
+        setCaseList(res.data.case_list);
+        setCurrentCaseList(res.data.case_list);
+        setReportDetail(res.data.report);
+        setPlanName(res.data.plan_name);
+      }
+    } finally {
+      setReportLoading(false);
     }
   }
 
@@ -165,7 +170,7 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
       title: '用例名称',
       dataIndex: 'case_name',
       key: 'case_name',
-      render: (text, record) => <a href={`/#/apiTest/testcase/${record.directory_id}/${record.case_id}`}>{text}</a>
+      render: (text, record) => <span><a href={`/#/apiTest/testcase/${record.directory_id}/${record.case_id}`}>{text}</a>{record.api_pending_update ? <Tag color="red" style={{marginLeft: 8}}>变更</Tag> : null}</span>
     },
     {
       title: '数据描述',

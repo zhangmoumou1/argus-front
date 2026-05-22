@@ -1,7 +1,7 @@
 import {PageContainer} from "@ant-design/pro-components";
 import {connect, useLocation, useParams} from '@umijs/max';
 import React, {useEffect, useMemo, useState} from "react";
-import {Badge, Button, Card, Col, Descriptions, Empty, Form, Row, Spin, Tag, Tooltip, message} from "antd";
+import {Badge, Button, Card, Col, Descriptions, Empty, Form, Modal, Row, Segmented, Spin, Tag, Tooltip, message} from "antd";
 import TestCaseEditor from "@/components/TestCase/TestCaseEditor";
 import TestResult from "@/components/TestCase/TestResult";
 import CONFIG from "@/consts/config";
@@ -14,7 +14,7 @@ import UserLink from "@/components/Button/UserLink";
 import TestCaseBottom from "@/components/TestCase/TestCaseBottom";
 import NoPermission from '@/assets/NoPermission.svg';
 import {CASE_TYPE, REQUEST_METHOD, REQUEST_TYPE} from "@/components/Common/global";
-import {listApiEndpoints, listApiServices} from "@/services/interfaceManage";
+import {listApiEndpoints, listApiServices, reviewApiEndpointCase} from "@/services/interfaceManage";
 
 
 const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
@@ -50,6 +50,8 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
   const [suffix, setSuffix] = useState(false);
   const [apiServiceName, setApiServiceName] = useState('');
   const [apiEndpointName, setApiEndpointName] = useState('');
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState('no_impact');
 
   const fetchTestCaseInfo = () => {
     if (case_id) {
@@ -268,11 +270,45 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
     return caseInfo.tag.split(",")
   }
 
+  const submitReview = async () => {
+    const res = await reviewApiEndpointCase({
+      case_id,
+      review_status: reviewStatus,
+    });
+    if (auth.response(res, true)) {
+      message.success('审查成功');
+      setReviewModalOpen(false);
+      fetchTestCaseInfo();
+    }
+  };
+
   return (
     <PageContainer key={location.pathname} title={false} breadcrumb={null}>
 
       <TestResult width={1000} modal={resultModal} setModal={setResultModal} response={testResult}
                   caseName={caseInfo.name} single={false}/>
+      <Modal
+        title="版本审查"
+        open={reviewModalOpen}
+        onOk={submitReview}
+        okText="确认"
+        cancelText="取消"
+        onCancel={() => setReviewModalOpen(false)}
+      >
+        <div style={{marginBottom: 12, color: '#667085'}}>
+          当前接口关联的资产版本变更，请对当前接口进行审查，保证运行正常
+        </div>
+        <Segmented
+          block
+          className="review-segmented"
+          value={reviewStatus}
+          onChange={(value) => setReviewStatus(value)}
+          options={[
+            {label: '无影响', value: 'no_impact'},
+            {label: '已审查', value: 'reviewed'},
+          ]}
+        />
+      </Modal>
 
       <Spin spinning={load} tip="暴力加载中..." size="large">
         {
@@ -310,12 +346,18 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
                                 }
                               })
                             }} style={{borderRadius: 16}}><EditOutlined/> 编辑</Button>
+                            {caseInfo.api_pending_update ? (
+                              <Button style={{marginLeft: 8, borderRadius: 16}} onClick={() => {
+                                setReviewStatus('no_impact');
+                                setReviewModalOpen(true);
+                              }}>版本审查</Button>
+                            ) : null}
                             <Button type="primary" style={{marginLeft: 8, borderRadius: 16}}
                                     loading={loading.effects['testcase/onExecuteTestCase']}
                                     onClick={onRun}><PlayCircleOutlined/> 运行</Button>
                           </div>}>
                       <Descriptions column={4}>
-                        <Descriptions.Item label='用例名称'><a>{caseInfo.name}</a></Descriptions.Item>
+                        <Descriptions.Item label='用例名称'><span><a>{caseInfo.name}</a></span></Descriptions.Item>
 
                         <Descriptions.Item
                           label='请求类型'>{REQUEST_TYPE[caseInfo.request_type]}</Descriptions.Item>
@@ -351,7 +393,7 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
                         <Descriptions.Item label='接口'>
                           {apiEndpointName || '-'}
                         </Descriptions.Item>
-                        <Descriptions.Item label='接口版本'>{caseInfo.api_version_no || '-'}</Descriptions.Item>
+                        <Descriptions.Item label='接口版本'><span>{caseInfo.api_version_no || '-'}{caseInfo.api_pending_update ? <Tag color="red" style={{marginLeft: 8}}>有新版</Tag> : null}</span></Descriptions.Item>
                         <Descriptions.Item label='创建时间'>{caseInfo.created_at}</Descriptions.Item>
                         <Descriptions.Item label='更新时间'>{caseInfo.updated_at}</Descriptions.Item>
                       </Descriptions>

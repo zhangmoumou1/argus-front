@@ -10,6 +10,14 @@ export async function listApiServices(params) {
   });
 }
 
+export async function listPendingApiAssets(params) {
+  return request(`${CONFIG.URL}/interface-management/service/pending-assets`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
 export async function insertApiService(data) {
   return request(`${CONFIG.URL}/interface-management/service/insert`, {
     method: 'POST',
@@ -134,6 +142,14 @@ export async function getApiEndpointLineage(params) {
   return request(`${CONFIG.URL}/interface-management/endpoint/lineage`, {
     method: 'GET',
     params,
+    headers: auth.headers(),
+  });
+}
+
+export async function reviewApiEndpointCase(data) {
+  return request(`${CONFIG.URL}/interface-management/endpoint/review`, {
+    method: 'POST',
+    data,
     headers: auth.headers(),
   });
 }

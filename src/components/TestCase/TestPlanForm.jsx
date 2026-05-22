@@ -1,5 +1,5 @@
 import {connect} from '@umijs/max';
-import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Steps, Switch, TreeSelect} from "antd";
+import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Steps, Switch, Tag, TreeSelect} from "antd";
 import {ApiOutlined, NotificationOutlined, SaveOutlined, TeamOutlined} from "@ant-design/icons";
 import React, {useEffect, useState} from 'react';
 import CONFIG from "@/consts/config";
@@ -13,7 +13,7 @@ import UserSelect from "@/components/User/UserSelect";
 const {Step} = Steps;
 const {Option} = Select;
 
-const CaseList = ({dispatch, form, loading, caseMap, treeData, planRecord, onSave, selectedCaseData}) => {
+const CaseList = ({dispatch, form, loading, caseMap, treeData, planRecord, onSave, selectedCaseData, pendingMap}) => {
   const columns = [
     {
       title: '用例id',
@@ -28,7 +28,7 @@ const CaseList = ({dispatch, form, loading, caseMap, treeData, planRecord, onSav
       title: '用例名称',
       key: 'name',
       dataIndex: 'name',
-      render: name => <a>{name}</a>,
+      render: (name, record) => <span><a>{name}</a>{pendingMap?.[record.case_id?.split("_")[1]] ? <Tag color="red" style={{marginLeft: 8}}>变更</Tag> : null}</span>,
     },
   ]
   useEffect(() => {
@@ -87,7 +87,7 @@ const CaseList = ({dispatch, form, loading, caseMap, treeData, planRecord, onSav
 
 const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetchTestPlan}) => {
 
-  const {visible, currentStep, title, treeData, selectedCaseData, caseMap, planRecord} = testplan;
+  const {visible, currentStep, title, treeData, selectedCaseData, caseMap, planRecord, pendingMap} = testplan;
   const {projects} = project;
   const {envList} = gconfig;
   const {userList} = user;
@@ -225,7 +225,7 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
 
     if (currentStep === 1) {
       return <CaseList dispatch={dispatch} treeData={treeData} planRecord={planRecord} form={form} onSave={onSave}
-                       selectedCaseData={selectedCaseData} caseMap={caseMap} loading={loading}/>
+                       selectedCaseData={selectedCaseData} caseMap={caseMap} loading={loading} pendingMap={pendingMap}/>
     }
 
     if (currentStep === 2) {

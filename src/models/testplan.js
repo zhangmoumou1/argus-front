@@ -27,6 +27,7 @@ export default {
     currentStep: 0,
     treeData: [],
     selectedCaseData: [],
+    pendingMap: {},
   },
 
   reducers: {
@@ -106,6 +107,7 @@ export default {
           payload: {
             treeData: res.data.tree,
             caseMap: res.data.case_map,
+            pendingMap: res.data.pending_map || {},
           }
         })
       }
