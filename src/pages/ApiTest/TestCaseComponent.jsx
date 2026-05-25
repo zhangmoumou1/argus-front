@@ -393,7 +393,34 @@ const TestCaseComponent = ({loading, dispatch, user, testcase, gconfig}) => {
                         <Descriptions.Item label='接口'>
                           {apiEndpointName || '-'}
                         </Descriptions.Item>
-                        <Descriptions.Item label='接口版本'><span>{caseInfo.api_version_no || '-'}{caseInfo.api_pending_update ? <Tag color="red" style={{marginLeft: 8}}>有新版</Tag> : null}</span></Descriptions.Item>
+                        <Descriptions.Item label='接口版本'>
+                          <span>
+                            {caseInfo.api_version_no || '-'}
+                            {caseInfo.api_pending_update ? (
+                              <Tooltip title="查看新版本差异">
+                                <Tag
+                                  color="red"
+                                  style={{marginLeft: 8, cursor: 'pointer'}}
+                                  onClick={() => {
+                                    const serviceId = Number(caseInfo?.api_service_id || 0);
+                                    const endpointId = Number(caseInfo?.api_endpoint_id || 0);
+                                    if (serviceId > 0) {
+                                      const endpointUrl = encodeURIComponent(String(caseInfo?.url || ''));
+                                      const query = `?endpoint_url=${endpointUrl}`;
+                                      if (endpointId > 0) {
+                                        window.open(`/#/apiTest/interface/${serviceId}/${endpointId}${query}`, '_blank');
+                                      } else {
+                                        window.open(`/#/apiTest/interface/${serviceId}${query}`, '_blank');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  有新版
+                                </Tag>
+                              </Tooltip>
+                            ) : null}
+                          </span>
+                        </Descriptions.Item>
                         <Descriptions.Item label='创建时间'>{caseInfo.created_at}</Descriptions.Item>
                         <Descriptions.Item label='更新时间'>{caseInfo.updated_at}</Descriptions.Item>
                       </Descriptions>

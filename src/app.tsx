@@ -66,6 +66,10 @@ type RouteEntry = {
   hideInMenu?: boolean;
   labels: string[];
 };
+type RouteCrumb = {
+  label: string;
+  path?: string;
+};
 
 const routeNameText: Record<string, string> = {
   dashboard: '仪表盘',
@@ -130,7 +134,19 @@ const buildRouteEntries = (routes: any[] = []) => {
 
 const routeEntries = buildRouteEntries(routesConfig as any[]);
 
-const getRouteCrumbs = (pathname = '') => {
+const fillPathParams = (pathPattern = '', pathname = '') => {
+  const patternParts = normalizePath(pathPattern).split('/').filter(Boolean);
+  const currentParts = normalizePath(pathname).split('/').filter(Boolean);
+  const resolved = patternParts.map((part, index) => {
+    if (part.startsWith(':')) {
+      return currentParts[index] || part;
+    }
+    return part;
+  });
+  return `/${resolved.join('/')}`;
+};
+
+const getRouteCrumbs = (pathname = ''): RouteCrumb[] => {
   const currentPath = normalizePath(pathname);
   const matched = routeEntries
     .filter((entry) => createRouteMatcher(entry.path).test(currentPath))
@@ -138,27 +154,42 @@ const getRouteCrumbs = (pathname = '') => {
 
   if (!matched) return [];
 
-  if (matched.labels.length === 1 && matched.hideInMenu) {
-    const parent = routeEntries
+  const labels = (() => {
+    if (matched.labels.length === 1 && matched.hideInMenu) {
+      const parent = routeEntries
+        .filter((entry) => {
+          if (entry.hideInMenu || entry.path === matched.path) return false;
+          return currentPath === entry.path || currentPath.startsWith(`${entry.path}/`);
+        })
+        .sort((a, b) => b.path.length - a.path.length)[0];
+
+      if (parent?.labels?.length) {
+        return [...parent.labels, ...matched.labels.filter((label) => !parent.labels.includes(label))];
+      }
+    }
+    return matched.labels;
+  })();
+
+  return labels.map((label, index) => {
+    const prefixLabels = labels.slice(0, index + 1);
+    const prefixPathEntry = routeEntries
       .filter((entry) => {
-        if (entry.hideInMenu || entry.path === matched.path) return false;
-        return currentPath === entry.path || currentPath.startsWith(`${entry.path}/`);
+        if (entry.labels.length !== prefixLabels.length) return false;
+        return entry.labels.every((item, idx) => item === prefixLabels[idx]);
       })
       .sort((a, b) => b.path.length - a.path.length)[0];
-
-    if (parent?.labels?.length) {
-      return [...parent.labels, ...matched.labels.filter((label) => !parent.labels.includes(label))];
-    }
-  }
-
-  return matched.labels;
+    return {
+      label,
+      path: prefixPathEntry ? fillPathParams(prefixPathEntry.path, currentPath) : undefined,
+    };
+  });
 };
 
 const PageTopBar = ({
   crumbs,
   onOpenTheme,
 }: {
-  crumbs: string[];
+  crumbs: RouteCrumb[];
   onOpenTheme: () => void;
 }) => {
   const onToggleSider = () => {
@@ -180,8 +211,22 @@ const PageTopBar = ({
         </button>
         {crumbs.length > 0 && (
           <Breadcrumb className="argus-topbar__breadcrumb" separator=">">
-            {crumbs.map((item) => (
-              <Breadcrumb.Item key={item}>{item}</Breadcrumb.Item>
+            {crumbs.map((item, index) => (
+              <Breadcrumb.Item key={`${item.label}-${item.path || 'text'}`}>
+                {item.path && index > 0 ? (
+                  <a
+                    className="argus-topbar__breadcrumb-link"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      history.push(item.path as string);
+                    }}
+                  >
+                    {item.label}
+                  </a>
+                ) : (
+                  item.label
+                )}
+              </Breadcrumb.Item>
             ))}
           </Breadcrumb>
         )}

@@ -9,7 +9,7 @@ import {
   StopOutlined,
 } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
-import { connect, useParams } from '@umijs/max';
+import { connect, history, useLocation, useParams } from '@umijs/max';
 import {
   Button,
   Card,
@@ -79,6 +79,16 @@ const parseJsonText = (value) => {
   } catch (e) {
     return text;
   }
+};
+
+const getSearchParams = (locationSearch = '') => {
+  const params = new URLSearchParams(locationSearch || '');
+  if ([...params.keys()].length > 0) {
+    return params;
+  }
+  const hash = window?.location?.hash || '';
+  const queryPart = hash.includes('?') ? hash.split('?')[1] : '';
+  return new URLSearchParams(queryPart || '');
 };
 
 const formatCompareValue = (value) => {
@@ -593,7 +603,9 @@ const VersionCompare = ({
 };
 
 const InterfaceEndpoint = () => {
-  const { service_id } = useParams();
+  const { service_id, endpoint_id } = useParams();
+  const location = useLocation();
+  const isDetailPage = Number(endpoint_id || 0) > 0;
   const [keyword, setKeyword] = useState('');
   const [urlKeyword, setUrlKeyword] = useState('');
   const [moduleName, setModuleName] = useState('');
@@ -602,6 +614,7 @@ const InterfaceEndpoint = () => {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const requestIdRef = useRef(0);
+  const pendingAutoOpenRef = useRef({ endpointId: 0, endpointUrl: '' });
 
   const [versionOpen, setVersionOpen] = useState(false);
   const [versions, setVersions] = useState([]);
@@ -618,6 +631,7 @@ const InterfaceEndpoint = () => {
   const [lineageData, setLineageData] = useState(null);
   const lineageGraphRef = useRef(null);
   const lineageGraphInstanceRef = useRef(null);
+  const autoOpenedRef = useRef(false);
 
   const fetchList = async (overrides = {}) => {
     if (!service_id) return;
@@ -641,12 +655,48 @@ const InterfaceEndpoint = () => {
       const nextModules = res.data?.modules || [];
       setList(nextList);
       setModuleOptions(nextModules);
+      if (!autoOpenedRef.current && pendingAutoOpenRef.current.endpointId > 0) {
+        const endpointId = pendingAutoOpenRef.current.endpointId;
+        const target = nextList.find((item) => Number(item?.id || 0) === endpointId);
+        autoOpenedRef.current = true;
+        openVersions(
+          target || {
+            id: endpointId,
+            name: `接口#${endpointId}`,
+            method: 'GET',
+            path: '',
+            full_url: '',
+            current_version_no: '-',
+          },
+        );
+      }
     }
   };
 
   useEffect(() => {
+    const search = getSearchParams(location?.search || '');
+    const endpointId = Number(endpoint_id || search.get('endpoint_id') || 0);
+    const endpointUrl = String(search.get('endpoint_url') || '');
+    if (endpointUrl) {
+      autoOpenedRef.current = false;
+      let decodedUrl = endpointUrl;
+      try {
+        decodedUrl = decodeURIComponent(endpointUrl);
+      } catch (e) {
+        decodedUrl = endpointUrl;
+      }
+      setUrlKeyword(decodedUrl);
+      pendingAutoOpenRef.current = { endpointId, endpointUrl: decodedUrl };
+      fetchList({ urlKeyword: decodedUrl });
+      return;
+    }
+    pendingAutoOpenRef.current = { endpointId, endpointUrl: '' };
     fetchList();
-  }, [service_id, moduleName, status]);
+  }, [service_id, endpoint_id, moduleName, status, location?.search]);
+
+  useEffect(() => {
+    autoOpenedRef.current = false;
+  }, [location?.search, service_id]);
 
   const endpointStats = useMemo(() => {
     const total = list.length;
@@ -1066,7 +1116,7 @@ const InterfaceEndpoint = () => {
       width: 320,
       render: (_, record) => (
         <Space size={12} wrap={false}>
-          <a onClick={() => openVersions(record)}>详情</a>
+          <a onClick={() => history.push(`/apiTest/interface/${service_id}/${record.id}`)}>详情</a>
           <Tooltip title={record.case_total ? '查看接口用例血缘' : '无关联接口用例'}>
             <a
               style={!record.case_total ? { color: '#c0c4cc', cursor: 'not-allowed' } : null}
@@ -1089,57 +1139,62 @@ const InterfaceEndpoint = () => {
   return (
     <PageContainer title={false} breadcrumb={null}>
       <div className="interface-endpoint-page">
-        <Row gutter={[16, 16]} className="interface-endpoint-stats">
-          <Col xs={12} md={6}>
-            <Card bordered={false}><Statistic title="接口总数" value={endpointStats.total} prefix={<ApiOutlined />} /></Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card bordered={false}><Statistic title="可用接口" value={endpointStats.available} prefix={<CheckCircleOutlined />} /></Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card bordered={false}><Statistic title="废弃接口" value={endpointStats.deprecated} prefix={<StopOutlined />} /></Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card bordered={false}><Statistic title="功能模块" value={endpointStats.modules} prefix={<BranchesOutlined />} /></Card>
-          </Col>
-        </Row>
+        {!isDetailPage ? (
+          <Row gutter={[16, 16]} className="interface-endpoint-stats">
+            <Col xs={12} md={6}>
+              <Card bordered={false}><Statistic title="接口总数" value={endpointStats.total} prefix={<ApiOutlined />} /></Card>
+            </Col>
+            <Col xs={12} md={6}>
+              <Card bordered={false}><Statistic title="可用接口" value={endpointStats.available} prefix={<CheckCircleOutlined />} /></Card>
+            </Col>
+            <Col xs={12} md={6}>
+              <Card bordered={false}><Statistic title="废弃接口" value={endpointStats.deprecated} prefix={<StopOutlined />} /></Card>
+            </Col>
+            <Col xs={12} md={6}>
+              <Card bordered={false}><Statistic title="功能模块" value={endpointStats.modules} prefix={<BranchesOutlined />} /></Card>
+            </Col>
+          </Row>
+        ) : null}
 
-        <Card bordered={false} className="interface-endpoint-card">
-          <div className="interface-endpoint-toolbar">
-            <Space wrap>
-              <Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索接口名称" style={{ width: 220 }} />
-              <Input value={urlKeyword} onChange={(e) => setUrlKeyword(e.target.value)} placeholder="URL模糊查询" style={{ width: 220 }} />
-              <Select
-                allowClear
-                value={moduleName || undefined}
-                style={{ width: 200 }}
-                placeholder="选择功能模块"
-                options={(moduleOptions || []).map((item) => ({ label: item, value: item }))}
-                onChange={(value) => setModuleName(value || '')}
-              />
-              <Select
-                allowClear
-                value={status || undefined}
-                style={{ width: 140 }}
-                placeholder="接口状态"
-                options={[{ label: '可用', value: 'available' }, { label: '废弃', value: 'deprecated' }]}
-                onChange={(value) => setStatus(value || '')}
-              />
-              <Button type="primary" onClick={fetchList}>查询</Button>
-              <Button onClick={onReset}>重置</Button>
-            </Space>
-          </div>
-          <Table
-            rowKey="id"
-            columns={endpointColumns}
-            dataSource={list}
-            loading={loading}
-            scroll={{ x: 980 }}
-            rowClassName={(record) => (record.endpoint_status === 'deprecated' ? 'interface-endpoint-row deprecated' : 'interface-endpoint-row')}
-          />
-        </Card>
+        {!isDetailPage ? (
+          <Card bordered={false} className="interface-endpoint-card">
+            <div className="interface-endpoint-toolbar">
+              <Space wrap>
+                <Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索接口名称" style={{ width: 220 }} />
+                <Input value={urlKeyword} onChange={(e) => setUrlKeyword(e.target.value)} placeholder="URL模糊查询" style={{ width: 220 }} />
+                <Select
+                  allowClear
+                  value={moduleName || undefined}
+                  style={{ width: 200 }}
+                  placeholder="选择功能模块"
+                  options={(moduleOptions || []).map((item) => ({ label: item, value: item }))}
+                  onChange={(value) => setModuleName(value || '')}
+                />
+                <Select
+                  allowClear
+                  value={status || undefined}
+                  style={{ width: 140 }}
+                  placeholder="接口状态"
+                  options={[{ label: '可用', value: 'available' }, { label: '废弃', value: 'deprecated' }]}
+                  onChange={(value) => setStatus(value || '')}
+                />
+                <Button type="primary" onClick={fetchList}>查询</Button>
+                <Button onClick={onReset}>重置</Button>
+              </Space>
+            </div>
+            <Table
+              rowKey="id"
+              columns={endpointColumns}
+              dataSource={list}
+              loading={loading}
+              scroll={{ x: 980 }}
+              rowClassName={(record) => (record.endpoint_status === 'deprecated' ? 'interface-endpoint-row deprecated' : 'interface-endpoint-row')}
+            />
+          </Card>
+        ) : null}
       </div>
 
+      {!isDetailPage ? (
       <Drawer
         width="72vw"
         title={(
@@ -1150,7 +1205,9 @@ const InterfaceEndpoint = () => {
           </Space>
         )}
         open={versionOpen}
-        onClose={() => setVersionOpen(false)}
+        onClose={() => {
+          setVersionOpen(false);
+        }}
         className="interface-version-drawer"
       >
         <Row gutter={16} className="interface-version-layout">
@@ -1218,6 +1275,70 @@ const InterfaceEndpoint = () => {
           </Col>
         </Row>
       </Drawer>
+      ) : (
+        <Card bordered={false} style={{ marginTop: 16 }}>
+          <Row gutter={16} className="interface-version-layout">
+            <Col span={7}>
+              <Card
+                bordered={false}
+                className="interface-version-sidebar"
+                title={(
+                  <Space>
+                    <BranchesOutlined />
+                    <span>版本时间线</span>
+                    <Tag>{versions.length}</Tag>
+                  </Space>
+                )}
+              >
+                <VersionTimeline versions={versions} activeId={detailVersionId} onSelect={setDetailVersionId} />
+              </Card>
+            </Col>
+            <Col span={17}>
+              <Card bordered={false} className="interface-version-workbench">
+                <Tabs
+                  items={[
+                    {
+                      key: 'detail',
+                      label: '版本快照',
+                      children: <VersionDetail detail={detailData} />,
+                    },
+                    {
+                      key: 'sample',
+                      label: '实例样本',
+                      children: (
+                        <SamplePanel
+                          endpoint={detailData || current}
+                          sample={sampleDetail}
+                          editing={sampleEditing}
+                          onEdit={() => setSampleEditing(true)}
+                          onCancelEdit={() => setSampleEditing(false)}
+                          onSubmit={onManualInputSample}
+                          submitting={sampleSubmitting}
+                        />
+                      ),
+                    },
+                    {
+                      key: 'diff',
+                      label: '版本对比',
+                      children: (
+                        <VersionCompare
+                          versions={versions}
+                          leftVersionId={leftVersionId}
+                          rightVersionId={rightVersionId}
+                          setLeftVersionId={setLeftVersionId}
+                          setRightVersionId={setRightVersionId}
+                          onCompare={onCompareVersion}
+                          compareResult={compareResult}
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </Card>
+      )}
 
       <Drawer
         title="接口血缘"

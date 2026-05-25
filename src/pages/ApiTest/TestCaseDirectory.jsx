@@ -83,9 +83,9 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   } = testcase;
   const [currentNode, setCurrentNode] = useState(null);
   const [rootModal, setRootModal] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [record, setRecord] = useState({});
   const [modalTitle, setModalTitle] = useState('新建目录');
+  const [editing, setEditing] = useState(false);
   const [addCaseVisible, setAddCaseVisible] = useState(false);
   const [form] = Form.useForm();
   const [addForm] = Form.useForm();
@@ -559,7 +559,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       return;
     }
     const res = await fetchTestcaseDirectoryTree({project_id: targetProjectId, move: true});
-    if (auth.response(res, true)) {
+    if (auth.response(res, false)) {
       setCopyDirectoryTree(res.data || []);
     }
   };
@@ -1120,6 +1120,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
             <Select
               allowClear
               showSearch
+              style={{width: '100%'}}
               value={pendingReviewQuery.project_id}
               placeholder="选择项目"
               onChange={(value) => setPendingReviewQuery((prev) => ({...prev, project_id: value}))}
@@ -1321,15 +1322,15 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                               overflowCount={99}
                               color="red"
                               offset={[4, 2]}
-                            countStyle={{
-                              minWidth: 17,
-                              height: 17,
-                              lineHeight: '17px',
-                              padding: '0 1px',
-                              fontSize: 8,
-                              borderRadius: 8,
-                              zIndex: 2,
-                            }}
+                              countStyle={{
+                                minWidth: 17,
+                                height: 17,
+                                lineHeight: '17px',
+                                padding: '0 1px',
+                                fontSize: 8,
+                                borderRadius: 8,
+                                zIndex: 2,
+                              }}
                               style={{display: pendingReviewRows.length > 0 ? 'inline-block' : 'none'}}
                             >
                               <Button

@@ -75,14 +75,30 @@ export default [
     routes: [
       {
         path: '/asset/interface',
-        name: '接口管理',
-        component: './ApiTest/InterfaceService',
-      },
-      {
-        path: '/asset/interface/:service_id',
-        name: '接口列表',
-        hideInMenu: true,
-        component: './ApiTest/InterfaceEndpoint',
+        name: '服务管理',
+        routes: [
+          {
+            path: '/asset/interface',
+            component: './ApiTest/InterfaceService',
+          },
+          {
+            path: '/asset/interface/:service_id',
+            name: '接口列表',
+            hideInMenu: true,
+            routes: [
+              {
+                path: '/asset/interface/:service_id',
+                component: './ApiTest/InterfaceEndpoint',
+              },
+              {
+                path: '/asset/interface/:service_id/:endpoint_id',
+                name: '接口详情',
+                hideInMenu: true,
+                component: './ApiTest/InterfaceEndpoint',
+              },
+            ],
+          },
+        ],
       },
       {
         path: '/asset/record',
@@ -104,21 +120,26 @@ export default [
       {
         path: '/scenario/testcase',
         name: '接口用例',
-        component: './ApiTest/TestCaseDirectory',
-      },
-      {
-        path: '/scenario/testcase/:directory/add',
-        name: '添加用例',
-        hideInMenu: true,
-        keepAlive: false,
-        component: './ApiTest/TestCaseComponent',
-      },
-      {
-        path: '/scenario/testcase/:directory/:case_id',
-        name: '编辑用例',
-        hideInMenu: true,
-        keepAlive: false,
-        component: './ApiTest/TestCaseComponent',
+        routes: [
+          {
+            path: '/scenario/testcase',
+            component: './ApiTest/TestCaseDirectory',
+          },
+          {
+            path: '/scenario/testcase/:directory/add',
+            name: '添加用例',
+            hideInMenu: true,
+            keepAlive: false,
+            component: './ApiTest/TestCaseComponent',
+          },
+          {
+            path: '/scenario/testcase/:directory/:case_id',
+            name: '用例详情',
+            hideInMenu: true,
+            keepAlive: false,
+            component: './ApiTest/TestCaseComponent',
+          },
+        ],
       },
       {
         path: '/scenario/functionalCase',
@@ -192,6 +213,11 @@ export default [
     path: '/apiTest/interface/:service_id',
     hideInMenu: true,
     redirect: '/asset/interface/:service_id',
+  },
+  {
+    path: '/apiTest/interface/:service_id/:endpoint_id',
+    hideInMenu: true,
+    redirect: '/asset/interface/:service_id/:endpoint_id',
   },
   {
     path: '/apiTest/record',
