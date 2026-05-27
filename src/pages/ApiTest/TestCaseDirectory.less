@@ -155,6 +155,35 @@
   min-height: calc(100vh - 150px);
 }
 
+.pitySplit.tree-collapsed .Pane1 {
+  width: 0 !important;
+  min-width: 0 !important;
+  padding-right: 0 !important;
+  overflow: hidden !important;
+}
+
+.pitySplit.tree-collapsed .Pane2 {
+  left: 0 !important;
+  width: 100% !important;
+  padding-left: 0 !important;
+}
+
+.pitySplit.tree-collapsed .Resizer {
+  display: none !important;
+}
+
+.interface-tree-restore {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 9;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 4px;
+}
+
 .interface-project-switch {
   padding: 8px 12px 2px;
 }

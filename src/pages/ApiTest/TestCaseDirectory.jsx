@@ -44,6 +44,7 @@ import {
   QuestionCircleOutlined,
   ReloadOutlined,
   DoubleLeftOutlined,
+  DoubleRightOutlined,
   RocketOutlined,
   RobotOutlined,
   SaveOutlined,
@@ -116,6 +117,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewingCase, setReviewingCase] = useState(null);
   const [reviewStatus, setReviewStatus] = useState('no_impact');
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [aiForm] = Form.useForm();
 
   const [bodyType, setBodyType] = useState(0);
@@ -1284,22 +1286,24 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
             />
             <div className="pitySplitWrap">
               <SplitPane
-                className="pitySplit"
+                className={`pitySplit ${treeCollapsed ? 'tree-collapsed' : ''}`}
                 style={{height: '100%'}}
                 split="vertical"
-                minSize={260}
+                size={treeCollapsed ? 0 : undefined}
+                minSize={0}
                 maxSize={800}
+                allowResize={!treeCollapsed}
                 primary="first"
               >
               <ScrollCard className="card" hideOverflowX={true}>
                 <div className="interface-tree-header">
                   <strong>接口用例树</strong>
-                  <Tooltip title="收起功能暂不可用">
+                  <Tooltip title="收起接口用例树">
                     <Button
                       size="small"
                       type="text"
                       icon={<DoubleLeftOutlined />}
-                      disabled
+                      onClick={() => setTreeCollapsed(true)}
                     />
                   </Tooltip>
                 </div>
@@ -1537,6 +1541,16 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                 )}
               </ScrollCard>
               </SplitPane>
+              {treeCollapsed ? (
+                <Tooltip title="展开接口用例树">
+                  <Button
+                    className="interface-tree-restore"
+                    size="small"
+                    icon={<DoubleRightOutlined />}
+                    onClick={() => setTreeCollapsed(false)}
+                  />
+                </Tooltip>
+              ) : null}
             </div>
           </Row>
         </Card>
