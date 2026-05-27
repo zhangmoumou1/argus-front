@@ -101,14 +101,14 @@ export default [
         ],
       },
       {
-        path: '/asset/record',
-        name: '接口录制',
-        component: './ApiTest/TestCaseRecorder',
-      },
-      {
         path: '/asset/mock',
         name: 'Mock服务',
         component: './ApiTest/MockConfig',
+      },
+      {
+        path: '/asset/record',
+        name: '接口录制',
+        component: './ApiTest/TestCaseRecorder',
       },
     ],
   },

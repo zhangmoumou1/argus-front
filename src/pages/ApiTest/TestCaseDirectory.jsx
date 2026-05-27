@@ -43,6 +43,7 @@ import {
   PlusOutlined,
   QuestionCircleOutlined,
   ReloadOutlined,
+  DoubleLeftOutlined,
   RocketOutlined,
   RobotOutlined,
   SaveOutlined,
@@ -455,6 +456,20 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
     listTestcase();
   }, [currentDirectory]);
 
+  useEffect(() => {
+    if (!directory || directory.length === 0) {
+      return;
+    }
+    const currentKey = currentDirectory?.[0];
+    const keyExists = directory.some((item) => item.key === currentKey);
+    if (!currentKey || !keyExists) {
+      saveCase({
+        currentDirectory: [directory[0].key],
+        selectedRowKeys: [],
+      });
+    }
+  }, [directory]);
+
   const save = (data) => {
     dispatch({
       type: 'project/save',
@@ -464,8 +479,11 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       type: 'testcase/save',
       payload: {currentDirectory: []},
     });
-    // 把项目id写入localStorage
-    localStorage.setItem('project_id', data.project_id);
+    if (data.project_id !== undefined && data.project_id !== null) {
+      localStorage.setItem('project_id', data.project_id);
+    } else {
+      localStorage.removeItem('project_id');
+    }
   };
 
   const saveCase = (data) => {
@@ -669,8 +687,9 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       name: 'name',
       label: '目录名称',
       required: true,
-      placeholder: '请输入目录名称, 不超过18个字符',
+      placeholder: '请输入目录名称',
       type: 'input',
+      component: <Input maxLength={18} showCount placeholder="请输入目录名称"/>,
     },
   ];
 
@@ -766,8 +785,8 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
 
   const AddDirectory = (
     <Tooltip title="点击可新建根目录, 子目录需要在树上新建">
-      <a
-        className="directoryButton"
+      <span
+        className="directoryButton interface-tree-add-btn"
         onClick={() => {
           setRootModal(true);
           setRecord({name: ''});
@@ -775,8 +794,8 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
           setCurrentNode(null);
         }}
       >
-        <PlusOutlined/>
-      </a>
+        <PlusOutlined className="interface-tree-add-icon"/>
+      </span>
     </Tooltip>
   );
 
@@ -1212,7 +1231,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
         />
       ) : (
         <Card
-          style={{height: '100%', minHeight: 600}}
+          style={{height: '100%', minHeight: 'calc(100vh - 150px)'}}
           bodyStyle={{padding: 0}}
           bordered={false}
         >
@@ -1263,94 +1282,82 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
               visible={recorderModal}
               setVisible={setRecorderModal}
             />
-            <SplitPane
-              className="pitySplit"
-              split="vertical"
-              minSize={260}
-              defaultSize={300}
-              maxSize={800}
-            >
+            <div className="pitySplitWrap">
+              <SplitPane
+                className="pitySplit"
+                style={{height: '100%'}}
+                split="vertical"
+                minSize={260}
+                maxSize={800}
+                primary="first"
+              >
               <ScrollCard className="card" hideOverflowX={true}>
-                <Row gutter={8}>
-                  <Col span={24}>
-                    <div style={{height: 40, lineHeight: '40px', overflow: 'visible'}}>
-                      {editing ? (
-                        <Select
-                          style={{marginLeft: 32, width: 150}}
-                          showSearch
-                          allowClear
-                          placeholder="请选择项目"
-                          value={project_id}
-                          autoFocus={true}
-                          onChange={(e) => {
-                            if (e !== undefined) {
-                              save({project_id: e});
-                            }
-                            setEditing(false);
-                          }}
-                          filterOption={(input, option) =>
-                            option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-                          }
-                        >
-                          {projects.map((v) => (
-                            <Option key={v.id} value={v.id}>
-                              {v.name}
-                            </Option>
-                          ))}
-                        </Select>
-                      ) : (
-                        <div onClick={() => setEditing(true)}>
-                          <span
-                            style={{
-                              display: 'inline-block',
-                              marginLeft: 8,
-                              fontWeight: 400,
-                              fontSize: 14,
-                            }}
-                          >
-                            {getProject().name}
-                          </span>
-                          <Switch
-                            style={{marginLeft: 12, cursor: 'pointer', lineHeight: '40px'}}
-                            theme="outline"
-                            size="16"
-                            fill="#7ed321"
-                          />
-                          <span style={{display: 'inline-block', paddingTop: 6}}>
-                            <Badge
-                              count={pendingReviewRows.length > 99 ? '99+' : pendingReviewRows.length}
-                              overflowCount={99}
-                              color="red"
-                              offset={[4, 2]}
-                              countStyle={{
-                                minWidth: 17,
-                                height: 17,
-                                lineHeight: '17px',
-                                padding: '0 1px',
-                                fontSize: 8,
-                                borderRadius: 8,
-                                zIndex: 2,
-                              }}
-                              style={{display: pendingReviewRows.length > 0 ? 'inline-block' : 'none'}}
-                            >
-                              <Button
-                                size="small"
-                                style={{marginLeft: 12}}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openPendingReviewModal();
-                                }}
-                              >
-                                变更用例
-                              </Button>
-                            </Badge>
-                          </span>
-                        </div>
-                      )}
+                <div className="interface-tree-header">
+                  <strong>接口用例树</strong>
+                  <Tooltip title="收起功能暂不可用">
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<DoubleLeftOutlined />}
+                      disabled
+                    />
+                  </Tooltip>
+                </div>
+                <div className="interface-project-switch">
+                  <Select
+                    className="interface-project-select"
+                    showSearch
+                    allowClear
+                    placeholder="请选择项目"
+                    value={project_id}
+                    onChange={(value) => {
+                      if (value !== undefined) {
+                        save({project_id: value});
+                      } else {
+                        save({project_id: undefined});
+                      }
+                    }}
+                    filterOption={(input, option) =>
+                      String(option?.children || '').toLowerCase().includes(input.toLowerCase())
+                    }
+                  >
+                    {projects.map((item) => (
+                      <Option key={item.id} value={item.id}>
+                        {item.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
+
+                  {pendingReviewRows.length > 0 && (
+                    <div
+                      onClick={openPendingReviewModal}
+                      style={{
+                        margin: '8px 12px 0',
+                        padding: '0 12px',
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)',
+                        border: '1px solid #fecdd3',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 1px 2px rgba(225, 29, 72, 0.04)',
+                        transition: 'all 0.2s',
+                        height: 32,
+                        boxSizing: 'border-box',
+                        width: 'calc(100% - 24px)',
+                      }}
+                      className="pending-reviews-btn"
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e11d48', fontSize: 12, fontWeight: 500 }}>
+                        <ExclamationCircleOutlined />
+                        <span>有 {pendingReviewRows.length} 个变更用例待处理</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: '#e11d48', fontWeight: 600 }}>&rarr;</span>
                     </div>
-                  </Col>
-                </Row>
-                <div style={{marginTop: 24}}>
+                  )}
+                <div className="interface-tree-body">
                   <Spin spinning={loading.effects['testcase/listTestcaseDirectory']}>
                     {directory.length > 0 ? (
                       <SearchTree
@@ -1529,7 +1536,8 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                   />
                 )}
               </ScrollCard>
-            </SplitPane>
+              </SplitPane>
+            </div>
           </Row>
         </Card>
       )}

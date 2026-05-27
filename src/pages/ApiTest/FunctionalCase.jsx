@@ -61,7 +61,7 @@ import {
   ZoomInOutlined,
   ZoomOutOutlined,
 } from '@ant-design/icons';
-import { FolderCode, Switch } from '@icon-park/react';
+import { FolderCode } from '@icon-park/react';
 import MindMap from 'simple-mind-map';
 import MindMapAssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine';
 import MindMapDrag from 'simple-mind-map/src/plugins/Drag';
@@ -908,7 +908,6 @@ const FunctionalCase = ({ project, dispatch }) => {
   const [moveDirectoryId, setMoveDirectoryId] = useState(null);
   const [moveSortIndex, setMoveSortIndex] = useState(0);
   const [nodeKey, setNodeKey] = useState(null);
-  const [editingProject, setEditingProject] = useState(false);
   const [formatPainterActive, setFormatPainterActive] = useState(false);
   const [formatPainterSourceUid, setFormatPainterSourceUid] = useState(null);
   const [hugeCaseModeOverride, setHugeCaseModeOverride] = useState(null);
@@ -3429,67 +3428,30 @@ const FunctionalCase = ({ project, dispatch }) => {
             </Tooltip>
           </div>
           <div className="functional-project-switch">
-            <div style={{ height: 40, lineHeight: '40px' }}>
-              {editingProject ? (
-                <Select
-                  style={{ marginLeft: 32, width: 150 }}
-                  showSearch
-                  allowClear
-                  placeholder="请选择项目"
-                  value={projectId}
-                  autoFocus
-                  onChange={(value) => {
-                    if (value !== undefined) {
-                      saveProject(value);
-                    }
-                    setEditingProject(false);
-                    setCurrentDirectory(null);
-                    setCurrentCase(null);
-                    destroyMindMap();
-                  }}
-                  filterOption={(input, option) =>
-                    String(option?.children || '').toLowerCase().includes(input.toLowerCase())
-                  }
-                >
-                  {projects.map((item) => (
-                    <Option key={item.id} value={item.id}>
-                      {item.name}
-                    </Option>
-                  ))}
-                </Select>
-              ) : (
-                <div onClick={() => setEditingProject(true)}>
-                  <img
-                    src="/project.svg"
-                    alt="project"
-                    style={{
-                      width: 30,
-                      marginLeft: 8,
-                      marginRight: 6,
-                      display: 'inline-block',
-                      objectFit: 'contain',
-                      verticalAlign: 'middle',
-                    }}
-                  />
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      marginLeft: 12,
-                      fontWeight: 400,
-                      fontSize: 14,
-                    }}
-                  >
-                    {getProject()?.name || '请选择项目'}
-                  </span>
-                  <Switch
-                    style={{ marginLeft: 12, cursor: 'pointer', lineHeight: '40px' }}
-                    theme="outline"
-                    size="16"
-                    fill="#7ed321"
-                  />
-                </div>
-              )}
-            </div>
+            <Select
+              className="functional-project-select"
+              showSearch
+              allowClear
+              placeholder="请选择项目"
+              value={projectId}
+              onChange={(value) => {
+                if (value !== undefined) {
+                  saveProject(value);
+                }
+                setCurrentDirectory(null);
+                setCurrentCase(null);
+                destroyMindMap();
+              }}
+              filterOption={(input, option) =>
+                String(option?.children || '').toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {projects.map((item) => (
+                <Option key={item.id} value={item.id}>
+                  {item.name}
+                </Option>
+              ))}
+            </Select>
           </div>
           <div className="functional-tree-search">
             <Input
@@ -3812,7 +3774,13 @@ const FunctionalCase = ({ project, dispatch }) => {
         onOk={submitDirectory}
         onCancel={() => setDirectoryModal({ open: false, record: null, parent: null })}
       >
-        <Input placeholder="请输入目录名称" value={directoryName} onChange={(e) => setDirectoryName(e.target.value)} />
+        <Input
+          maxLength={18}
+          showCount
+          placeholder="请输入目录名称"
+          value={directoryName}
+          onChange={(e) => setDirectoryName(e.target.value)}
+        />
       </Modal>
 
       <Modal
@@ -3821,7 +3789,13 @@ const FunctionalCase = ({ project, dispatch }) => {
         onOk={submitCase}
         onCancel={() => setCaseModal({ open: false, record: null, directoryId: null })}
       >
-        <Input placeholder="请输入功能用例名称" value={caseTitle} onChange={(e) => setCaseTitle(e.target.value)} />
+        <Input
+          maxLength={18}
+          showCount
+          placeholder="请输入功能用例名称"
+          value={caseTitle}
+          onChange={(e) => setCaseTitle(e.target.value)}
+        />
       </Modal>
 
       <Modal

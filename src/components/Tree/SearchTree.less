@@ -10,23 +10,80 @@
 }
 
 .suffixButton {
-  float: right;
+  margin-left: auto;
+  flex: 0 0 auto;
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+  width: 44px;
 
   .icon-left {
-    margin-right: 4px;
+    margin-right: 8px;
   }
 
   .icon-right {
-    margin-right: 8px;
+    margin-right: 0;
   }
+
+  .icon-placeholder {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+  }
+
   :hover {
     color: #1890ff;
   }
 }
 
+.suffixButton.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ant-tree-treenode {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.ant-tree-node-content-wrapper {
+  width: 100%;
+}
+
+.ant-tree-treenode:hover .suffixButton,
+.ant-tree-node-content-wrapper:hover .suffixButton {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.search-tree-title {
+  width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-tree-main {
+  min-width: 0;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .folder {
   font-size: 15px;
   cursor: pointer;
-  margin-right: 8px;
+  margin-right: 6px;
 }

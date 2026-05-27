@@ -1,7 +1,7 @@
 import {Col, Dropdown, Input, Row, Tree} from 'antd';
 import React, {useState} from "react";
 import './SearchTree.less';
-import {FolderTwoTone, MoreOutlined, PlusOutlined, SearchOutlined} from "@ant-design/icons";
+import {FolderAddOutlined, FolderTwoTone, MoreOutlined, SearchOutlined} from "@ant-design/icons";
 import {FolderCode} from "@icon-park/react";
 
 const dataList = [];
@@ -38,7 +38,6 @@ export default ({treeData: gData, blockNode = true, onAddNode, menu, selectedKey
   const [expandedKeys, setExpandedKeys] = useState([]);
   const [searchValue, setSearchValue] = useState('');
   const [autoExpandParent, setAutoExpandParent] = useState(true);
-  const [nodeKey, setNodeKey] = useState(null);
 
   const onExpand = expandedKeys => {
     setExpandedKeys(expandedKeys);
@@ -105,13 +104,16 @@ export default ({treeData: gData, blockNode = true, onAddNode, menu, selectedKey
         treeData={loop(gData)}
         titleRender={(node) => {
           return (
-            <div onMouseOver={() => setNodeKey(node.key)} onMouseLeave={() => setNodeKey(null)}>
-              {/*<FolderTwoTone className="folder" twoToneColor="rgb(255, 173, 210)"/>*/}
-              <FolderCode theme="outline" size="15" className="folder"/>
-              {node.title}
+            <div
+              className="search-tree-title"
+            >
+              <span className="search-tree-main">
+                <FolderCode theme="outline" size="15" className="folder"/>
+                <span className="search-tree-label">{node.title}</span>
+              </span>
               {
-                nodeKey === node.key ? <span className="suffixButton">
-                <PlusOutlined onClick={event => {
+                <span className="suffixButton">
+                <FolderAddOutlined onClick={event => {
                   event.stopPropagation();
                   onAddNode(node)
                 }} className="icon-left"/>
@@ -120,7 +122,7 @@ export default ({treeData: gData, blockNode = true, onAddNode, menu, selectedKey
                         e.stopPropagation()
                       }}/>
                     </Dropdown>
-              </span> : null
+              </span>
               }
             </div>
           )
@@ -130,4 +132,3 @@ export default ({treeData: gData, blockNode = true, onAddNode, menu, selectedKey
   );
 
 }
-
