@@ -118,6 +118,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   const [reviewingCase, setReviewingCase] = useState(null);
   const [reviewStatus, setReviewStatus] = useState('no_impact');
   const [treeCollapsed, setTreeCollapsed] = useState(false);
+  const [treePaneSize, setTreePaneSize] = useState(320);
   const [aiForm] = Form.useForm();
 
   const [bodyType, setBodyType] = useState(0);
@@ -385,6 +386,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
         payload: {
           directory_id: currentDirectory[0],
           name: values.name || '',
+          url: values.url || '',
           create_user:
             values.create_user !== null && values.create_user !== undefined
               ? values.create_user
@@ -1286,14 +1288,20 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
             />
             <div className="pitySplitWrap">
               <SplitPane
+                key={treeCollapsed ? 'collapsed' : 'expanded'}
                 className={`pitySplit ${treeCollapsed ? 'tree-collapsed' : ''}`}
                 style={{height: '100%'}}
                 split="vertical"
-                size={treeCollapsed ? 0 : undefined}
+                size={treeCollapsed ? 0 : treePaneSize}
                 minSize={0}
                 maxSize={800}
                 allowResize={!treeCollapsed}
                 primary="first"
+                onChange={(size) => {
+                  if (!treeCollapsed && typeof size === 'number' && size >= 260) {
+                    setTreePaneSize(size);
+                  }
+                }}
               >
               <ScrollCard className="card" hideOverflowX={true}>
                 <div className="interface-tree-header">
@@ -1409,17 +1417,22 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                   <>
                     <Form form={form}>
                       <Row gutter={6}>
-                        <Col span={8}>
+                        <Col span={6}>
                           <Form.Item label="用例名称" {...layout} name="name">
                             <Input placeholder="输入用例名称"/>
                           </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col span={6}>
+                          <Form.Item label="接口地址" {...layout} name="url">
+                            <Input placeholder="输入接口地址"/>
+                          </Form.Item>
+                        </Col>
+                        <Col span={6}>
                           <Form.Item label="创建人" {...layout} name="create_user">
                             <UserSelect users={userList} placeholder="请选择创建用户"/>
                           </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col span={6}>
                           <div style={{float: 'right'}}>
                             <Button
                               type="primary"
