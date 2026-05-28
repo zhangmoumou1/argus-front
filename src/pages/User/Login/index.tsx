@@ -118,7 +118,7 @@ const Login: React.FC = () => {
           <h1 className="argux-auth-title">hello !</h1>
           <div key={type} className="argux-auth-stage">
             <p className="argux-auth-subtitle">
-              {type === 'register' ? '欢迎注册 Argux 测试工作台' : '欢迎回到 Argus 测试工作台'}
+              欢迎来到 Argus 智能测试平台，开启高质量交付
             </p>
             <div className="argux-auth-form-wrap">
               <div className="argux-auth-form">
