@@ -145,3 +145,14 @@ export async function queryFunctionalCaseSkillTask(params) {
     headers: auth.headers(),
   });
 }
+
+export async function uploadFunctionalCaseNodeImage(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request(`${CONFIG.URL}/functional-case/file/image/upload`, {
+    method: 'POST',
+    data: formData,
+    requestType: 'form',
+    headers: auth.headers(false),
+  });
+}

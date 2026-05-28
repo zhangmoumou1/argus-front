@@ -84,6 +84,7 @@ import {
   aiGenerateFunctionalCase,
   createFunctionalCaseSkillTask,
   queryFunctionalCaseSkillTask,
+  uploadFunctionalCaseNodeImage,
   updateFunctionalCaseDirectory,
   updateFunctionalCaseFile,
 } from '@/services/functionalCase';
@@ -466,6 +467,298 @@ const cloneMindData = (data) => {
   }
 };
 
+const tryParseJsonString = (value) => {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return null;
+  }
+};
+
+const parseOutlineTextToMindData = (value) => {
+  if (typeof value !== 'string') return null;
+  const lines = value
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\t/g, '  '))
+    .filter((line) => line.trim().length > 0);
+  if (lines.length === 0) return null;
+  const nodeList = lines.map((line) => {
+    const indent = line.match(/^\s*/)?.[0] || '';
+    const level = Math.floor(indent.length / 2);
+    const text = line.trim().replace(/^[-*+]\s+/, '') || '新节点';
+    return { level, text };
+  });
+  const root = { data: { text: nodeList[0].text }, children: [] };
+  const stack = [{ level: -1, node: root }];
+  nodeList.slice(1).forEach((item) => {
+    const node = { data: { text: item.text }, children: [] };
+    while (stack.length > 1 && stack[stack.length - 1].level >= item.level) {
+      stack.pop();
+    }
+    const parent = stack[stack.length - 1]?.node || root;
+    parent.children = parent.children || [];
+    parent.children.push(node);
+    stack.push({ level: item.level, node });
+  });
+  return root;
+};
+
+const extractTopicMarkers = (topic) => {
+  const directMarkers = Array.isArray(topic?.markers) ? topic.markers : [];
+  const markerRefs = Array.isArray(topic?.markerRefs) ? topic.markerRefs : [];
+  const extensionMarkers = Array.isArray(topic?.extensions)
+    ? topic.extensions.flatMap((ext) => {
+      if (Array.isArray(ext?.content?.markers)) return ext.content.markers;
+      if (Array.isArray(ext?.markers)) return ext.markers;
+      return [];
+    })
+    : [];
+  const all = [...directMarkers, ...markerRefs, ...extensionMarkers];
+  return all
+    .map((item) => {
+      if (!item) return '';
+      if (typeof item === 'string') return item;
+      return item.markerId || item.id || item.ref || item.marker || '';
+    })
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+};
+
+const collectMarkerHintsFromObject = (source, depth = 0) => {
+  if (!source || depth > 4) return [];
+  const results = [];
+  if (Array.isArray(source)) {
+    source.forEach((item) => {
+      results.push(...collectMarkerHintsFromObject(item, depth + 1));
+    });
+    return results;
+  }
+  if (typeof source !== 'object') return results;
+  Object.entries(source).forEach(([key, value]) => {
+    const keyText = String(key || '').toLowerCase();
+    const keyHit = /(marker|priority|progress|task|flag|status|icon)/.test(keyText);
+    if (typeof value === 'string' || typeof value === 'number') {
+      if (keyHit) {
+        results.push(`${key}:${value}`);
+        results.push(String(value));
+      }
+    } else if (Array.isArray(value) || (value && typeof value === 'object')) {
+      if (keyHit && value && typeof value === 'object' && !Array.isArray(value)) {
+        ['markerId', 'id', 'name', 'value', 'key', 'ref'].forEach((field) => {
+          if (value[field] !== undefined && value[field] !== null) {
+            results.push(String(value[field]));
+          }
+        });
+      }
+      results.push(...collectMarkerHintsFromObject(value, depth + 1));
+    }
+  });
+  return results;
+};
+
+const mapMarkerToIcon = (markerRaw) => {
+  const markerId = String(markerRaw || '').toLowerCase().trim();
+  const plainMarker = markerId.replace(/^.*[:/]/, '');
+  const priorityMatch = /priority[-_]?(\d+)/.exec(plainMarker) || /pri[-_]?(\d+)/.exec(plainMarker);
+  if (priorityMatch) {
+    const level = Math.max(1, Math.min(9, Number(priorityMatch[1] || 1)));
+    return `priority_${level}`;
+  }
+  const pMatch = /(?:^|\b)p([1-9])(?:\b|$)/.exec(plainMarker);
+  if (pMatch) {
+    return `priority_${Math.max(1, Math.min(9, Number(pMatch[1])))}`
+  }
+  const zhPriority = /优先级\s*([1-9])/.exec(plainMarker);
+  if (zhPriority) {
+    return `priority_${Math.max(1, Math.min(9, Number(zhPriority[1])))}`
+  }
+  const taskIndex = XMIND_TASK_MARKERS.findIndex((item) => plainMarker.endsWith(item));
+  if (taskIndex >= 0) {
+    return `progress_${Math.max(1, Math.min(8, taskIndex))}`;
+  }
+  const progressMatch = /task[-_]?(\d+)/.exec(plainMarker) || /progress[-_]?(\d+)/.exec(plainMarker);
+  if (progressMatch) {
+    const step = Math.max(1, Math.min(8, Number(progressMatch[1] || 1)));
+    return `progress_${step}`;
+  }
+  const percent = /([1-9]\d?|100)\s*%/.exec(plainMarker);
+  if (percent) {
+    const value = Number(percent[1]);
+    const step = Math.max(1, Math.min(8, Math.round((value / 100) * 8)));
+    return `progress_${step}`;
+  }
+  if (/(已完成|完成|done|completed)/.test(plainMarker)) return 'progress_8';
+  if (/(未开始|start|todo|待处理)/.test(plainMarker)) return 'progress_1';
+  if (/(进行中|in[\s_-]?progress|doing)/.test(plainMarker)) return 'progress_4';
+  return null;
+};
+
+const collectHtmlMarkerValues = (element) => {
+  if (!(element instanceof HTMLElement)) return [];
+  const values = [];
+  const classNames = String(element.className || '').split(/\s+/).filter(Boolean);
+  values.push(...classNames);
+  ['data-marker-id', 'data-marker', 'data-icon', 'title', 'alt', 'aria-label'].forEach((attr) => {
+    const value = element.getAttribute(attr);
+    if (value) values.push(value);
+  });
+  const descendants = element.querySelectorAll('*');
+  descendants.forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    const childClasses = String(node.className || '').split(/\s+/).filter(Boolean);
+    values.push(...childClasses);
+    ['data-marker-id', 'data-marker', 'data-icon', 'title', 'alt', 'aria-label'].forEach((attr) => {
+      const value = node.getAttribute(attr);
+      if (value) values.push(value);
+    });
+  });
+  return values;
+};
+
+const parseHtmlToMindData = (html) => {
+  if (typeof html !== 'string' || !html.trim()) return null;
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const rootList = doc.body.querySelector('ul,ol');
+    if (!rootList) return null;
+    const buildFromLi = (li) => {
+      const cloned = li.cloneNode(true);
+      const nestedList = cloned.querySelector(':scope > ul, :scope > ol');
+      if (nestedList) nestedList.remove();
+      const text = stripHtmlText(cloned.textContent || '').trim() || '新节点';
+      const rawMarkers = collectHtmlMarkerValues(li);
+      const iconList = rawMarkers.map((marker) => mapMarkerToIcon(marker)).filter(Boolean);
+      const node = {
+        data: {
+          text,
+        },
+        children: [],
+      };
+      if (iconList.length > 0) {
+        node.data.icon = normalizeNodeIcons(iconList);
+      }
+      const childList = li.querySelector(':scope > ul, :scope > ol');
+      if (childList) {
+        node.children = Array.from(childList.children || [])
+          .filter((child) => child.tagName?.toLowerCase?.() === 'li')
+          .map((child) => buildFromLi(child))
+          .filter(Boolean);
+      }
+      return node;
+    };
+    const topNodes = Array.from(rootList.children || [])
+      .filter((child) => child.tagName?.toLowerCase?.() === 'li')
+      .map((li) => buildFromLi(li))
+      .filter(Boolean);
+    if (topNodes.length === 0) return null;
+    if (topNodes.length === 1) return topNodes[0];
+    return {
+      data: { text: '粘贴内容' },
+      children: topNodes,
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+const extractEmbeddedJsonBlocks = (text) => {
+  if (typeof text !== 'string' || !text.trim()) return [];
+  const blocks = [];
+  const regexList = [
+    /\{[\s\S]*"rootTopic"[\s\S]*\}/g,
+    /\[[\s\S]*"rootTopic"[\s\S]*\]/g,
+    /\{[\s\S]*"marker[sR]?"[\s\S]*\}/g,
+  ];
+  regexList.forEach((regex) => {
+    let match = regex.exec(text);
+    while (match) {
+      blocks.push(match[0]);
+      match = regex.exec(text);
+    }
+  });
+  return Array.from(new Set(blocks)).slice(0, 10);
+};
+
+const parseRtfToMindData = (rtfText) => {
+  if (typeof rtfText !== 'string' || !rtfText.trim()) return null;
+  const embedded = extractEmbeddedJsonBlocks(rtfText);
+  for (const block of embedded) {
+    const parsed = tryParseJsonString(block);
+    const normalized = normalizeClipboardMindData(parsed);
+    if (normalized) return normalized;
+  }
+  return null;
+};
+
+const convertXMindTopicToMindNode = (topic) => {
+  if (!topic || typeof topic !== 'object') return null;
+  const markerHints = [
+    ...extractTopicMarkers(topic),
+    ...collectMarkerHintsFromObject(topic),
+    topic?.title,
+    topic?.name,
+  ];
+  const markerIcons = markerHints
+    .map((marker) => mapMarkerToIcon(marker))
+    .filter(Boolean);
+  const topicStyle = topic.style || {};
+  const textColor = topicStyle.color || topicStyle.fontColor || topicStyle.textColor;
+  const fillColor = topicStyle.fill || topicStyle.fillColor || topicStyle.backgroundColor;
+  const borderColor = topicStyle.borderColor || topicStyle.stroke || topicStyle.lineColor;
+  const node = {
+    data: {
+      text: stripHtmlText(topic.title || topic.name || '新节点'),
+    },
+    children: [],
+  };
+  if (topic.href) node.data.hyperlink = topic.href;
+  const plainNote = topic.notes?.plain?.content;
+  if (plainNote) node.data.note = stripHtmlText(plainNote);
+  if (markerIcons.length > 0) {
+    node.data.icon = normalizeNodeIcons(markerIcons);
+  }
+  if (Array.isArray(topic.labels) && topic.labels.length > 0) {
+    node.data.tag = topic.labels.filter(Boolean);
+  }
+  if (textColor) node.data.color = textColor;
+  if (fillColor) node.data.fillColor = fillColor;
+  if (borderColor) node.data.borderColor = borderColor;
+  if (topicStyle.fontSize !== undefined && topicStyle.fontSize !== null) {
+    node.data.fontSize = Number(topicStyle.fontSize) || topicStyle.fontSize;
+  }
+  if (topicStyle.fontWeight) node.data.fontWeight = topicStyle.fontWeight;
+  if (topicStyle.fontStyle) node.data.fontStyle = topicStyle.fontStyle;
+  const children = [
+    ...(topic.children?.attached || []),
+    ...(topic.children?.detached || []),
+  ];
+  node.children = children
+    .map((child) => convertXMindTopicToMindNode(child))
+    .filter(Boolean);
+  return node;
+};
+
+const normalizeClipboardMindData = (raw) => {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.root?.data || raw.data) {
+    return sanitizeMindData(raw);
+  }
+  if (raw.rootTopic) {
+    const root = convertXMindTopicToMindNode(raw.rootTopic);
+    return root ? sanitizeMindData(root) : null;
+  }
+  if (Array.isArray(raw) && raw[0]?.rootTopic) {
+    const root = convertXMindTopicToMindNode(raw[0].rootTopic);
+    return root ? sanitizeMindData(root) : null;
+  }
+  return null;
+};
+
 const normalizeNodeIcons = (icons) => {
   const rawIcons = Array.isArray(icons) ? icons : [icons].filter(Boolean);
   const priorityIcon = rawIcons.find((icon) => /^priority_\d+$/.test(icon));
@@ -473,6 +766,35 @@ const normalizeNodeIcons = (icons) => {
   const otherIcons = rawIcons.filter((icon) => icon !== priorityIcon && icon !== progressIcon);
   return [priorityIcon, progressIcon, ...otherIcons].filter(Boolean).slice(0, MAX_NODE_ICONS);
 };
+
+const normalizeNodeImageUrl = (imageValue) => {
+  if (!imageValue) return '';
+  if (typeof imageValue === 'string') return imageValue;
+  if (typeof imageValue === 'object') {
+    if (typeof imageValue.url === 'string') return imageValue.url;
+    if (typeof imageValue.src === 'string') return imageValue.src;
+  }
+  return '';
+};
+
+const loadImageNaturalSize = (url) => new Promise((resolve) => {
+  if (!url) {
+    resolve(null);
+    return;
+  }
+  const img = new window.Image();
+  img.onload = () => {
+    const width = Number(img.naturalWidth || img.width || 0);
+    const height = Number(img.naturalHeight || img.height || 0);
+    if (width > 0 && height > 0) {
+      resolve({ width, height });
+      return;
+    }
+    resolve(null);
+  };
+  img.onerror = () => resolve(null);
+  img.src = url;
+});
 
 const restoreIconsFromTags = (nodeData = {}) => {
   const rawTags = Array.isArray(nodeData.tag) ? nodeData.tag : [nodeData.tag].filter(Boolean);
@@ -899,6 +1221,8 @@ const FunctionalCase = ({ project, dispatch }) => {
   const [linkUrl, setLinkUrl] = useState('');
   const [linkTitle, setLinkTitle] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageUploading, setImageUploading] = useState(false);
+  const [nodeImagePreview, setNodeImagePreview] = useState({ open: false, url: '' });
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
   const [formulaText, setFormulaText] = useState('');
@@ -1207,6 +1531,9 @@ const FunctionalCase = ({ project, dispatch }) => {
         }
         if (mindRef.current.__nodeContextMenuHandler) {
           mindRef.current.off('node_contextmenu', mindRef.current.__nodeContextMenuHandler);
+        }
+        if (mindRef.current.__nodeImageClickHandler) {
+          mindRef.current.off('node_img_click', mindRef.current.__nodeImageClickHandler);
         }
         if (mindRef.current.__nodeIconClickHandler) {
           mindRef.current.off('node_icon_click', mindRef.current.__nodeIconClickHandler);
@@ -1592,6 +1919,13 @@ const FunctionalCase = ({ project, dispatch }) => {
         value: iconName,
       });
     };
+    const handleNodeImageClick = (node, imageEl, event) => {
+      const imageUrl = normalizeNodeImageUrl(node?.getData?.('image') || node?.nodeData?.data?.image);
+      if (!imageUrl) return;
+      event?.stopPropagation?.();
+      event?.preventDefault?.();
+      setNodeImagePreview({ open: true, url: imageUrl });
+    };
     const handleScaleSync = () => {
       requestAnimationFrame(syncScaleFromMind);
     };
@@ -1613,6 +1947,7 @@ const FunctionalCase = ({ project, dispatch }) => {
     instance.on('node_active', handleNodeActive);
     instance.on('node_dblclick', handleNodeDoubleClick);
     instance.on('node_icon_click', handleNodeIconClick);
+    instance.on('node_img_click', handleNodeImageClick);
     instance.on('node_contextmenu', handleNodeContextMenu);
     instance.on('contextmenu', handleCanvasContextMenu);
     instance.svg?.on?.('dblclick', handleCanvasDoubleClick);
@@ -1625,6 +1960,7 @@ const FunctionalCase = ({ project, dispatch }) => {
     instance.__formatPainterHandler = handleNodeActive;
     instance.__nodeDoubleClickHandler = handleNodeDoubleClick;
     instance.__nodeIconClickHandler = handleNodeIconClick;
+    instance.__nodeImageClickHandler = handleNodeImageClick;
     instance.__nodeContextMenuHandler = handleNodeContextMenu;
     instance.__canvasContextMenuHandler = handleCanvasContextMenu;
     instance.__canvasDoubleClickHandler = handleCanvasDoubleClick;
@@ -1980,6 +2316,32 @@ const FunctionalCase = ({ project, dispatch }) => {
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
+
+  useEffect(() => {
+    const isEditableTarget = (target) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = (target.tagName || '').toLowerCase();
+      if (['input', 'textarea', 'select'].includes(tag)) return true;
+      if (target.isContentEditable) return true;
+      return Boolean(target.closest('.ant-input, .ant-select, [contenteditable="true"]'));
+    };
+    const handlePaste = (event) => {
+      if (!currentCase || !mindRef.current) return;
+      if (isEditableTarget(event.target)) return;
+      const container = editorPanelRef.current || mindContainerRef.current;
+      if (container && event.target instanceof Node && !container.contains(event.target)) return;
+      const pastedData = getClipboardMindData(event);
+      if (!pastedData) return;
+      event.preventDefault();
+      const inserted = insertPastedDataAfterActiveNode(pastedData);
+      if (!inserted) {
+        applyImportedData(pastedData);
+        message.success('已在画布展示粘贴内容');
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [currentCase?.id]);
 
   const refreshTree = async () => {
     if (!projectId) return;
@@ -2441,14 +2803,62 @@ const FunctionalCase = ({ project, dispatch }) => {
       message.warning('请先选中脑图节点');
       return;
     }
-    setImageUrl(node.getData?.('image') || '');
+    setImageUrl(normalizeNodeImageUrl(node.getData?.('image')));
     setImageModal({ open: true });
   };
 
   const submitImage = () => {
     const url = imageUrl.trim();
-    execNodeCommand('SET_NODE_IMAGE', url ? { url } : { url: null });
+    if (!url) {
+      execNodeCommand('SET_NODE_IMAGE', { url: null });
+      setImageModal({ open: false });
+      return;
+    }
+    loadImageNaturalSize(url).then((size) => {
+      const payload = size ? { url, width: size.width, height: size.height } : { url };
+      execNodeCommand('SET_NODE_IMAGE', payload);
+    });
     setImageModal({ open: false });
+  };
+
+  const handleNodeImageUpload = async (file) => {
+    if (!file?.type?.startsWith?.('image/')) {
+      message.warning('仅支持上传图片文件');
+      return Upload.LIST_IGNORE;
+    }
+    try {
+      setImageUploading(true);
+      const res = await uploadFunctionalCaseNodeImage(file);
+      if (res?.code !== 0) {
+        message.warning(res?.msg || '图片上传失败，请重试');
+        return Upload.LIST_IGNORE;
+      }
+      const staticUrl = String(res?.data?.url || '').trim();
+      if (!staticUrl) {
+        message.warning('图片上传成功但未返回访问地址');
+        return Upload.LIST_IGNORE;
+      }
+      const backendBase = String(CONFIG.URL || '').replace(/\/$/, '');
+      const absoluteUrl = staticUrl.startsWith('http')
+        ? staticUrl
+        : `${backendBase}${staticUrl.startsWith('/') ? staticUrl : `/${staticUrl}`}`;
+      setImageUrl(absoluteUrl);
+      const activeNode = getActiveNode();
+      if (activeNode && mindRef.current) {
+        const size = await loadImageNaturalSize(absoluteUrl);
+        const payload = size
+          ? { url: absoluteUrl, width: size.width, height: size.height }
+          : { url: absoluteUrl };
+        mindRef.current.execCommand('SET_NODE_IMAGE', activeNode, payload);
+        markCaseDirty();
+      }
+      message.success('图片已上传，可预览后应用');
+    } catch (error) {
+      message.error(error?.message || '图片上传失败');
+    } finally {
+      setImageUploading(false);
+    }
+    return Upload.LIST_IGNORE;
   };
 
   const openAttachment = () => {
@@ -2624,6 +3034,97 @@ const FunctionalCase = ({ project, dispatch }) => {
     } else {
       mindRef.current.setData(data);
     }
+  };
+
+  const getClipboardMindData = (event) => {
+    const clipboard = event?.clipboardData;
+    if (!clipboard) return null;
+    const types = Array.from(clipboard.types || []);
+    const jsonText = clipboard.getData('application/json') || '';
+    const plainText = clipboard.getData('text/plain') || '';
+    const htmlText = clipboard.getData('text/html') || '';
+    const rtfText = clipboard.getData('text/rtf') || '';
+    window.__ARGUS_XMIND_CLIPBOARD_DEBUG__ = {
+      at: new Date().toISOString(),
+      types,
+      jsonPreview: String(jsonText || '').slice(0, 400),
+      htmlPreview: String(htmlText || '').slice(0, 400),
+      rtfPreview: String(rtfText || '').slice(0, 400),
+      plainPreview: String(plainText || '').slice(0, 200),
+    };
+    const candidates = [jsonText, plainText, htmlText].filter(Boolean);
+    for (const item of candidates) {
+      const parsedJson = tryParseJsonString(item);
+      const normalized = normalizeClipboardMindData(parsedJson);
+      if (normalized) return normalized;
+    }
+    const htmlEmbedded = extractEmbeddedJsonBlocks(htmlText);
+    for (const block of htmlEmbedded) {
+      const parsedJson = tryParseJsonString(block);
+      const normalized = normalizeClipboardMindData(parsedJson);
+      if (normalized) return normalized;
+    }
+    const rtfData = parseRtfToMindData(rtfText);
+    if (rtfData) return sanitizeMindData(rtfData);
+    const htmlData = parseHtmlToMindData(htmlText);
+    if (htmlData) return sanitizeMindData(htmlData);
+    const outlineData = parseOutlineTextToMindData(plainText);
+    return outlineData ? sanitizeMindData(outlineData) : null;
+  };
+
+  const insertPastedDataAfterActiveNode = (pastedData) => {
+    if (!mindRef.current || !currentCase) return false;
+    const activeNode = getActiveNode();
+    if (!activeNode) return false;
+    const activeUid = getNodeData(activeNode)?.uid;
+    if (!activeUid) return false;
+    const currentData = cloneMindData(getMindData() || currentCase.data || defaultCaseData(currentCase.title));
+    const root = getMindRootData(currentData);
+    const findNodeWithParent = (node, uid, parent = null) => {
+      if (!node) return null;
+      if (node?.data?.uid === uid) return { node, parent };
+      for (const child of node.children || []) {
+        const found = findNodeWithParent(child, uid, node);
+        if (found) return found;
+      }
+      return null;
+    };
+    const found = findNodeWithParent(root, activeUid);
+    if (!found) return false;
+    const pastedRoot = cloneMindData(getMindRootData(pastedData));
+    if (!pastedRoot) return false;
+    const hasStyledPayload = (node) => Boolean(
+      node?.data?.icon
+      || node?.data?.tag
+      || node?.data?.note
+      || node?.data?.hyperlink
+      || node?.data?.color
+      || node?.data?.fillColor
+      || node?.data?.borderColor,
+    );
+    const unwrapBatchNodes = (rootNode) => {
+      let nodes = Array.isArray(rootNode?.children) && rootNode.children.length > 0
+        ? rootNode.children
+        : [rootNode];
+      // 外部剪贴板常带一层“包装父节点”，这里自动解包，防止全部挤成一个节点。
+      while (
+        nodes.length === 1
+        && Array.isArray(nodes[0]?.children)
+        && nodes[0].children.length > 0
+        && !hasStyledPayload(nodes[0])
+      ) {
+        nodes = nodes[0].children;
+      }
+      return nodes;
+    };
+    const batchChildren = unwrapBatchNodes(pastedRoot);
+    found.node.children = found.node.children || [];
+    found.node.children.push(...batchChildren);
+    const merged = sanitizeMindData(currentData, currentCase.title);
+    applyImportedData(merged);
+    markCaseDirty();
+    message.success('已粘贴到当前节点下层');
+    return true;
   };
 
   const importJson = (event) => {
@@ -3135,6 +3636,7 @@ const FunctionalCase = ({ project, dispatch }) => {
     if (!currentCase) {
       return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择用例后编辑样式" />;
     }
+    const isHugeCase = Number(currentCase?.__nodeCount || 0) >= HUGE_CASE_NODE_THRESHOLD;
     if (activePanel === 'icon') {
       return (
         <div className="functional-panel-section">
@@ -3856,9 +4358,34 @@ const FunctionalCase = ({ project, dispatch }) => {
         title="设置图片"
         open={imageModal.open}
         onOk={submitImage}
-        onCancel={() => setImageModal({ open: false })}
+        onCancel={() => {
+          setImageModal({ open: false });
+        }}
       >
-        <Input placeholder="请输入图片 URL，留空可移除图片" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+        <Input
+          style={{ marginBottom: 12 }}
+          placeholder="请输入图片 URL，留空可移除图片"
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+        />
+        <Upload
+          accept="image/*"
+          showUploadList={false}
+          beforeUpload={handleNodeImageUpload}
+          disabled={imageUploading}
+        >
+          <Button loading={imageUploading} icon={<UploadOutlined />}>上传本地图片</Button>
+        </Upload>
+        {imageUrl ? (
+          <div style={{ marginTop: 12, border: '1px solid #f0f0f0', borderRadius: 8, padding: 8 }}>
+            <img
+              src={imageUrl}
+              alt="节点图片预览"
+              style={{ width: '100%', maxHeight: 220, objectFit: 'contain', display: 'block', cursor: 'zoom-in' }}
+              onClick={() => window.open(imageUrl, '_blank', 'noopener,noreferrer')}
+            />
+          </div>
+        ) : null}
       </Modal>
 
       <Modal
@@ -3869,6 +4396,22 @@ const FunctionalCase = ({ project, dispatch }) => {
       >
         <Input style={{ marginBottom: 12 }} placeholder="附件名称" value={attachmentName} onChange={(e) => setAttachmentName(e.target.value)} />
         <Input placeholder="附件 URL" value={attachmentUrl} onChange={(e) => setAttachmentUrl(e.target.value)} />
+      </Modal>
+
+      <Modal
+        title="节点图片预览"
+        open={nodeImagePreview.open}
+        footer={null}
+        width="72vw"
+        onCancel={() => setNodeImagePreview({ open: false, url: '' })}
+      >
+        {nodeImagePreview.url ? (
+          <img
+            src={nodeImagePreview.url}
+            alt="节点图片预览"
+            style={{ width: '100%', maxHeight: '72vh', objectFit: 'contain', display: 'block' }}
+          />
+        ) : null}
       </Modal>
 
       <Modal
