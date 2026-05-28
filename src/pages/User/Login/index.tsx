@@ -118,7 +118,7 @@ const Login: React.FC = () => {
           <h1 className="argux-auth-title">hello !</h1>
           <div key={type} className="argux-auth-stage">
             <p className="argux-auth-subtitle">
-              {type === 'register' ? '欢迎注册 Argux 测试工作台' : '欢迎回到 Argux 测试工作台'}
+              {type === 'register' ? '欢迎注册 Argux 测试工作台' : '欢迎回到 Argus 测试工作台'}
             </p>
             <div className="argux-auth-form-wrap">
               <div className="argux-auth-form">
@@ -207,10 +207,18 @@ const Login: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <ProFormCheckbox noStyle name="autoLogin">
-                        自动登录
-                      </ProFormCheckbox>
-                      <span className="argux-auth-hint">继续进入你的项目和用例协作空间</span>
+                      <div className="argux-auth-meta-left">
+                        <ProFormCheckbox noStyle name="autoLogin">
+                          自动登录
+                        </ProFormCheckbox>
+                      </div>
+                      <button
+                        type="button"
+                        className="argux-auth-switch-link argux-auth-meta-link"
+                        onClick={() => setForgotOpen(true)}
+                      >
+                        忘记密码
+                      </button>
                     </>
                   )}
                 </div>
@@ -220,20 +228,14 @@ const Login: React.FC = () => {
                 </button>
 
                 {type === 'account' ? (
-                  <div className="argux-auth-actions">
+                  <div className="argux-auth-register-row">
+                    <span className="argux-auth-register-hint">还没有账号？</span>
                     <button
                       type="button"
-                      className="argux-auth-action-button"
+                      className="argux-auth-switch-link argux-auth-register-link"
                       onClick={() => triggerTypeChange('register')}
                     >
-                      注册
-                    </button>
-                    <button
-                      type="button"
-                      className="argux-auth-switch-link"
-                      onClick={() => setForgotOpen(true)}
-                    >
-                      忘记密码
+                      立即注册
                     </button>
                   </div>
                 ) : null}

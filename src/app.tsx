@@ -297,7 +297,7 @@ export async function getInitialState(): Promise<{
     try {
       const token = localStorage.getItem('pityToken');
       if (!token) {
-        history.push(loginPath);
+        history.replace(loginPath);
         return;
       }
       const msg = await queryCurrentUser({ token });
@@ -321,7 +321,9 @@ export async function getInitialState(): Promise<{
       if (localUser) {
         return localUser;
       }
-      history.push(loginPath);
+      localStorage.removeItem('pityToken');
+      localStorage.removeItem('pityUser');
+      history.replace(loginPath);
     }
     return undefined;
   };

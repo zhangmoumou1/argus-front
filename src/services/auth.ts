@@ -64,6 +64,7 @@ export async function currentUser(params: Record<string, string>) {
   }>(`${CONFIG.URL}/auth/query`, {
     method: 'GET',
     params,
+    timeout: 3000,
   });
 }
 

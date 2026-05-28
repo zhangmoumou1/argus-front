@@ -170,7 +170,6 @@ const SplitMetricCard = ({
   total,
   apiValue,
   functionalValue,
-  suffix = '',
 }) => (
   <Card className="h-full" padding="p-4 md:p-4 pb-0">
     <div className="flex h-full flex-col">
@@ -181,27 +180,14 @@ const SplitMetricCard = ({
         <span className="text-[15px] font-normal leading-none text-gray-800">
           {label}
         </span>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] leading-6 text-gray-500">
-          <span>
-            总数：
-            <span className="ml-1 text-[13px] font-normal text-gray-800">
-              {total}
-              {suffix}
-            </span>
-          </span>
-          <span>
-            接口：
-            <span className="ml-1 text-[13px] font-normal text-gray-800">
-              {apiValue}
-            </span>
-          </span>
-          <span className="mx-2 text-gray-300">|</span>
-          <span>
-            功能：
-            <span className="ml-1 text-[13px] font-normal text-gray-800">
-              {functionalValue}
-            </span>
-          </span>
+        <div className="mt-1 flex flex-wrap items-center gap-y-0.5 text-[13px] font-normal leading-6 text-gray-500">
+          <span className="text-gray-500">总数：</span>
+          <span className="ml-1 text-[13px] font-normal text-gray-800">{total}</span>
+          <span className="ml-4 text-gray-500">接口：</span>
+          <span className="ml-1 text-[13px] font-normal text-gray-800">{apiValue}</span>
+          <span className="mx-3 text-gray-300">|</span>
+          <span className="text-gray-500">功能：</span>
+          <span className="ml-1 text-[13px] font-normal text-gray-800">{functionalValue}</span>
         </div>
       </div>
     </div>
@@ -1039,7 +1025,6 @@ const Workspace = ({ user, dispatch }) => {
             total={Number(case_count || 0)}
             apiValue={Number(api_case_count || 0)}
             functionalValue={Number(functional_case_count || 0)}
-            suffix="条"
           />
           <SplitMetricCard
             icon={<EditOutlined />}
@@ -1047,7 +1032,6 @@ const Workspace = ({ user, dispatch }) => {
             total={weeklyTotal}
             apiValue={weeklyApi}
             functionalValue={weeklyFunctional}
-            suffix="条"
           />
         </div>
 

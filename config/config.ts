@@ -150,6 +150,12 @@ export default defineConfig({
       projectName: 'swagger',
     },
   ],
-  mfsu: false,
+  /**
+   * @name MFSU 依赖预编译
+   * @description 大项目开发模式下能明显减少首屏等待和重复编译时间。
+   */
+  mfsu: {
+    strategy: 'normal',
+  },
   requestRecord: {},
 });

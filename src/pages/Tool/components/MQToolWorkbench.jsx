@@ -141,17 +141,19 @@ const MQToolWorkbench = ({ gconfig, dispatch, loading: modelLoading, mqType, pag
       setSelectedConfigId(null);
       return;
     }
-    if (!selectedConfigId || !rows.some((item) => item.id === selectedConfigId)) {
-      setSelectedConfigId(rows[0].id);
+    if (selectedConfigId && !rows.some((item) => item.id === selectedConfigId)) {
+      setSelectedConfigId(null);
     }
-  }, [rows]);
+  }, [rows, selectedConfigId]);
 
   useEffect(() => {
     if (!isKafka) return;
-    if (!selectedConfigId || current?.id === selectedConfigId) return;
+    // Kafka 页面进入后仅同步选中项，不自动触发连接请求。
+    if (!selectedConfigId) return;
+    if (current?.id === selectedConfigId) return;
     const target = rows.find((item) => item.id === selectedConfigId);
     if (target) {
-      onConnect(target);
+      setCurrent(target);
     }
   }, [isKafka, selectedConfigId, rows]);
 
@@ -474,6 +476,22 @@ const MQToolWorkbench = ({ gconfig, dispatch, loading: modelLoading, mqType, pag
               const key = (keys && keys[0]) || '';
               if (typeof key === 'string' && key.startsWith('cfg-')) {
                 const configId = parseInt(key.replace('cfg-', ''), 10);
+                if (selectedConfigId === configId) {
+                  // Click the selected node again => unselect and clear workspace.
+                  setSelectedConfigId(null);
+                  setCurrent(null);
+                  setActiveResource('overview');
+                  setKafkaTopics([]);
+                  setSelectedTopic('');
+                  setTopicMessages([]);
+                  setTopicPartitions([]);
+                  setSelectedPartition(null);
+                  setKafkaConsumerGroups([]);
+                  setSelectedConsumerGroup('');
+                  setConsumerGroupDetail(null);
+                  setRabbitQueues([]);
+                  return;
+                }
                 setSelectedConfigId(configId);
                 const target = rows.find((item) => item.id === configId);
                 if (target) {

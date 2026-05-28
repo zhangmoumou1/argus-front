@@ -1,12 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* Root wrapper for the TailAdmin-styled dashboard pages. */
 .tailadmin-scope {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Outfit', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 @layer utilities {
