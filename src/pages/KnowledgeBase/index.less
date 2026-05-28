@@ -119,60 +119,97 @@
 }
 
 .knowledge-hub__group-title {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--knowledge-muted);
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: #334155;
+}
+
+.knowledge-hub__group-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--knowledge-soft);
+  font-size: 10px;
+}
+
+.knowledge-hub__group-arrow .is-collapsed {
+  transform: rotate(0deg);
+  transition: transform 0.18s ease;
+}
+
+.knowledge-hub__group-arrow .is-expanded {
+  transform: rotate(90deg);
+  transition: transform 0.18s ease;
 }
 
 .knowledge-hub__group-title em {
   margin-left: auto;
   font-style: normal;
-  color: var(--knowledge-soft);
-}
-
-.knowledge-hub__group-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: var(--knowledge-accent);
+  color: #a0aec0;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .knowledge-hub__group-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  padding-left: 20px;
+}
+
+.knowledge-hub__group-list.is-collapsed {
+  display: none;
 }
 
 .knowledge-hub__item {
   width: 100%;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.16s ease, color 0.16s ease;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
 .knowledge-hub__item:hover {
-  background: #f8fafc;
+  background: #eaf2ff;
+  transform: translateX(1px);
 }
 
 .knowledge-hub__item.is-active {
-  background: #f1f5f9;
+  background: #e6f0ff;
+  box-shadow: none;
 }
 
 .knowledge-hub__item-title {
   display: block;
   font-size: 13px;
+  font-weight: 400;
   line-height: 1.5;
-  color: var(--knowledge-text);
+  color: #334155;
+}
+
+.knowledge-hub__item:hover .knowledge-hub__item-title {
+  color: #2563eb;
+}
+
+.knowledge-hub__item.is-active .knowledge-hub__item-title {
+  color: #2563eb;
+  font-weight: 600;
 }
 
 .knowledge-hub__main {

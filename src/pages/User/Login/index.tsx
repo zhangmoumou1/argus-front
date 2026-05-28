@@ -25,8 +25,8 @@ const Login: React.FC = () => {
   const pageStyle = useMemo(
     () => ({
       backgroundImage: LOGIN_BACKGROUND_IMAGE.trim()
-        ? `linear-gradient(135deg, rgba(31, 41, 70, 0.26), rgba(123, 92, 210, 0.16)), url(${LOGIN_BACKGROUND_IMAGE})`
-        : 'radial-gradient(circle at 18% 20%, rgba(255, 177, 164, 0.36), transparent 24%), radial-gradient(circle at 82% 18%, rgba(167, 179, 255, 0.32), transparent 26%), linear-gradient(135deg, #f4f1ff 0%, #f8efff 48%, #fff5f0 100%)',
+        ? `linear-gradient(135deg, rgba(27, 58, 126, 0.24), rgba(66, 114, 211, 0.16)), url(${LOGIN_BACKGROUND_IMAGE})`
+        : 'radial-gradient(circle at 18% 20%, rgba(132, 176, 255, 0.26), transparent 24%), radial-gradient(circle at 82% 18%, rgba(177, 211, 255, 0.28), transparent 26%), linear-gradient(135deg, #edf3ff 0%, #f4f8ff 48%, #f8fbff 100%)',
     }),
     [],
   );

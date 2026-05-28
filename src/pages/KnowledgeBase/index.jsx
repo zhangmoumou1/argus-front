@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Empty,
@@ -18,8 +18,8 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  FolderOpenOutlined,
   TagsOutlined,
+  CaretRightFilled,
 } from '@ant-design/icons';
 import 'highlight.js/styles/atom-one-dark.css';
 import { history, useLocation, useModel } from '@umijs/max';
@@ -66,6 +66,8 @@ const KnowledgeBase = () => {
   const [loading, setLoading] = useState(false);
   const [docs, setDocs] = useState([]);
   const [activeId, setActiveId] = useState(null);
+  const [collapsedMap, setCollapsedMap] = useState({});
+  const firstEnterRef = useRef(true);
 
   // 分类管理状态
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -88,10 +90,19 @@ const KnowledgeBase = () => {
         setDocs(list);
         if (list.length === 0) {
           setActiveId(null);
+          firstEnterRef.current = false;
           return;
         }
         const queryId = query.get('id');
         const hit = list.find((item) => String(item.id) === String(queryId));
+        if (!hit) {
+          const firstId = list[0]?.id;
+          if (firstId !== undefined && firstId !== null) {
+            setActiveId(firstId);
+            history.replace(`${routeBasePath}?id=${firstId}`);
+            return;
+          }
+        }
         setActiveId((prev) => {
           if (prev && list.some((item) => String(item.id) === String(prev))) {
             return prev;
@@ -127,6 +138,44 @@ const KnowledgeBase = () => {
   useEffect(() => {
     fetchCategories(true);
   }, []);
+
+  useEffect(() => {
+    if (!grouped.length) return;
+    setCollapsedMap((prev) => {
+      const next = {};
+      grouped.forEach((group, index) => {
+        next[group.category] = index === 0 ? false : (prev[group.category] ?? true);
+      });
+      return next;
+    });
+  }, [grouped]);
+
+  useEffect(() => {
+    if (!firstEnterRef.current) return;
+    if (!grouped?.length) return;
+    const firstGroup = grouped[0];
+    const firstId = firstGroup?.items?.[0]?.id;
+    if (!firstId) return;
+    const currentId = query.get('id');
+    const hasValidId = grouped.some((group) =>
+      (group.items || []).some((doc) => String(doc.id) === String(currentId)),
+    );
+    if (!hasValidId) {
+      history.replace(`${routeBasePath}?id=${firstId}`);
+      setActiveId(firstId);
+    }
+    setCollapsedMap((prev) => {
+      const next = { ...prev };
+      grouped.forEach((group, index) => {
+        if (next[group.category] === undefined) {
+          next[group.category] = index !== 0;
+        }
+      });
+      next[firstGroup.category] = false;
+      return next;
+    });
+    firstEnterRef.current = false;
+  }, [grouped, routeBasePath, location.search]);
 
   const grouped = useMemo(() => {
     const categoryMeta = new Map(
@@ -293,14 +342,25 @@ const KnowledgeBase = () => {
                 <div className="knowledge-hub__menu">
                   {grouped.map((group) => (
                     <div key={group.category} className="knowledge-hub__group">
-                      <div className="knowledge-hub__group-title">
-                        <span className="knowledge-hub__group-icon">
-                          <FolderOpenOutlined />
+                      <button
+                        type="button"
+                        className="knowledge-hub__group-title"
+                        onClick={() => {
+                          setCollapsedMap((prev) => ({
+                            ...prev,
+                            [group.category]: prev[group.category] === false,
+                          }));
+                        }}
+                      >
+                        <span className="knowledge-hub__group-arrow">
+                          <CaretRightFilled
+                            className={collapsedMap[group.category] !== false ? 'is-collapsed' : 'is-expanded'}
+                          />
                         </span>
                         <span>{group.category}</span>
                         <em>{group.items.length}</em>
-                      </div>
-                      <div className="knowledge-hub__group-list">
+                      </button>
+                      <div className={`knowledge-hub__group-list ${collapsedMap[group.category] !== false ? 'is-collapsed' : ''}`}>
                         {group.items.map((doc) => {
                           const active = String(doc.id) === String(activeId);
                           return (
