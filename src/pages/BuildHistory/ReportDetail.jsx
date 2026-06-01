@@ -268,7 +268,7 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
                                value={skippedCount}/>
                   </Card>
                 </Col>
-                <Col span={5}>
+                <Col span={4}>
                   <Card hoverable bordered={false} className={styles.statisticCard}>
                     <Statistic title="测试通过率" suffix="%"
                                value={common.calPercent(successCount, failedCount + successCount + errorCount)}
@@ -276,7 +276,6 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
                                  ? <LikeTwoTone/> : <FrownTwoTone/>}/>
                   </Card>
                 </Col>
-                <Col span={1}/>
               </Row>
               <Descriptions>
                 <Descriptions.Item label="测试环境">
