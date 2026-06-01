@@ -1,4 +1,4 @@
-import { BellOutlined, BgColorsOutlined, BookOutlined } from '@ant-design/icons';
+import { BellOutlined, BgColorsOutlined, FileTextOutlined } from '@ant-design/icons';
 import {useEmotionCss} from '@ant-design/use-emotion-css';
 import {history, useModel} from '@umijs/max';
 import {Badge, Tooltip} from 'antd';
@@ -61,7 +61,7 @@ const GlobalHeaderRight = ({ onOpenTheme }: GlobalHeaderRightProps) => {
             history.push('/knowledge');
           }}
         >
-          <BookOutlined />
+          <FileTextOutlined />
         </span>
       </Tooltip>
       <Tooltip title="消息中心">

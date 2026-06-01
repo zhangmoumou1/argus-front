@@ -39,9 +39,14 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
   const [reportLoading, setReportLoading] = useState(false);
   const {envMap, envList} = gconfig;
   const {userMap, userNameMap} = user;
+  const successCount = Number(reportDetail.success_count || 0);
+  const failedCount = Number(reportDetail.failed_count || 0);
+  const errorCount = Number(reportDetail.error_count || 0);
+  const skippedCount = Number(reportDetail.skipped_count || 0);
+  const totalCount = successCount + failedCount + errorCount + skippedCount;
 
   const getTag = () => {
-    if (reportDetail.failed_count === 0 && reportDetail.error_count === 0 && reportDetail.success_count > 0) {
+    if (failedCount === 0 && errorCount === 0 && successCount > 0) {
       return <Tag icon={<CheckCircleOutlined/>} color="success">
         通过
       </Tag>
@@ -69,15 +74,14 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
   }
 
   const getPieData = () => {
-    if (!reportDetail.success_count && !reportDetail.failed_count && !reportDetail.error_count) {
+    if (totalCount <= 0) {
       return [];
     }
-    const total = reportDetail.success_count + reportDetail.failed_count + reportDetail.error_count + reportDetail.skipped_count;
     return [
-      {name: '成功', count: reportDetail.success_count, percent: common.calPiePercent(reportDetail.success_count, total)},
-      {name: '失败', count: reportDetail.failed_count, percent: common.calPiePercent(reportDetail.failed_count, total)},
-      {name: '错误', count: reportDetail.error_count, percent: common.calPiePercent(reportDetail.error_count, total)},
-      {name: '跳过', count: reportDetail.skipped_count, percent: common.calPiePercent(reportDetail.skipped_count, total)},
+      {name: '成功', count: successCount},
+      {name: '失败', count: failedCount},
+      {name: '错误', count: errorCount},
+      {name: '跳过', count: skippedCount},
     ]
   }
 
@@ -233,40 +237,46 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
                 <Col span={4}>
                   <Card hoverable bordered={false} className={styles.statisticCard}>
                     <Statistic title="用例总数" valueStyle={{marginLeft: 8}}
-                               value={reportDetail.failed_count + reportDetail.success_count + reportDetail.error_count}
+                               value={totalCount}
                                prefix={<IconFont type="icon-yongliliebiao"/>}/>
                   </Card>
                 </Col>
                 <Col span={4}>
                   <Card hoverable bordered={false} className={styles.statisticCard}>
                     <Statistic title="成功数"
-                               value={reportDetail.success_count}
+                               value={successCount}
                                prefix={<CheckCircleTwoTone twoToneColor='rgb(63, 205, 127)'/>}/>
                   </Card>
                 </Col>
                 <Col span={4}>
                   <Card hoverable bordered={false} className={styles.statisticCard}>
                     <Statistic title="失败数" valueStyle={{marginLeft: 8}}
-                               value={reportDetail.failed_count}
+                               value={failedCount}
                                prefix={<CloseCircleTwoTone twoToneColor='rgb(230, 98, 97)'/>}/>
                   </Card>
                 </Col>
                 <Col span={4}>
                   <Card hoverable bordered={false} className={styles.statisticCard}>
                     <Statistic title="错误数" valueStyle={{marginLeft: 8}}
-                               value={reportDetail.error_count}
+                               value={errorCount}
                                prefix={<AlertTwoTone twoToneColor="rgb(250, 207, 76)"/>}/>
+                  </Card>
+                </Col>
+                <Col span={4}>
+                  <Card hoverable bordered={false} className={styles.statisticCard}>
+                    <Statistic title="跳过数" valueStyle={{marginLeft: 8}}
+                               value={skippedCount}/>
                   </Card>
                 </Col>
                 <Col span={5}>
                   <Card hoverable bordered={false} className={styles.statisticCard}>
                     <Statistic title="测试通过率" suffix="%"
-                               value={common.calPercent(reportDetail.success_count, reportDetail.failed_count + reportDetail.success_count + reportDetail.error_count)}
-                               prefix={common.calPercent(reportDetail.success_count, reportDetail.failed_count + reportDetail.success_count + reportDetail.error_count) > 90
+                               value={common.calPercent(successCount, failedCount + successCount + errorCount)}
+                               prefix={common.calPercent(successCount, failedCount + successCount + errorCount) > 90
                                  ? <LikeTwoTone/> : <FrownTwoTone/>}/>
                   </Card>
                 </Col>
-                <Col span={3}/>
+                <Col span={1}/>
               </Row>
               <Descriptions>
                 <Descriptions.Item label="测试环境">
@@ -282,7 +292,7 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
                   {reportConfig.EXECUTE_METHOD[reportDetail.mode]}
                 </Descriptions.Item>
                 <Descriptions.Item label="用例跳过数">
-                  {reportDetail.skipped_count}
+                  {skippedCount}
                 </Descriptions.Item>
                 <Descriptions.Item label="测试计划">
                   {planName || '无'}
@@ -301,7 +311,7 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
 
             </Col>
             <Col span={7}>
-              <Pie height={230} data={getPieData()} name="name" value="percent"/>
+              <Pie height={230} data={getPieData()} name="name" value="count"/>
             </Col>
           </Row>
         </Card>

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
+  Drawer,
   Empty,
   Input,
   Modal,
+  Tooltip,
   Form,
   Table,
   InputNumber,
@@ -20,6 +22,7 @@ import {
   DeleteOutlined,
   TagsOutlined,
   CaretRightFilled,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import 'highlight.js/styles/atom-one-dark.css';
 import { history, useLocation, useModel } from '@umijs/max';
@@ -34,6 +37,7 @@ import {
   deleteKnowledgeCategory,
 } from '@/services/configure';
 import { highlightKnowledgeHtml } from './store';
+import { renderMermaidInElement } from './mermaidRender';
 import './index.less';
 
 const PAGE_SIZE = 1000;
@@ -78,6 +82,12 @@ const KnowledgeBase = () => {
   const [categoryFormLoading, setCategoryFormLoading] = useState(false);
   const [categoryForm] = Form.useForm();
   const [previewImage, setPreviewImage] = useState('');
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [outlineItems, setOutlineItems] = useState([]);
+  const [outlineKeyword, setOutlineKeyword] = useState('');
+  const [contentSearchItems, setContentSearchItems] = useState([]);
+  const articleRef = useRef(null);
+  const activeHighlightTimerRef = useRef(null);
 
   const fetchDocs = async (title = '') => {
     setLoading(true);
@@ -178,6 +188,10 @@ const KnowledgeBase = () => {
   }, [grouped, routeBasePath, location.search]);
 
   const grouped = useMemo(() => {
+    const orderMap = new Map();
+    docs.forEach((doc, index) => {
+      orderMap.set(String(doc?.id), index);
+    });
     const categoryMeta = new Map(
       categories.map((item, index) => [
         String(item?.name || '').trim(),
@@ -188,28 +202,33 @@ const KnowledgeBase = () => {
       ]),
     );
     const map = new Map();
+    const categoryFirstDocOrder = new Map();
     docs.forEach((doc) => {
       const category = normalizeCategory(doc);
       if (!map.has(category)) {
         map.set(category, []);
       }
       map.get(category).push(doc);
+      if (!categoryFirstDocOrder.has(category)) {
+        categoryFirstDocOrder.set(category, orderMap.get(String(doc?.id)) ?? Number.MAX_SAFE_INTEGER);
+      }
     });
     return Array.from(map.entries())
       .map(([category, items]) => {
         const meta = categoryMeta.get(category) || {};
         return {
           category,
-          items: items.slice().sort((a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), 'zh-Hans-CN')),
+          items: items.slice(),
           sortOrder: meta.sortOrder ?? Number.MAX_SAFE_INTEGER,
           index: meta.index ?? Number.MAX_SAFE_INTEGER,
+          firstDocOrder: categoryFirstDocOrder.get(category) ?? Number.MAX_SAFE_INTEGER,
         };
       })
       .sort(
         (a, b) =>
           a.sortOrder - b.sortOrder ||
-          a.index - b.index ||
-          a.category.localeCompare(b.category, 'zh-Hans-CN'),
+          a.firstDocOrder - b.firstDocOrder ||
+          a.index - b.index,
       );
   }, [docs, categories]);
 
@@ -221,6 +240,92 @@ const KnowledgeBase = () => {
   const highlightedContent = useMemo(() => {
     return highlightKnowledgeHtml(activeDoc?.content || '');
   }, [activeDoc?.content]);
+
+  useEffect(() => {
+    renderMermaidInElement(articleRef.current);
+  }, [highlightedContent]);
+
+  useEffect(() => {
+    const container = articleRef.current;
+    if (!container) {
+      setOutlineItems([]);
+      setContentSearchItems([]);
+      return;
+    }
+    const headings = Array.from(container.querySelectorAll('h1, h2, h3, h4'));
+    const nextItems = headings
+      .map((node, index) => {
+        const rawText = (node.textContent || '').trim();
+        if (!rawText) return null;
+        const id = `kb-main-outline-heading-${index + 1}`;
+        node.id = id;
+        return {
+          id,
+          text: rawText,
+          level: Number(node.tagName?.replace('H', '') || 1),
+        };
+      })
+      .filter(Boolean);
+    setOutlineItems(nextItems);
+
+    const blocks = Array.from(container.querySelectorAll('p, li, td, blockquote, pre'));
+    const contentItems = blocks
+      .map((node, index) => {
+        const rawText = (node.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!rawText) return null;
+        const id = `kb-main-content-block-${index + 1}`;
+        node.id = node.id || id;
+        return {
+          id: node.id,
+          text: rawText,
+        };
+      })
+      .filter(Boolean);
+    setContentSearchItems(contentItems);
+  }, [highlightedContent, activeDoc?.id]);
+
+  const handleOutlineJump = (id) => {
+    const container = articleRef.current;
+    if (!container) return;
+    const target = container.querySelector(`#${id}`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (activeHighlightTimerRef.current) {
+      clearTimeout(activeHighlightTimerRef.current);
+      activeHighlightTimerRef.current = null;
+    }
+    container.querySelectorAll('.knowledge-jump-highlight').forEach((el) => {
+      el.classList.remove('knowledge-jump-highlight');
+    });
+    target.classList.add('knowledge-jump-highlight');
+    activeHighlightTimerRef.current = setTimeout(() => {
+      target.classList.remove('knowledge-jump-highlight');
+      activeHighlightTimerRef.current = null;
+    }, 1800);
+    setOutlineOpen(false);
+  };
+
+  useEffect(
+    () => () => {
+      if (activeHighlightTimerRef.current) {
+        clearTimeout(activeHighlightTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const normalizedKeyword = outlineKeyword.trim().toLowerCase();
+  const filteredOutlineItems = useMemo(() => {
+    if (!normalizedKeyword) return outlineItems;
+    return outlineItems.filter((item) => item.text.toLowerCase().includes(normalizedKeyword));
+  }, [outlineItems, normalizedKeyword]);
+
+  const filteredContentItems = useMemo(() => {
+    if (!normalizedKeyword) return [];
+    return contentSearchItems
+      .filter((item) => item.text.toLowerCase().includes(normalizedKeyword))
+      .slice(0, 20);
+  }, [contentSearchItems, normalizedKeyword]);
 
   const activeDocAuthor = activeDoc?.create_user_name || activeDoc?.author || '-';
   const getPageShareLink = () => {
@@ -306,7 +411,7 @@ const KnowledgeBase = () => {
           </div>
           <div className="knowledge-hub-topbar__actions">
             {!isPublicSharePage && (
-              <Button icon={<ArrowLeftOutlined />} onClick={() => history.back()}>
+              <Button icon={<ArrowLeftOutlined />} onClick={() => history.push('/dashboard/workspace')}>
                 返回
               </Button>
             )}
@@ -402,31 +507,11 @@ const KnowledgeBase = () => {
                     </div>
                     <p className="knowledge-hub__article-summary">摘要：{activeDoc.summary || '暂无摘要'}</p>
                   </div>
-                  <div className="knowledge-hub__article-actions">
-                    <Space wrap>
-                      {isSuperAdmin && (
-                        <>
-                          <Button icon={<EditOutlined />} onClick={() => history.push(`/knowledge/edit/${activeDoc.id}`)}>
-                            编辑
-                          </Button>
-                          <Popconfirm
-                            title="确认删除该文档吗？"
-                            okText="删除"
-                            cancelText="取消"
-                            onConfirm={() => handleDelete(activeDoc.id)}
-                          >
-                            <Button danger icon={<DeleteOutlined />}>
-                              删除
-                            </Button>
-                          </Popconfirm>
-                        </>
-                      )}
-                    </Space>
-                  </div>
                 </div>
 
                 <article className="knowledge-viewer knowledge-hub__article-body">
                   <div
+                    ref={articleRef}
                     className="knowledge-viewer-content w-e-text"
                     onClick={(event) => {
                       const target = event.target;
@@ -455,6 +540,98 @@ const KnowledgeBase = () => {
       >
         <img src={previewImage} alt="preview" style={{ width: '100%', height: 'auto', display: 'block' }} />
       </Modal>
+
+      {(outlineItems.length > 0 || (isSuperAdmin && activeDoc)) && (
+        <div className="knowledge-floating-dock">
+          {outlineItems.length > 0 && (
+            <Tooltip placement="left" title="文档大纲">
+              <Button
+                type="primary"
+                shape="circle"
+                icon={<UnorderedListOutlined />}
+                onClick={() => setOutlineOpen(true)}
+              />
+            </Tooltip>
+          )}
+          {isSuperAdmin && activeDoc && (
+            <>
+              <Tooltip placement="left" title="编辑文档">
+                <Button
+                  shape="circle"
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => history.push(`/knowledge/edit/${activeDoc.id}`)}
+                />
+              </Tooltip>
+              <Tooltip placement="left" title="删除文档">
+                <Popconfirm
+                  title="确认删除该文档吗？"
+                  okText="删除"
+                  cancelText="取消"
+                  onConfirm={() => handleDelete(activeDoc.id)}
+                >
+                  <Button danger shape="circle" icon={<DeleteOutlined />} />
+                </Popconfirm>
+              </Tooltip>
+            </>
+          )}
+        </div>
+      )}
+      {outlineItems.length > 0 && (
+        <Drawer
+          title="文档大纲"
+          placement="right"
+          width={320}
+          open={outlineOpen}
+          onClose={() => {
+            setOutlineOpen(false);
+            setOutlineKeyword('');
+          }}
+        >
+          <Input.Search
+            allowClear
+            value={outlineKeyword}
+            placeholder="全文模糊搜索（标题/正文）"
+            onChange={(e) => setOutlineKeyword(e.target.value)}
+            style={{ marginBottom: 12 }}
+          />
+          <div className="knowledge-outline-list">
+            {filteredOutlineItems.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={`knowledge-outline-item level-${Math.min(Math.max(item.level, 1), 4)}`}
+                onClick={() => handleOutlineJump(item.id)}
+              >
+                {item.text}
+              </button>
+            ))}
+            {normalizedKeyword && filteredOutlineItems.length === 0 && (
+              <div className="knowledge-outline-empty">标题无匹配</div>
+            )}
+          </div>
+          {normalizedKeyword && (
+            <div className="knowledge-outline-search-block">
+              <div className="knowledge-outline-search-title">正文匹配</div>
+              <div className="knowledge-outline-list">
+                {filteredContentItems.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className="knowledge-outline-item level-2"
+                    onClick={() => handleOutlineJump(item.id)}
+                  >
+                    {item.text.length > 52 ? `${item.text.slice(0, 52)}...` : item.text}
+                  </button>
+                ))}
+                {filteredContentItems.length === 0 && (
+                  <div className="knowledge-outline-empty">正文无匹配</div>
+                )}
+              </div>
+            </div>
+          )}
+        </Drawer>
+      )}
 
       <Modal
         title="分类管理"

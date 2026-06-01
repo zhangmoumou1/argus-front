@@ -412,7 +412,7 @@ export default [
   },
   {
     path: '/knowledge',
-    icon: 'book',
+    icon: 'read',
     name: '帮助文档',
     hideInMenu: true,
     component: './KnowledgeBase',

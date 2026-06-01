@@ -12,6 +12,41 @@ if (!window.__WANG_EDITOR_ATTACHMENT_REGISTERED__) {
   window.__WANG_EDITOR_ATTACHMENT_REGISTERED__ = true;
 }
 
+class MermaidMenu {
+  constructor() {
+    this.title = '流程图(Mermaid)';
+    this.tag = 'button';
+  }
+
+  getValue() {
+    return '';
+  }
+
+  isActive() {
+    return false;
+  }
+
+  isDisabled() {
+    return false;
+  }
+
+  exec(editor) {
+    editor.dangerouslyInsertHtml(
+      '<pre><code class="language-mermaid">flowchart TD\n  A[开始] --> B[处理]\n  B --> C[结束]</code></pre><p><br></p>',
+    );
+  }
+}
+
+if (!window.__WANG_EDITOR_MERMAID_MENU_REGISTERED__) {
+  Boot.registerMenu({
+    key: 'insertMermaidTemplate',
+    factory() {
+      return new MermaidMenu();
+    },
+  });
+  window.__WANG_EDITOR_MERMAID_MENU_REGISTERED__ = true;
+}
+
 const RichEditor = ({ value, onChange }) => {
   const [editor, setEditor] = useState(null);
 
@@ -33,6 +68,16 @@ const RichEditor = ({ value, onChange }) => {
   };
 
   const normalizedValue = normalizeHtmlAssets(value || '');
+  const toolbarConfig = useMemo(
+    () => ({
+      insertKeys: {
+        index: 34,
+        keys: ['insertMermaidTemplate'],
+      },
+    }),
+    [],
+  );
+
   const editorConfig = useMemo(
     () => ({
       placeholder: '请输入知识库文档内容...',
@@ -75,7 +120,7 @@ const RichEditor = ({ value, onChange }) => {
   return (
     <div className="knowledge-rich-editor">
       <div className="knowledge-rich-editor__toolbar">
-        <Toolbar editor={editor} mode="default" defaultConfig={{}} />
+        <Toolbar editor={editor} mode="default" defaultConfig={toolbarConfig} />
       </div>
       <Editor
         mode="default"

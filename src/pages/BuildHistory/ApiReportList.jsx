@@ -1,4 +1,4 @@
-import moment from 'moment';
+import dayjs from 'dayjs';
 import { PageContainer } from '@ant-design/pro-components';
 import { Button, Card, Col, DatePicker, Form, Row, Select, Table, Tag } from 'antd';
 import { CheckCircleTwoTone, CloseCircleTwoTone, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
@@ -109,22 +109,27 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
   const fetchReport = async () => {
     const value = await form.validateFields();
     const [startDate, endDate] = value.date || [];
+    if (!startDate || !endDate) return;
+    const start = startDate.startOf('day');
+    const end = endDate.endOf('day');
+    const start_time = start.format('YYYY-MM-DD HH:mm:ss');
+    const end_time = end.format('YYYY-MM-DD HH:mm:ss');
+    const { date, ...rest } = value;
     dispatch({
       type: 'report/fetchReportList',
       payload: {
-        ...value,
-        start_time: startDate.format('YYYY-MM-DD HH:mm:ss'),
-        end_time: endDate.format('YYYY-MM-DD HH:mm:ss'),
+        ...rest,
+        start_time,
+        end_time,
         page: pagination.current,
         size: pagination.pageSize,
-        date: null,
       },
     });
   };
 
   const onReset = () => {
     form.resetFields();
-    form.setFieldsValue({ date: [moment().startOf('week'), moment().endOf('week')] });
+    form.setFieldsValue({ date: [dayjs().startOf('week'), dayjs().endOf('week')] });
     fetchReport();
   };
 
@@ -152,13 +157,13 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
                 label="执行时间"
                 name="date"
                 rules={[{ required: true, message: '请选择开始/结束时间' }]}
-                initialValue={[moment().startOf('week'), moment().endOf('week')]}
+                initialValue={[dayjs().startOf('week'), dayjs().endOf('week')]}
               >
                 <RangePicker
                   ranges={{
-                    今天: [moment(), moment()],
-                    本周: [moment().startOf('week'), moment().endOf('week')],
-                    本月: [moment().startOf('month'), moment().endOf('month')],
+                    今天: [dayjs(), dayjs()],
+                    本周: [dayjs().startOf('week'), dayjs().endOf('week')],
+                    本月: [dayjs().startOf('month'), dayjs().endOf('month')],
                   }}
                   showTime
                   format="YYYY-MM-DD HH:mm:ss"
