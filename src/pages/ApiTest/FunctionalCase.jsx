@@ -1703,6 +1703,36 @@ const FunctionalCase = ({ project, dispatch }) => {
     return true;
   };
 
+  const insertSiblingNode = (position = 'after') => {
+    const node = getActiveNode();
+    if (!node) {
+      message.warning('请先选中脑图节点');
+      return false;
+    }
+    if (!mindRef.current) {
+      message.warning('请先选择功能用例');
+      return false;
+    }
+    if (node.isRoot) {
+      message.warning('根节点不支持前插或后插，请使用子节点');
+      return false;
+    }
+    if (node.isGeneralization) {
+      message.warning('概要节点不支持前插或后插');
+      return false;
+    }
+
+    mindRef.current.execCommand('INSERT_NODE');
+    if (position === 'before') {
+      requestAnimationFrame(() => {
+        if (!mindRef.current) return;
+        mindRef.current.execCommand('UP_NODE');
+      });
+    }
+    markCaseDirty();
+    return true;
+  };
+
   const getNodeData = (node) => {
     if (!node) return {};
     if (typeof node.getData === 'function') {
@@ -4148,10 +4178,10 @@ const FunctionalCase = ({ project, dispatch }) => {
                   <Button icon={<DoubleLeftOutlined />} disabled={!currentCase} onClick={() => execCommand('INSERT_PARENT_NODE')} />
                 </Tooltip>
                 <Tooltip title="前插节点">
-                  <Button icon={<span>↑</span>} disabled={!currentCase} onClick={() => execCommand('INSERT_BEFORE')} />
+                  <Button icon={<span>↑</span>} disabled={!currentCase} onClick={() => insertSiblingNode('before')} />
                 </Tooltip>
                 <Tooltip title="后插节点">
-                  <Button icon={<span>↓</span>} disabled={!currentCase} onClick={() => execCommand('INSERT_AFTER')} />
+                  <Button icon={<span>↓</span>} disabled={!currentCase} onClick={() => insertSiblingNode('after')} />
                 </Tooltip>
                 <Tooltip title="删除节点">
                   <Button icon={<DeleteOutlined />} disabled={!currentCase} onClick={() => execCommand('REMOVE_CURRENT_NODE')} />
@@ -4208,8 +4238,6 @@ const FunctionalCase = ({ project, dispatch }) => {
                     onClick={openSkillAIModal}
                   />
                 </Tooltip>
-              </div>
-              <div className="functional-toolbar-save">
                 <Tooltip title="保存">
                   <Button
                     className={`functional-save-button ${caseDirty ? 'is-dirty' : ''}`}
