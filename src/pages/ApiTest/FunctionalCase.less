@@ -371,6 +371,44 @@
       align-items: center;
       justify-content: center;
     }
+
+    .functional-save-button {
+      color: #ffffff;
+      border-color: #6b89e6;
+      background: linear-gradient(180deg, #7b97ee 0%, #6987df 100%);
+      box-shadow: 0 6px 14px rgba(71, 114, 211, 0.18);
+
+      &:hover,
+      &:focus {
+        color: #ffffff;
+        border-color: #5f7fd8;
+        background: linear-gradient(180deg, #7491ea 0%, #6280d7 100%);
+        box-shadow: 0 8px 18px rgba(71, 114, 211, 0.22);
+      }
+
+      &.is-dirty {
+        color: #ffffff;
+        border-color: #4f72d4;
+        background: linear-gradient(180deg, #6887e4 0%, #4e6fcd 100%);
+        box-shadow: 0 10px 22px rgba(63, 98, 197, 0.26);
+      }
+
+      &.is-dirty:hover,
+      &.is-dirty:focus {
+        color: #ffffff;
+        border-color: #4668c9;
+        background: linear-gradient(180deg, #6281df 0%, #4969c6 100%);
+        box-shadow: 0 12px 24px rgba(63, 98, 197, 0.30);
+      }
+
+      &.ant-btn[disabled],
+      &.ant-btn[disabled]:hover {
+        color: #ffffff;
+        border-color: #cfd7e6;
+        background: #c7d1e6;
+        box-shadow: none;
+      }
+    }
   }
 
   .functional-ai-trigger {

@@ -4211,7 +4211,13 @@ const FunctionalCase = ({ project, dispatch }) => {
               </div>
               <div className="functional-toolbar-save">
                 <Tooltip title="保存">
-                  <Button icon={<SaveOutlined />} loading={saving} disabled={!currentCase} onClick={saveMind} />
+                  <Button
+                    className={`functional-save-button ${caseDirty ? 'is-dirty' : ''}`}
+                    icon={<SaveOutlined />}
+                    loading={saving}
+                    disabled={!currentCase}
+                    onClick={saveMind}
+                  />
                 </Tooltip>
               </div>
             </div>
