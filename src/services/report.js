@@ -17,3 +17,10 @@ export async function queryReport(params) {
     headers: auth.headers(),
   });
 }
+
+export async function querySharedReport(params) {
+  return request(`${CONFIG.URL}/share/report`, {
+    method: 'GET',
+    params,
+  });
+}

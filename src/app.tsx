@@ -95,6 +95,12 @@ const isPublicKnowledgeShare = (locationLike?: { pathname?: string; search?: str
   return pathname === '/knowledge/docs';
 };
 
+const isPublicReportShare = (locationLike?: { pathname?: string; search?: string }) => {
+  const pathname = normalizePath(locationLike?.pathname || '');
+  return (pathname.startsWith('/run/api-report/') && locationLike?.search?.includes('share=1'))
+    || pathname.startsWith('/share/report/');
+};
+
 const createRouteMatcher = (path = '') => {
   const pattern = normalizePath(path)
     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -328,7 +334,7 @@ export async function getInitialState(): Promise<{
     return undefined;
   };
   const { location } = history;
-  if (isPublicKnowledgeShare(location)) {
+  if (isPublicKnowledgeShare(location) || isPublicReportShare(location)) {
     return {
       fetchUserInfo,
       settings: defaultSettings,
@@ -393,7 +399,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     footerRender: () => (hideAppShellForKnowledge ? false : <Footer />),
     onPageChange: () => {
       const { location } = history;
-      if (!initialState?.currentUser && location.pathname !== loginPath && !isPublicKnowledgeShare(location)) {
+      if (!initialState?.currentUser && location.pathname !== loginPath && !isPublicKnowledgeShare(location) && !isPublicReportShare(location)) {
         history.push(loginPath);
       }
     },

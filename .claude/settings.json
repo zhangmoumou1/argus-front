@@ -60,14 +60,19 @@
       "Bash(dir /b \"E:\\\\github_argus\\\\argus-end\\\\app\")",
       "Bash(python -c \"import docx; print\\(docx.__version__\\)\")",
       "Bash(python generate_qwen_doc.py)",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.get\\('dependencies',{}\\).items\\(\\) if 'ant' in k.lower\\(\\) or 'antd' in k.lower\\(\\)}, indent=2\\)\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.get\\('dependencies',{}\\).items\\(\\) if 'ant' in k.lower\\(\\) or 'antd' in k.lower\\(\\)}, indent=2\\)\\)\")",
+      "Bash(npx umi *)",
+      "Bash(node -e \"const pkg = require\\('./package.json'\\); console.log\\(JSON.stringify\\(pkg.scripts, null, 2\\)\\)\")",
+      "Bash(npm run *)"
     ],
     "additionalDirectories": [
       "E:\\github_argus\\argus-end\\app\\models",
       "e:\\github_argus\\argus-end\\app\\schema",
       "e:\\github_argus\\argus-end\\app\\routers\\config",
       "E:\\github_argus\\argus-end\\app\\crud\\project",
-      "E:\\github_argus\\argus-end\\app\\routers\\workspace"
+      "E:\\github_argus\\argus-end\\app\\routers\\workspace",
+      "E:\\github_argus\\argus-end\\app\\routers\\testcase",
+      "E:\\github_argus\\argus-end"
     ]
   }
 }

@@ -177,6 +177,11 @@ export default [
     ],
   },
   {
+    path: '/share/report/:id',
+    layout: false,
+    component: './BuildHistory/ReportDetail',
+  },
+  {
     path: '/performance',
     icon: 'areaChart',
     name: '性能测试',

@@ -28,7 +28,8 @@ const resColumns = [
     key: 'value',
   },
 ];
-export default ({ response, caseName, width, modal, setModal, single = true }) => {
+export default ({ response, caseName, width, modal, setModal, single = true, isShared = false }) => {
+  const drawerWidth = width || (window.innerWidth < 768 ? window.innerWidth - 40 : 1000);
   const [xmindData, setXmindData] = useState(null);
   const [xmindDataList, setXmindDataList] = useState([]);
   const [graph, setGraph] = useState({});
@@ -50,6 +51,7 @@ export default ({ response, caseName, width, modal, setModal, single = true }) =
   };
 
   const getBrain = async (case_id = response.case_id, single = true) => {
+    if (isShared) return;
     const res = await queryXmindData({ case_id });
     if (auth.response(res)) {
       if (single) {
@@ -158,7 +160,7 @@ export default ({ response, caseName, width, modal, setModal, single = true }) =
           [<strong>{caseName}</strong>] 执行详情
         </span>
       }
-      width={width || 1000}
+      width={drawerWidth}
       open={modal}
       placement="right"
       onClose={() => setModal(false)}
