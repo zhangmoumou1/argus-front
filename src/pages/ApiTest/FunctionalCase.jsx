@@ -745,16 +745,28 @@ const convertXMindTopicToMindNode = (topic) => {
 
 const normalizeClipboardMindData = (raw) => {
   if (!raw || typeof raw !== 'object') return null;
+  if (raw.simpleMindMap) {
+    const payload = raw.data;
+    if (Array.isArray(payload)) {
+      const wrapped = sanitizeMindData({
+        data: { text: '粘贴内容' },
+        children: payload,
+      });
+      return markClipboardSource(wrapped, 'simpleMindMap');
+    }
+    const nested = normalizeClipboardMindData(payload);
+    return markClipboardSource(nested, 'simpleMindMap');
+  }
   if (raw.root?.data || raw.data) {
     return sanitizeMindData(raw);
   }
   if (raw.rootTopic) {
     const root = convertXMindTopicToMindNode(raw.rootTopic);
-    return root ? sanitizeMindData(root) : null;
+    return markClipboardSource(root ? sanitizeMindData(root) : null, 'xmind');
   }
   if (Array.isArray(raw) && raw[0]?.rootTopic) {
     const root = convertXMindTopicToMindNode(raw[0].rootTopic);
-    return root ? sanitizeMindData(root) : null;
+    return markClipboardSource(root ? sanitizeMindData(root) : null, 'xmind');
   }
   return null;
 };
@@ -938,6 +950,16 @@ const buildXMindTopic = (node, indexPath = '0') => {
   }
   topic.children.attached = (node.children || []).map((child, index) => buildXMindTopic(child, `${indexPath}_${index}`));
   return topic;
+};
+
+const markClipboardSource = (data, source) => {
+  if (!data || typeof data !== 'object' || !source) return data;
+  Object.defineProperty(data, '__clipboardSource', {
+    value: source,
+    enumerable: false,
+    configurable: true,
+  });
+  return data;
 };
 
 const downloadBlob = (blob, filename) => {
@@ -1151,6 +1173,8 @@ const FunctionalCase = ({ project, dispatch }) => {
   const editorPanelRef = useRef(null);
   const renderFrameRef = useRef(null);
   const renderRetryRef = useRef(0);
+  const currentCaseRenderVersionRef = useRef(0);
+  const renderedCaseDescriptorRef = useRef('');
   const suppressDirtyCheckRef = useRef(false);
   const savedCaseSnapshotRef = useRef('');
   const routeConfirmingRef = useRef(false);
@@ -1557,6 +1581,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       mindRef.current.destroy();
       mindRef.current = null;
     }
+    renderedCaseDescriptorRef.current = '';
     closeMindContextMenu();
     closeIconQuickMenu();
     setFormatPainterActive(false);
@@ -1976,6 +2001,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       fallbackTitle = '',
       skipSanitize = false,
       performanceMode = false,
+      preserveView = false,
     } = options;
     const safeData = skipSanitize ? data : sanitizeMindData(data, fallbackTitle);
     const rootData = getMindRootData(safeData);
@@ -2000,6 +2026,8 @@ const FunctionalCase = ({ project, dispatch }) => {
       }
 
       renderRetryRef.current = 0;
+      const viewData = preserveView ? mindRef.current?.view?.getTransformData?.() : null;
+      const drawTransform = preserveView ? mindRef.current?.draw?.transform?.() : null;
       if (mindRef.current && Boolean(mindRef.current.__openPerformance) !== Boolean(performanceMode)) {
         try {
           mindRef.current.destroy();
@@ -2020,6 +2048,26 @@ const FunctionalCase = ({ project, dispatch }) => {
           enableFreeDrag: true,
           enableCtrlKeyNodeSelection: true,
           useLeftKeySelectionRightKeyDrag: false,
+          customCheckEnableShortcut: (event) => {
+            const target = event?.target;
+            if (target === document.body) return true;
+            if (!(target instanceof HTMLElement)) return false;
+            const editClasses = mindRef.current?.editNodeClassList || [];
+            if (editClasses.some((className) => target.classList.contains(className))) {
+              return true;
+            }
+            const tag = (target.tagName || '').toLowerCase();
+            if (['input', 'textarea', 'select'].includes(tag)) return false;
+            if (target.isContentEditable) return false;
+            if (target.closest('.ant-input, .ant-select, [contenteditable="true"]')) return false;
+            const editorRoot = editorPanelRef.current;
+            const canvasRoot = mindContainerRef.current;
+            return Boolean(
+              (editorRoot && editorRoot.contains(target))
+              || (canvasRoot && canvasRoot.contains(target))
+            );
+          },
+          beforeShortcutRun: (key) => key === 'Control+v',
           iconList: MIND_ICON_LIST,
           openPerformance: Boolean(performanceMode),
           performanceConfig: {
@@ -2034,7 +2082,11 @@ const FunctionalCase = ({ project, dispatch }) => {
           mindRef.current.setFullData(fullData);
         }
         requestAnimationFrame(() => {
-          if (fitOnRender) {
+          if (preserveView && viewData && mindRef.current?.view?.setTransformData) {
+            mindRef.current.view.setTransformData(viewData);
+          } else if (preserveView && drawTransform) {
+            mindRef.current?.draw?.transform?.(drawTransform);
+          } else if (fitOnRender) {
             mindRef.current?.view?.fit?.();
           }
           syncScaleFromMind();
@@ -2047,7 +2099,11 @@ const FunctionalCase = ({ project, dispatch }) => {
         mindRef.current.setData(rootData);
       }
       requestAnimationFrame(() => {
-        if (fitOnRender) {
+        if (preserveView && viewData && mindRef.current?.view?.setTransformData) {
+          mindRef.current.view.setTransformData(viewData);
+        } else if (preserveView && drawTransform) {
+          mindRef.current?.draw?.transform?.(drawTransform);
+        } else if (fitOnRender) {
           mindRef.current?.view?.fit?.();
         }
         syncScaleFromMind();
@@ -2077,6 +2133,7 @@ const FunctionalCase = ({ project, dispatch }) => {
         const nodeCount = Number(baseStats?.nodeCount || 0);
         const isHugeCase = nodeCount >= HUGE_CASE_NODE_THRESHOLD;
         const renderData = isHugeCase ? buildHugeCasePreview(safeData, 2) : safeData;
+        currentCaseRenderVersionRef.current += 1;
         suppressDirtyCheckRef.current = true;
         savedCaseSnapshotRef.current = buildCaseSnapshot(safeData, fallbackTitle);
         setCaseDirty(false);
@@ -2235,14 +2292,28 @@ const FunctionalCase = ({ project, dispatch }) => {
       const isLargeCase = Number(currentCase?.__nodeCount || 0) >= LARGE_CASE_NODE_THRESHOLD;
       const isHugeCase = Number(currentCase?.__nodeCount || 0) >= HUGE_CASE_NODE_THRESHOLD;
       const enableHugeMode = hugeCaseModeOverride === null ? isHugeCase : Boolean(hugeCaseModeOverride);
-      setScale(100);
+      const renderDescriptor = `${currentCase.id || 'unknown'}:${currentCaseRenderVersionRef.current}:${enableHugeMode ? 'huge' : 'normal'}`;
+      const canReuseCurrentCanvas = mindRef.current && renderedCaseDescriptorRef.current === renderDescriptor;
+      if (canReuseCurrentCanvas) {
+        return;
+      }
+      const preserveView = Boolean(
+        mindRef.current &&
+        renderedCaseDescriptorRef.current &&
+        String(renderedCaseDescriptorRef.current).split(':')[0] === String(currentCase.id || 'unknown')
+      );
+      if (!preserveView) {
+        setScale(100);
+      }
       suppressDirtyCheckRef.current = true;
       renderMindMap(currentCase.data || defaultCaseData(currentCase.title), {
         fitOnRender: !mindRef.current && !isLargeCase,
         fallbackTitle: currentCase.title,
         skipSanitize: Boolean(currentCase.__dataSanitized),
         performanceMode: enableHugeMode,
+        preserveView,
       });
+      renderedCaseDescriptorRef.current = renderDescriptor;
       if (caseRenderTimerRef.current) {
         window.clearTimeout(caseRenderTimerRef.current);
       }
@@ -2257,6 +2328,8 @@ const FunctionalCase = ({ project, dispatch }) => {
       suppressDirtyCheckRef.current = false;
       setCaseDirty(false);
       savedCaseSnapshotRef.current = '';
+      currentCaseRenderVersionRef.current = 0;
+      renderedCaseDescriptorRef.current = '';
       destroyMindMap();
       setLoadingCase(false);
     }
@@ -2325,18 +2398,52 @@ const FunctionalCase = ({ project, dispatch }) => {
       if (target.isContentEditable) return true;
       return Boolean(target.closest('.ant-input, .ant-select, [contenteditable="true"]'));
     };
-    const handlePaste = (event) => {
+    const handlePaste = async (event) => {
       if (!currentCase || !mindRef.current) return;
       if (isEditableTarget(event.target)) return;
       const container = editorPanelRef.current || mindContainerRef.current;
-      if (container && event.target instanceof Node && !container.contains(event.target)) return;
+      const isCanvasTarget = !event.target
+        || event.target === document.body
+        || event.target === document.documentElement
+        || (container && event.target instanceof Node && container.contains(event.target));
+      if (!isCanvasTarget) return;
+      const clipboard = event?.clipboardData;
+      if (!clipboard) return;
+      const plainText = clipboard.getData('text/plain') || '';
+      const jsonText = clipboard.getData('application/json') || '';
+      const htmlText = clipboard.getData('text/html') || '';
+      const rtfText = clipboard.getData('text/rtf') || '';
+      const hasTextPayload = Boolean(jsonText || plainText || htmlText || rtfText);
+      const imageItem = Array.from(clipboard.items || []).find((item) => item.type?.startsWith('image/'));
+      const imageFile = imageItem?.getAsFile?.() || null;
       const pastedData = getClipboardMindData(event);
-      if (!pastedData) return;
+      if (pastedData) {
+        event.preventDefault();
+        const inserted = insertPastedDataAfterActiveNode(pastedData);
+        if (!inserted) {
+          applyImportedData(pastedData);
+          message.success('已在画布展示粘贴内容');
+        }
+        return;
+      }
+      if (!imageFile || hasTextPayload) return;
       event.preventDefault();
-      const inserted = insertPastedDataAfterActiveNode(pastedData);
-      if (!inserted) {
-        applyImportedData(pastedData);
-        message.success('已在画布展示粘贴内容');
+      try {
+        const imageUrl = await readFileAsDataUrl(imageFile);
+        if (!imageUrl) return;
+        const size = await loadImageNaturalSize(imageUrl);
+        const payload = size
+          ? { url: imageUrl, width: size.width, height: size.height }
+          : { url: imageUrl };
+        const nodes = getActiveNodes();
+        if (nodes.length === 0) return;
+        nodes.forEach((node) => {
+          mindRef.current.execCommand('SET_NODE_IMAGE', node, payload);
+        });
+        markCaseDirty();
+        message.success('图片已粘贴到当前节点');
+      } catch (error) {
+        message.error(error?.message || '粘贴图片失败');
       }
     };
     document.addEventListener('paste', handlePaste);
@@ -3065,65 +3172,54 @@ const FunctionalCase = ({ project, dispatch }) => {
       if (normalized) return normalized;
     }
     const rtfData = parseRtfToMindData(rtfText);
-    if (rtfData) return sanitizeMindData(rtfData);
+    if (rtfData) return markClipboardSource(rtfData, rtfData.__clipboardSource || 'rtf');
     const htmlData = parseHtmlToMindData(htmlText);
-    if (htmlData) return sanitizeMindData(htmlData);
+    if (htmlData) {
+      const source = Array.isArray(htmlData.children) && htmlData.children.length > 0 && htmlData.data?.text === '粘贴内容'
+        ? 'html-wrapper'
+        : 'html-node';
+      return markClipboardSource(sanitizeMindData(htmlData), source);
+    }
     const outlineData = parseOutlineTextToMindData(plainText);
-    return outlineData ? sanitizeMindData(outlineData) : null;
+    return outlineData ? markClipboardSource(sanitizeMindData(outlineData), 'outline') : null;
+  };
+
+  const getClipboardPasteNodes = (pastedData) => {
+    if (!pastedData) return [];
+    const root = getMindRootData(pastedData);
+    const clipboardSource = pastedData?.__clipboardSource || '';
+    if (!root) return [];
+    if (clipboardSource === 'simpleMindMap' || clipboardSource === 'html-wrapper') {
+      return Array.isArray(root.children) ? root.children.filter(Boolean) : [];
+    }
+    if (clipboardSource === 'xmind' || clipboardSource === 'html-node' || clipboardSource === 'outline' || clipboardSource === 'rtf') {
+      return [root];
+    }
+    if (Array.isArray(root.children) && root.children.length > 0 && root.data?.text === '粘贴内容') {
+      return root.children.filter(Boolean);
+    }
+    return [root];
   };
 
   const insertPastedDataAfterActiveNode = (pastedData) => {
     if (!mindRef.current || !currentCase) return false;
     const activeNode = getActiveNode();
     if (!activeNode) return false;
-    const activeUid = getNodeData(activeNode)?.uid;
-    if (!activeUid) return false;
-    const currentData = cloneMindData(getMindData() || currentCase.data || defaultCaseData(currentCase.title));
-    const root = getMindRootData(currentData);
-    const findNodeWithParent = (node, uid, parent = null) => {
-      if (!node) return null;
-      if (node?.data?.uid === uid) return { node, parent };
-      for (const child of node.children || []) {
-        const found = findNodeWithParent(child, uid, node);
-        if (found) return found;
-      }
-      return null;
-    };
-    const found = findNodeWithParent(root, activeUid);
-    if (!found) return false;
-    const pastedRoot = cloneMindData(getMindRootData(pastedData));
-    if (!pastedRoot) return false;
-    const hasStyledPayload = (node) => Boolean(
-      node?.data?.icon
-      || node?.data?.tag
-      || node?.data?.note
-      || node?.data?.hyperlink
-      || node?.data?.color
-      || node?.data?.fillColor
-      || node?.data?.borderColor,
-    );
-    const unwrapBatchNodes = (rootNode) => {
-      let nodes = Array.isArray(rootNode?.children) && rootNode.children.length > 0
-        ? rootNode.children
-        : [rootNode];
-      // 外部剪贴板常带一层“包装父节点”，这里自动解包，防止全部挤成一个节点。
-      while (
-        nodes.length === 1
-        && Array.isArray(nodes[0]?.children)
-        && nodes[0].children.length > 0
-        && !hasStyledPayload(nodes[0])
-      ) {
-        nodes = nodes[0].children;
-      }
-      return nodes;
-    };
-    const batchChildren = unwrapBatchNodes(pastedRoot);
-    found.node.children = found.node.children || [];
-    found.node.children.push(...batchChildren);
-    const merged = sanitizeMindData(currentData, currentCase.title);
-    applyImportedData(merged);
+    const pasteNodes = getClipboardPasteNodes(pastedData);
+    if (pasteNodes.length === 0) return false;
+    mindRef.current.execCommand('PASTE_NODE', pasteNodes);
+    const latestData = sanitizeMindData(getMindData() || currentCase.data || defaultCaseData(currentCase.title), currentCase.title);
+    const latestStats = countMindData(getMindRootData(latestData));
+    setCurrentCase((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        data: latestData,
+        __nodeCount: latestStats.nodeCount,
+        __wordCount: latestStats.wordCount,
+      };
+    });
     markCaseDirty();
-    message.success('已粘贴到当前节点下层');
     return true;
   };
 
