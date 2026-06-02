@@ -32,6 +32,7 @@ const CONFIG = {
   OSS_URL: "http://oss.pity.fun/pity",
   AVATAR_URL: 'https://static.pity.fun/picture/20220809231905.png',
   DOCUMENT_URL: 'https://wuranxu.github.io/pityDoc',
+  GITHUB_URL: 'https://github.com/zhangmoumou1/argus-end',
   PROJECT_AVATAR_URL: 'https://static.pity.fun/picture/20220809232253.png',
   ROLE: {
     0: 'user',
