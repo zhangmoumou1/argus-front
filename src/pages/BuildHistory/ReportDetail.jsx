@@ -14,6 +14,7 @@ import {
   CloseCircleTwoTone,
   FrownTwoTone,
   LikeTwoTone,
+  MinusCircleOutlined,
   SearchOutlined
 } from "@ant-design/icons";
 import {IconFont} from "@/components/Icon/IconFont";
@@ -47,16 +48,9 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
 
   const getTag = () => {
     if (failedCount === 0 && errorCount === 0 && successCount > 0) {
-      return <Tag icon={<CheckCircleOutlined/>} color="success">
-        通过
-      </Tag>
+      return <span className={styles.statusBadge} data-status="pass"><CheckCircleOutlined/> 通过</span>
     }
-    return <Tag icon={<CloseCircleOutlined/>} color="error">
-      未通过
-    </Tag>
-    // return <Tag icon={<SyncOutlined spin/>} color="processing">
-    //   加载中
-    // </Tag>
+    return <span className={styles.statusBadge} data-status="fail"><CloseCircleOutlined/> 未通过</span>
   }
 
   const fetchEnv = () => {
@@ -227,111 +221,107 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
   ]
 
   return (
-    <PageContainer title={false} breadcrumb={null}>
+    <PageContainer title={false} breadcrumb={null} className={styles.reportDetailPage}>
       <TestResult width={1000} setModal={setCaseModal} modal={caseModal} caseName={caseName} response={response}/>
       <Spin spinning={load}>
-        <Card title={`测试报告#${reportId}`}>
-          <Row gutter={[8, 8]}>
-            <Col span={17}>
-              <Row gutter={8}>
-                <Col span={4}>
-                  <Card hoverable bordered={false} className={styles.statisticCard}>
-                    <Statistic title="用例总数" valueStyle={{marginLeft: 8}}
-                               value={totalCount}
-                               prefix={<IconFont type="icon-yongliliebiao"/>}/>
-                  </Card>
-                </Col>
-                <Col span={4}>
-                  <Card hoverable bordered={false} className={styles.statisticCard}>
-                    <Statistic title="成功数"
-                               value={successCount}
-                               prefix={<CheckCircleTwoTone twoToneColor='rgb(63, 205, 127)'/>}/>
-                  </Card>
-                </Col>
-                <Col span={4}>
-                  <Card hoverable bordered={false} className={styles.statisticCard}>
-                    <Statistic title="失败数" valueStyle={{marginLeft: 8}}
-                               value={failedCount}
-                               prefix={<CloseCircleTwoTone twoToneColor='rgb(230, 98, 97)'/>}/>
-                  </Card>
-                </Col>
-                <Col span={4}>
-                  <Card hoverable bordered={false} className={styles.statisticCard}>
-                    <Statistic title="错误数" valueStyle={{marginLeft: 8}}
-                               value={errorCount}
-                               prefix={<AlertTwoTone twoToneColor="rgb(250, 207, 76)"/>}/>
-                  </Card>
-                </Col>
-                <Col span={4}>
-                  <Card hoverable bordered={false} className={styles.statisticCard}>
-                    <Statistic title="跳过数" valueStyle={{marginLeft: 8}}
-                               value={skippedCount}/>
-                  </Card>
-                </Col>
-                <Col span={4}>
-                  <Card hoverable bordered={false} className={styles.statisticCard}>
-                    <Statistic title="测试通过率" suffix="%"
-                               value={common.calPercent(successCount, failedCount + successCount + errorCount)}
-                               prefix={common.calPercent(successCount, failedCount + successCount + errorCount) > 90
-                                 ? <LikeTwoTone/> : <FrownTwoTone/>}/>
-                  </Card>
-                </Col>
-              </Row>
-              <Descriptions>
-                <Descriptions.Item label="测试环境">
-                  <Tag icon={<IconFont type="icon-huanjing"/>}>{envMap[reportDetail.env]}</Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="测试结果">
-                  {getTag()}
-                </Descriptions.Item>
-                <Descriptions.Item label="执行人">
-                  {reportDetail.executor === 0 ? 'pity机器人' : <UserLink user={userMap[reportDetail.executor]} size={16}/>}
-                </Descriptions.Item>
-                <Descriptions.Item label="执行方式">
-                  {reportConfig.EXECUTE_METHOD[reportDetail.mode]}
-                </Descriptions.Item>
-                <Descriptions.Item label="用例跳过数">
-                  {skippedCount}
-                </Descriptions.Item>
-                <Descriptions.Item label="测试计划">
-                  {planName || '无'}
-                  {/*{reportDetail.plan_id || '无'}*/}
-                </Descriptions.Item>
-                <Descriptions.Item label="开始时间">
-                  {reportDetail.start_at}
-                </Descriptions.Item>
-                <Descriptions.Item label="结束时间">
-                  {reportDetail.finished_at}
-                </Descriptions.Item>
-                <Descriptions.Item label="耗时">
-                  {parseFloat(reportDetail.cost) > 60 ? `${Math.round(parseFloat(reportDetail.cost) / 60)}分` : reportDetail.cost + '秒'}
-                </Descriptions.Item>
-              </Descriptions>
-
-            </Col>
-            <Col span={7}>
-              <Pie height={230} data={getPieData()} name="name" value="count"/>
-            </Col>
-          </Row>
+        <Card className={styles.summaryCard}>
+          <div className={styles.summaryHeader}>
+            <span className={styles.headerTitle}>
+              测试报告 #{reportId}
+              {getTag()}
+            </span>
+          </div>
+          <div className={styles.summaryBody}>
+            <Row gutter={[12, 12]}>
+              <Col span={16}>
+                <Row gutter={[10, 10]} className={styles.statRow}>
+                  <Col span={8}>
+                    <Card className={`${styles.statisticCard} ${styles.statTotal}`}>
+                      <Statistic title="用例总数" value={totalCount}
+                                 prefix={<IconFont type="icon-yongliliebiao"/>}/>
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card className={`${styles.statisticCard} ${styles.statSuccess}`}>
+                      <Statistic title="成功" value={successCount}
+                                 prefix={<CheckCircleTwoTone twoToneColor='#22c55e'/>}/>
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card className={`${styles.statisticCard} ${styles.statFailed}`}>
+                      <Statistic title="失败" value={failedCount}
+                                 prefix={<CloseCircleTwoTone twoToneColor='#ef4444'/>}/>
+                    </Card>
+                  </Col>
+                </Row>
+                <Row gutter={[10, 10]} className={styles.statRow}>
+                  <Col span={8}>
+                    <Card className={`${styles.statisticCard} ${styles.statError}`}>
+                      <Statistic title="错误" value={errorCount}
+                                 prefix={<AlertTwoTone twoToneColor="#f59e0b"/>}/>
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card className={`${styles.statisticCard} ${styles.statSkipped}`}>
+                      <Statistic title="跳过" value={skippedCount}
+                             prefix={<MinusCircleOutlined style={{color: '#8b5cf6'}}/>}/>
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card className={`${styles.statisticCard} ${styles.statRate}`}>
+                      <Statistic title="通过率" suffix="%"
+                                 value={common.calPercent(successCount, failedCount + successCount + errorCount)}
+                                 prefix={common.calPercent(successCount, failedCount + successCount + errorCount) > 90
+                                   ? <LikeTwoTone/> : <FrownTwoTone/>}/>
+                    </Card>
+                  </Col>
+                </Row>
+                <Descriptions className={styles.reportDescriptions} column={2} size="small">
+                  <Descriptions.Item label="测试环境">
+                    <Tag icon={<IconFont type="icon-huanjing"/>}>{envMap[reportDetail.env]}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="执行人">
+                    {reportDetail.executor === 0 ? 'pity机器人' : <UserLink user={userMap[reportDetail.executor]} size={16}/>}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="执行方式">
+                    {reportConfig.EXECUTE_METHOD[reportDetail.mode]}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="用例跳过数">
+                    {skippedCount}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="测试计划">
+                    {planName || '无'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="开始时间">
+                    {reportDetail.start_at}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="结束时间">
+                    {reportDetail.finished_at}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="耗时">
+                    {parseFloat(reportDetail.cost) > 60 ? `${Math.round(parseFloat(reportDetail.cost) / 60)}分` : reportDetail.cost + '秒'}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Col>
+              <Col span={8}>
+                <div className={styles.pieCardWrap}>
+                  <Pie height={260} data={getPieData()} name="name" value="count"/>
+                </div>
+              </Col>
+            </Row>
+          </div>
         </Card>
-        <Card className={styles.bottomCard} title="用例列表">
-          <Row gutter={[8, 8]}>
-            <Col span={18}/>
-            <Col span={6}>
-              <Input prefix={<SearchOutlined/>} placeholder="请输入场景名称" className="borderSearch"
-                     onPressEnter={onSearchCase}/>
-            </Col>
-          </Row>
-          <Row gutter={[8, 8]}>
-            <Col span={24}>
-              <Table columns={columns} dataSource={currentCaseList}
-                     locale={{emptyText: <NoRecord height={200}/>}}/>
-            </Col>
-          </Row>
+
+        <Card className={styles.bottomCard}
+              title="用例列表"
+              extra={
+                <Input prefix={<SearchOutlined/>} placeholder="搜索场景名称..."
+                       className={styles.bottomSearch} onPressEnter={onSearchCase}/>
+              }>
+          <Table className={styles.caseTable} columns={columns} dataSource={currentCaseList}
+                 locale={{emptyText: <NoRecord height={200}/>}}/>
         </Card>
       </Spin>
-
-
     </PageContainer>
   )
 
