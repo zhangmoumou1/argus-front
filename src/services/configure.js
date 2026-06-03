@@ -412,6 +412,13 @@ export async function updateAiModelConfig(data) {
   });
 }
 
+export async function listAiModelProviders() {
+  return request(`${CONFIG.URL}/config/ai-model/providers`, {
+    method: 'GET',
+    headers: auth.headers(),
+  });
+}
+
 export async function listKnowledge(params) {
   return request(`${CONFIG.URL}/config/knowledge/list`, {
     method: 'GET',

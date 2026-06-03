@@ -5,6 +5,7 @@ import {
   deleteGConfig,
   deleteRedisConfig,
   getAiModelConfig,
+  listAiModelProviders,
   getSystemConfig,
   insertDbConfig,
   insertGateway,
@@ -35,9 +36,10 @@ export default {
     data: [],
     configuration: {},
     aiModelConfig: {
-      active_provider: 'kimi',
-      models: {},
+      active_model_id: '',
+      providers: [],
     },
+    aiModelProviders: [],
     currentEnv: null,
     name: '',
     currentCreateUser: undefined,
@@ -121,6 +123,20 @@ export default {
           type: 'save',
           payload: {
             aiModelConfig: res.data,
+          },
+        });
+        return true;
+      }
+      return false;
+    },
+
+    * fetchAiModelProviders({payload}, {call, put}) {
+      const res = yield call(listAiModelProviders, payload);
+      if (auth.response(res)) {
+        yield put({
+          type: 'save',
+          payload: {
+            aiModelProviders: Array.isArray(res.data) ? res.data : [],
           },
         });
       }

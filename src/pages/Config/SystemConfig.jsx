@@ -3,7 +3,6 @@ import {Button, Card, Col, Form, message, Row, Spin, Tabs} from "antd";
 import OssConfig from "@/components/System/OssConfig";
 import EmailConfig from "@/components/System/EmailConfig";
 import YapiConfig from "@/components/System/YapiConfig";
-import AIModelConfig from "@/components/System/AIModelConfig";
 import {SaveOutlined} from "@ant-design/icons";
 import {connect} from "@umijs/max";
 import {useEffect, useState} from "react";
@@ -13,7 +12,7 @@ const {TabPane} = Tabs;
 const SystemConfig = ({dispatch, gconfig, loading}) => {
 
   const [form] = Form.useForm()
-  const {configuration, aiModelConfig} = gconfig;
+  const {configuration} = gconfig;
   const [activeTab, setActiveTab] = useState("1");
 
   const onSetField = () => {
@@ -82,19 +81,14 @@ const SystemConfig = ({dispatch, gconfig, loading}) => {
                 <TabPane key="3" tab="Yapi设置" forceRender>
                   <YapiConfig form={form}/>
                 </TabPane>
-                <TabPane key="4" tab="AI模型" forceRender>
-                  <AIModelConfig dispatch={dispatch} aiModelConfig={aiModelConfig} loading={loading}/>
-                </TabPane>
               </Tabs>
             </Col>
           </Row>
-          {activeTab !== "4" ? (
-            <Row>
-              <div style={{margin: '16px auto'}}>
-                <Button type="primary" icon={<SaveOutlined/>} onClick={onSubmit}>保存</Button>
-              </div>
-            </Row>
-          ) : null}
+          <Row>
+            <div style={{margin: '16px auto'}}>
+              <Button type="primary" icon={<SaveOutlined/>} onClick={onSubmit}>保存</Button>
+            </div>
+          </Row>
         </Card>
       </Spin>
     </PageContainer>

@@ -90,14 +90,6 @@ export async function moveFunctionalCaseFile(data) {
   });
 }
 
-export async function aiGenerateFunctionalCase(data) {
-  return request(`${CONFIG.URL}/functional-case/file/ai-generate`, {
-    method: 'POST',
-    data,
-    headers: auth.headers(),
-  });
-}
-
 export async function listFunctionalCaseSkillDocs(params) {
   return request(`${CONFIG.URL}/functional-case/skill-doc/list`, {
     method: 'GET',
@@ -130,7 +122,7 @@ export async function deleteFunctionalCaseSkillDoc(params) {
   });
 }
 
-export async function createFunctionalCaseSkillTask(data) {
+export async function generateFunctionalCaseByModel(data) {
   return request(`${CONFIG.URL}/functional-case/skill-task/create`, {
     method: 'POST',
     data,
@@ -138,13 +130,17 @@ export async function createFunctionalCaseSkillTask(data) {
   });
 }
 
-export async function queryFunctionalCaseSkillTask(params) {
+export async function queryFunctionalCaseGenerateTask(params) {
   return request(`${CONFIG.URL}/functional-case/skill-task/status`, {
     method: 'GET',
     params,
     headers: auth.headers(),
   });
 }
+
+export const createFunctionalCaseSkillTask = generateFunctionalCaseByModel;
+
+export const queryFunctionalCaseSkillTask = queryFunctionalCaseGenerateTask;
 
 export async function uploadFunctionalCaseNodeImage(file) {
   const formData = new FormData();

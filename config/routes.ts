@@ -343,6 +343,11 @@ export default [
         component: './Config/SystemConfig',
       },
       {
+        path: '/system/model-config',
+        name: '模型配置',
+        component: './Config/AIModel',
+      },
+      {
         path: '/system/user',
         name: '用户管理',
         component: './Manager/UserList',
@@ -452,4 +457,3 @@ export default [
     component: './404',
   },
 ];
-

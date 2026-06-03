@@ -10,7 +10,6 @@ import {
   Menu,
   Modal,
   Popconfirm,
-  Progress,
   Steps,
   Select,
   Slider,
@@ -20,9 +19,10 @@ import {
   TreeSelect,
   Upload,
   message,
+  notification,
 } from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
-import { connect, history } from '@umijs/max';
+import { connect, history, useLocation } from '@umijs/max';
 import JSZip from 'jszip';
 import {
   ApartmentOutlined,
@@ -81,9 +81,8 @@ import {
   moveFunctionalCaseDirectory,
   moveFunctionalCaseFile,
   queryFunctionalCaseFile,
-  aiGenerateFunctionalCase,
-  createFunctionalCaseSkillTask,
-  queryFunctionalCaseSkillTask,
+  generateFunctionalCaseByModel,
+  queryFunctionalCaseGenerateTask,
   uploadFunctionalCaseNodeImage,
   updateFunctionalCaseDirectory,
   updateFunctionalCaseFile,
@@ -435,6 +434,10 @@ const EXPORT_OPTIONS = [
 
 const AI_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.webp,.bmp';
 const DESIGN_LINK_PLACEHOLDER = '支持 Figma / 蓝湖 / 墨刀 / 原型地址';
+const DEFAULT_SKILL_AI_INSTRUCTION = '根据上传的需求文档、需求图片、需求原型地址，并参考技能和规范文档生成xmind测试用例，补齐正常、异常、边界场景';
+const FUNCTIONAL_CASE_ROUTE_PATH = '/scenario/functionalCase';
+const FUNCTIONAL_CASE_RESULT_STORAGE_PREFIX = 'functional_case_skill_result_';
+const FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY = 'functional_case_skill_active_tasks';
 
 const createSkillRequirementItem = () => ({
   key: `requirement_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -443,6 +446,146 @@ const createSkillRequirementItem = () => ({
   fileList: [],
   designLinks: [''],
 });
+
+const parseSkillTaskTimeToMs = (value) => {
+  if (!value && value !== 0) return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? value : value * 1000;
+  }
+  const raw = String(value).trim();
+  if (!raw) return 0;
+  if (/^\d+$/.test(raw)) {
+    const numericValue = Number(raw);
+    return numericValue > 1e12 ? numericValue : numericValue * 1000;
+  }
+  const parsed = new Date(raw.replace('T', ' ').replace(/-/g, '/')).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatSkillTaskElapsedText = (durationMs) => {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return '';
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}秒`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}分钟${seconds}秒`;
+};
+
+const resolveSkillTaskElapsedText = ({
+  taskLogs,
+  startedAt,
+  finishedAt,
+  fallbackStartedAt,
+  fallbackFinishedAt,
+}) => {
+  const logList = Array.isArray(taskLogs) ? taskLogs : [];
+  const firstLogTime = parseSkillTaskTimeToMs(logList[0]?.time);
+  const lastLogTime = parseSkillTaskTimeToMs(logList[logList.length - 1]?.time);
+  const startMs = parseSkillTaskTimeToMs(startedAt) || firstLogTime || parseSkillTaskTimeToMs(fallbackStartedAt);
+  const endMs = parseSkillTaskTimeToMs(finishedAt) || lastLogTime || parseSkillTaskTimeToMs(fallbackFinishedAt);
+  if (!startMs || !endMs || endMs < startMs) return '';
+  return formatSkillTaskElapsedText(endMs - startMs);
+};
+
+const appendElapsedToSkillText = (text, elapsedText) => {
+  if (!elapsedText) return text;
+  if (!text) return `耗时 ${elapsedText}`;
+  if (String(text).includes('耗时')) return text;
+  const normalizedText = String(text).replace(/[。，、；;：:]+$/u, '');
+  return `${normalizedText}，耗时 ${elapsedText}`;
+};
+
+const isFunctionalCaseRoutePath = (pathname = '') => {
+  const lowerPath = String(pathname || '').trim().toLowerCase();
+  return lowerPath === '/scenario/functionalcase' || lowerPath === '/apitest/functionalcase';
+};
+
+const buildFunctionalCaseResultToken = (taskId, caseId) => {
+  const rawTaskId = String(taskId || '').trim();
+  if (rawTaskId) return rawTaskId;
+  return `case_${caseId || 'unknown'}_${Date.now()}`;
+};
+
+const buildFunctionalCaseResultUrl = ({ projectId, caseId, resultToken }) => {
+  const query = new URLSearchParams();
+  if (projectId) query.set('projectId', String(projectId));
+  if (caseId) query.set('caseId', String(caseId));
+  if (resultToken) query.set('resultToken', String(resultToken));
+  const search = query.toString();
+  return search ? `${FUNCTIONAL_CASE_ROUTE_PATH}?${search}` : FUNCTIONAL_CASE_ROUTE_PATH;
+};
+
+const getFunctionalCaseResultStorageKey = (resultToken) => `${FUNCTIONAL_CASE_RESULT_STORAGE_PREFIX}${resultToken}`;
+
+const persistFunctionalCaseResult = (resultToken, payload) => {
+  if (!resultToken || !payload) return;
+  try {
+    sessionStorage.setItem(getFunctionalCaseResultStorageKey(resultToken), JSON.stringify(payload));
+  } catch (error) {
+    // ignore storage quota errors and keep in-memory fallback
+  }
+};
+
+const readFunctionalCaseResult = (resultToken) => {
+  if (!resultToken) return null;
+  try {
+    const raw = sessionStorage.getItem(getFunctionalCaseResultStorageKey(resultToken));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const clearFunctionalCaseResult = (resultToken) => {
+  if (!resultToken) return;
+  try {
+    sessionStorage.removeItem(getFunctionalCaseResultStorageKey(resultToken));
+  } catch (error) {
+    // ignore storage errors
+  }
+};
+
+const readFunctionalCaseActiveTasks = () => {
+  try {
+    const raw = sessionStorage.getItem(FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.taskId) : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const writeFunctionalCaseActiveTasks = (tasks) => {
+  try {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      sessionStorage.removeItem(FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY);
+      return;
+    }
+    sessionStorage.setItem(FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  } catch (error) {
+    // ignore storage errors
+  }
+};
+
+const registerFunctionalCaseActiveTask = (taskPayload) => {
+  if (!taskPayload?.taskId && taskPayload?.taskId !== 0) return;
+  const taskIdText = String(taskPayload.taskId);
+  const nextTasks = readFunctionalCaseActiveTasks().filter((item) => String(item?.taskId) !== taskIdText);
+  nextTasks.push(taskPayload);
+  writeFunctionalCaseActiveTasks(nextTasks);
+};
+
+const unregisterFunctionalCaseActiveTask = (taskId) => {
+  if (!taskId && taskId !== 0) return;
+  const taskIdText = String(taskId);
+  const remainTasks = readFunctionalCaseActiveTasks().filter((item) => String(item?.taskId) !== taskIdText);
+  writeFunctionalCaseActiveTasks(remainTasks);
+};
 
 const defaultCaseData = (title) => ({
   data: {
@@ -1165,6 +1308,7 @@ const buildHugeCasePreview = (data, collapseLevel = 2) => {
 };
 
 const FunctionalCase = ({ project, dispatch }) => {
+  const location = useLocation();
   const projects = project?.projects || [];
   const projectId = project?.project_id;
   const mindRef = useRef(null);
@@ -1177,6 +1321,7 @@ const FunctionalCase = ({ project, dispatch }) => {
   const renderedCaseDescriptorRef = useRef('');
   const suppressDirtyCheckRef = useRef(false);
   const savedCaseSnapshotRef = useRef('');
+  const pendingModelGenerateResultRef = useRef(null);
   const routeConfirmingRef = useRef(false);
   const tabActionBypassRef = useRef(false);
   const currentDirectoryRef = useRef(null);
@@ -1186,6 +1331,7 @@ const FunctionalCase = ({ project, dispatch }) => {
   const nodeDoubleClickRef = useRef(false);
   const lastActiveNodeRef = useRef(null);
   const waitingCaseRenderRef = useRef(false);
+  const handledGeneratedViewRef = useRef('');
   const [directoryTree, setDirectoryTree] = useState([]);
   const [caseFiles, setCaseFiles] = useState([]);
   const [currentDirectory, setCurrentDirectory] = useState(null);
@@ -1205,34 +1351,30 @@ const FunctionalCase = ({ project, dispatch }) => {
   const [attachmentModal, setAttachmentModal] = useState({ open: false });
   const [formulaModal, setFormulaModal] = useState({ open: false });
   const [exportModal, setExportModal] = useState({ open: false, type: 'png', name: '' });
-  const [aiModal, setAiModal] = useState({
-    open: false,
-    loading: false,
-    requirementText: '',
-    instructionText: '',
-    fileList: [],
-  });
   const [skillAiModal, setSkillAiModal] = useState({
     open: false,
     loading: false,
     polling: false,
     taskId: null,
+    targetProjectId: null,
+    targetCaseId: null,
+    targetCaseTitle: '',
     progress: 0,
     stage: 'idle',
     stageText: '',
     errorMessage: '',
     reviewProvider: '',
     reviewRounds: 0,
-    taskLogs: [],
-    resultMdUrl: '',
     resultCaseCount: 0,
+    elapsedText: '',
+    requestStartedAt: 0,
+    hasPendingResult: false,
     requirementItems: [createSkillRequirementItem()],
-    instructionText: '',
+    instructionText: DEFAULT_SKILL_AI_INSTRUCTION,
     selectedDocIds: [],
   });
   const [skillDocOptions, setSkillDocOptions] = useState([]);
   const [loadingSkillDocs, setLoadingSkillDocs] = useState(false);
-  const [skillAiStep, setSkillAiStep] = useState(0);
   const [activePanel, setActivePanel] = useState('node');
   const [panelOpen, setPanelOpen] = useState(false);
   const [themeCategory, setThemeCategory] = useState('classic');
@@ -1291,6 +1433,23 @@ const FunctionalCase = ({ project, dispatch }) => {
     [directoryTree, caseFiles, appliedKeyword],
   );
 
+  const isFunctionalCaseRouteActive = useMemo(
+    () => isFunctionalCaseRoutePath(location?.pathname || history?.location?.pathname || ''),
+    [location?.pathname],
+  );
+
+  const pendingGeneratedCaseView = useMemo(() => {
+    const searchParams = new URLSearchParams(location?.search || '');
+    const routeProjectId = Number(searchParams.get('projectId') || 0);
+    const routeCaseId = Number(searchParams.get('caseId') || 0);
+    const resultToken = String(searchParams.get('resultToken') || '').trim();
+    return {
+      routeProjectId: Number.isFinite(routeProjectId) ? routeProjectId : 0,
+      routeCaseId: Number.isFinite(routeCaseId) ? routeCaseId : 0,
+      resultToken,
+    };
+  }, [location?.search]);
+
   useEffect(() => {
     if (!skillAiModal.open) return;
     let active = true;
@@ -1322,14 +1481,48 @@ const FunctionalCase = ({ project, dispatch }) => {
     };
   }, [skillAiModal.open]);
 
+  const applyPendingModelGenerateResult = useCallback(() => {
+    const pending = pendingModelGenerateResultRef.current;
+    if (!pending) {
+      message.warning('当前没有可应用的生成结果');
+      return false;
+    }
+    if (!currentCase || Number(currentCase.id) !== Number(pending.targetCaseId)) {
+      message.warning('请先切回发起生成的原用例，再应用结果');
+      return false;
+    }
+    applyImportedData(pending.data, pending.title);
+    pendingModelGenerateResultRef.current = null;
+    setSkillAiModal((prev) => ({
+      ...prev,
+      hasPendingResult: false,
+      stage: 'done',
+      stageText: appendElapsedToSkillText(`模型已生成 ${pending.caseCount} 条候选用例，当前画布已同步最新结果`, pending.elapsedText),
+      errorMessage: '',
+      reviewProvider: pending.reviewProvider || prev.reviewProvider || '',
+      reviewRounds: Number(pending.reviewRounds || prev.reviewRounds || 0),
+      resultCaseCount: Number(pending.caseCount || prev.resultCaseCount || 0),
+      elapsedText: pending.elapsedText || prev.elapsedText || '',
+    }));
+    message.success(appendElapsedToSkillText(`模型生成完成，识别到 ${pending.caseCount} 条候选用例，当前画布已更新`, pending.elapsedText));
+    return true;
+  }, [currentCase]);
+
   useEffect(() => {
-    if (!skillAiModal.open || !skillAiModal.polling || !skillAiModal.taskId) return undefined;
+    window.__FUNCTIONAL_CASE_TASK_POLLING__ = Boolean(skillAiModal.polling && skillAiModal.taskId && isFunctionalCaseRouteActive);
+    return () => {
+      window.__FUNCTIONAL_CASE_TASK_POLLING__ = false;
+    };
+  }, [isFunctionalCaseRouteActive, skillAiModal.polling, skillAiModal.taskId]);
+
+  useEffect(() => {
+    if (!skillAiModal.polling || !skillAiModal.taskId) return undefined;
     let cancelled = false;
     let timer = null;
 
     const pollTask = async () => {
       try {
-        const statusRes = await queryFunctionalCaseSkillTask({ id: skillAiModal.taskId });
+        const statusRes = await queryFunctionalCaseGenerateTask({ id: skillAiModal.taskId });
         if (cancelled) return;
         if (statusRes?.code !== 0) {
           throw new Error(statusRes?.msg || '查询生成结果失败');
@@ -1343,14 +1536,81 @@ const FunctionalCase = ({ project, dispatch }) => {
           reviewProvider: data.review_provider || '',
           reviewRounds: Number(data.review_rounds || 0),
           errorMessage: data.error_message || '',
-          taskLogs: Array.isArray(data.task_logs) ? data.task_logs : [],
-          resultMdUrl: data.result_md_url || '',
           resultCaseCount: Number(data.case_count || data.case_num || 0),
         }));
-        if (data.status === 'success') {
-          const generatedTitle = data.title || currentCase?.title || '功能用例';
-          const generatedData = sanitizeMindData(data.data || defaultCaseData(generatedTitle));
-          applyImportedData(generatedData, generatedTitle);
+        const generatedPayload = data?.result && typeof data.result === 'object' ? data.result : data;
+        if (generatedPayload?.data && typeof generatedPayload.data === 'object') {
+          const targetCaseId = skillAiModal.targetCaseId;
+          const targetCaseTitle = skillAiModal.targetCaseTitle || currentCase?.title || '功能用例';
+          const generatedTitle = generatedPayload.title || targetCaseTitle || '功能用例';
+          const generatedData = sanitizeMindData(generatedPayload.data || defaultCaseData(generatedTitle), generatedTitle);
+          const caseCount = Number(generatedPayload.case_count || generatedPayload.case_num || 0);
+          const reviewProvider = generatedPayload.review_provider || data.review_provider || '';
+          const reviewRounds = Number(generatedPayload.review_rounds || data.review_rounds || 0);
+          const elapsedText = resolveSkillTaskElapsedText({
+            taskLogs: data.task_logs,
+            startedAt: generatedPayload.started_at || data.started_at,
+            finishedAt: generatedPayload.finished_at || data.finished_at,
+            fallbackStartedAt: skillAiModal.requestStartedAt,
+            fallbackFinishedAt: Date.now(),
+          });
+          pendingModelGenerateResultRef.current = {
+            data: generatedData,
+            title: generatedTitle,
+            targetCaseId,
+            caseCount,
+            reviewProvider,
+            reviewRounds,
+            elapsedText,
+          };
+          if (!isFunctionalCaseRouteActive) {
+            queueGeneratedCaseResult({
+              taskId: skillAiModal.taskId,
+              projectId: skillAiModal.targetProjectId || projectId,
+              targetCaseId,
+              targetCaseTitle,
+              title: generatedTitle,
+              data: generatedData,
+              caseCount,
+              reviewProvider,
+              reviewRounds,
+              elapsedText,
+            });
+            setSkillAiModal((prev) => ({
+              ...prev,
+              open: false,
+              loading: false,
+              polling: false,
+              taskId: null,
+              progress: 100,
+              stage: 'done',
+              stageText: appendElapsedToSkillText(`模型已生成 ${caseCount} 条候选用例，可点击通知中的“查看”前往结果页面`, elapsedText),
+              errorMessage: '',
+              reviewProvider: reviewProvider || prev.reviewProvider || '',
+              reviewRounds: Number(reviewRounds || prev.reviewRounds || 0),
+              resultCaseCount: Number(caseCount || prev.resultCaseCount || 0),
+              elapsedText: elapsedText || prev.elapsedText || '',
+              hasPendingResult: true,
+            }));
+            unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+            return;
+          }
+          const matchesCurrentCase = currentCase && Number(currentCase.id) === Number(targetCaseId);
+          if (matchesCurrentCase) {
+            applyPendingModelGenerateResult();
+            setSkillAiModal((prev) => ({
+              ...prev,
+              open: true,
+              loading: false,
+              polling: false,
+              taskId: null,
+              progress: 100,
+              stage: 'done',
+              elapsedText: elapsedText || prev.elapsedText || '',
+            }));
+            unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+            return;
+          }
           setSkillAiModal((prev) => ({
             ...prev,
             open: true,
@@ -1359,26 +1619,28 @@ const FunctionalCase = ({ project, dispatch }) => {
             taskId: null,
             progress: 100,
             stage: 'done',
-            stageText: `已生成 ${data.case_count || data.case_num || 0} 条候选用例，当前画布已同步最新结果。`,
+            stageText: appendElapsedToSkillText(`模型已生成 ${caseCount} 条候选用例，你已切换到其他用例，请切回“${targetCaseTitle}”后应用结果`, elapsedText),
             errorMessage: '',
-            reviewProvider: data.review_provider || prev.reviewProvider || '',
-            reviewRounds: Number(data.review_rounds || prev.reviewRounds || 0),
-            taskLogs: Array.isArray(data.task_logs) ? data.task_logs : prev.taskLogs,
-            resultMdUrl: data.result_md_url || prev.resultMdUrl || '',
-            resultCaseCount: Number(data.case_count || data.case_num || prev.resultCaseCount || 0),
+            reviewProvider: reviewProvider || prev.reviewProvider || '',
+            reviewRounds: Number(reviewRounds || prev.reviewRounds || 0),
+            resultCaseCount: Number(caseCount || prev.resultCaseCount || 0),
+            elapsedText: elapsedText || prev.elapsedText || '',
+            hasPendingResult: true,
           }));
-          setSkillAiStep(2);
-          message.success(`技能生成完成，识别到 ${data.case_count || data.case_num || 0} 条候选用例，当前画布已更新`);
+          unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+          message.warning(appendElapsedToSkillText(`模型生成已完成，但当前不在原始用例“${targetCaseTitle}”上，结果尚未自动覆盖`, elapsedText));
           return;
         }
-        if (data.status === 'failed') {
+        const status = String(data.status || data.stage || '').toLowerCase();
+        if (status === 'failed' || status.includes('fail')) {
           setSkillAiModal((prev) => ({
             ...prev,
             loading: false,
             polling: false,
-            errorMessage: data.error_message || '技能生成失败',
+            errorMessage: data.error_message || '模型生成失败',
           }));
-          message.error(data.error_message || '技能生成失败');
+          unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+          message.error(data.error_message || '模型生成失败');
           return;
         }
         timer = setTimeout(pollTask, 2000);
@@ -1390,6 +1652,7 @@ const FunctionalCase = ({ project, dispatch }) => {
           polling: false,
           errorMessage: error?.message || '查询生成结果失败',
         }));
+        unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
         message.error(error?.message || '查询生成结果失败');
       }
     };
@@ -1399,7 +1662,19 @@ const FunctionalCase = ({ project, dispatch }) => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [skillAiModal.open, skillAiModal.polling, skillAiModal.taskId, currentCase]);
+  }, [
+    applyPendingModelGenerateResult,
+    currentCase,
+    isFunctionalCaseRouteActive,
+    projectId,
+    queueGeneratedCaseResult,
+    skillAiModal.polling,
+    skillAiModal.requestStartedAt,
+    skillAiModal.taskId,
+    skillAiModal.targetCaseId,
+    skillAiModal.targetCaseTitle,
+    skillAiModal.targetProjectId,
+  ]);
 
   const directoryOptions = useMemo(() => treeToSelectOptions(directoryTree), [directoryTree]);
 
@@ -1451,6 +1726,72 @@ const FunctionalCase = ({ project, dispatch }) => {
     });
     localStorage.setItem('project_id', String(nextProjectId));
   }, [dispatch]);
+
+  const clearGeneratedCaseRouteQuery = useCallback(() => {
+    const searchParams = new URLSearchParams(location?.search || '');
+    const hasGeneratedQuery = searchParams.has('projectId') || searchParams.has('caseId') || searchParams.has('resultToken');
+    if (!hasGeneratedQuery) return;
+    searchParams.delete('projectId');
+    searchParams.delete('caseId');
+    searchParams.delete('resultToken');
+    const nextSearch = searchParams.toString();
+    history.replace(nextSearch ? `${location.pathname}?${nextSearch}` : location.pathname);
+  }, [location?.pathname, location?.search]);
+
+  const openGeneratedCaseNotification = useCallback((payload) => {
+    const resultToken = String(payload?.resultToken || '').trim();
+    if (!resultToken) return;
+    const notificationKey = `functional_case_generate_${resultToken}`;
+    const targetTitle = payload?.targetCaseTitle || payload?.title || '功能用例';
+    const caseCount = Number(payload?.caseCount || 0);
+    const description = appendElapsedToSkillText(
+      `功能用例“${targetTitle}”已生成完成${caseCount ? `，识别到 ${caseCount} 条候选用例` : ''}`,
+      payload?.elapsedText || '',
+    );
+    notification.success({
+      key: notificationKey,
+      message: '用例生成完成',
+      description,
+      duration: 0,
+      btn: (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => {
+            notification.destroy(notificationKey);
+            history.push(buildFunctionalCaseResultUrl({
+              projectId: payload?.projectId,
+              caseId: payload?.targetCaseId,
+              resultToken,
+            }));
+          }}
+        >
+          查看
+        </Button>
+      ),
+    });
+  }, []);
+
+  const queueGeneratedCaseResult = useCallback((payload) => {
+    const resultToken = buildFunctionalCaseResultToken(payload?.taskId, payload?.targetCaseId);
+    const queuedPayload = {
+      ...payload,
+      resultToken,
+      queuedAt: Date.now(),
+    };
+    persistFunctionalCaseResult(resultToken, queuedPayload);
+    pendingModelGenerateResultRef.current = {
+      data: queuedPayload.data,
+      title: queuedPayload.title,
+      targetCaseId: queuedPayload.targetCaseId,
+      caseCount: queuedPayload.caseCount,
+      reviewProvider: queuedPayload.reviewProvider,
+      reviewRounds: queuedPayload.reviewRounds,
+      elapsedText: queuedPayload.elapsedText,
+    };
+    openGeneratedCaseNotification(queuedPayload);
+    return queuedPayload;
+  }, [openGeneratedCaseNotification]);
 
   useEffect(() => {
     formatPainterRef.current = {
@@ -2192,6 +2533,77 @@ const FunctionalCase = ({ project, dispatch }) => {
       setLoadingCase(false);
     }
   };
+
+  useEffect(() => {
+    const { routeProjectId, routeCaseId, resultToken } = pendingGeneratedCaseView;
+    if (!isFunctionalCaseRouteActive || !routeProjectId || !routeCaseId) return;
+    if (projectId !== routeProjectId) {
+      saveProject(routeProjectId);
+      return;
+    }
+    if (caseFiles.length === 0) return;
+    const targetRecord = caseFiles.find((item) => Number(item?.id) === Number(routeCaseId));
+    if (!targetRecord) {
+      if (appliedKeyword || searchText) {
+        if (searchText) setSearchText('');
+        if (appliedKeyword) setAppliedKeyword('');
+        void fetchTree('', routeProjectId);
+        return;
+      }
+      clearGeneratedCaseRouteQuery();
+      return;
+    }
+    const handledKey = `${routeProjectId}_${routeCaseId}_${resultToken || 'no_token'}`;
+    if (handledGeneratedViewRef.current === handledKey) return;
+    handledGeneratedViewRef.current = handledKey;
+
+    const openGeneratedCase = async () => {
+      setCurrentDirectory(targetRecord.directory_id || null);
+      await loadCase(targetRecord, { force: true });
+      const storedResult = readFunctionalCaseResult(resultToken);
+      if (storedResult?.data && Number(storedResult?.targetCaseId) === Number(targetRecord.id)) {
+        applyImportedData(storedResult.data, storedResult.title || targetRecord.title);
+        setSkillAiModal((prev) => ({
+          ...prev,
+          open: false,
+          loading: false,
+          polling: false,
+          taskId: null,
+          targetProjectId: routeProjectId,
+          targetCaseId: Number(storedResult.targetCaseId || targetRecord.id),
+          targetCaseTitle: storedResult.targetCaseTitle || storedResult.title || targetRecord.title || '功能用例',
+          progress: 100,
+          stage: 'done',
+          stageText: appendElapsedToSkillText(
+            `模型已生成 ${Number(storedResult.caseCount || 0)} 条候选用例，当前画布已同步最新结果`,
+            storedResult.elapsedText || '',
+          ),
+          errorMessage: '',
+          reviewProvider: storedResult.reviewProvider || '',
+          reviewRounds: Number(storedResult.reviewRounds || 0),
+          resultCaseCount: Number(storedResult.caseCount || 0),
+          elapsedText: storedResult.elapsedText || '',
+          hasPendingResult: false,
+        }));
+        clearFunctionalCaseResult(resultToken);
+      }
+      clearGeneratedCaseRouteQuery();
+    };
+
+    void openGeneratedCase();
+  }, [
+    applyImportedData,
+    appliedKeyword,
+    caseFiles,
+    fetchTree,
+    clearGeneratedCaseRouteQuery,
+    isFunctionalCaseRouteActive,
+    loadCase,
+    pendingGeneratedCaseView,
+    projectId,
+    saveProject,
+    searchText,
+  ]);
 
   useEffect(() => {
     if (!dispatch) return;
@@ -3284,84 +3696,91 @@ const FunctionalCase = ({ project, dispatch }) => {
     });
   };
 
-  const openAIModal = () => {
+  const openModelGenerateModal = () => {
     if (!currentCase) return;
-    setAiModal((prev) => ({ ...prev, open: true }));
-  };
-
-  const openSkillAIModal = () => {
-    if (!currentCase) return;
-    setSkillAiStep(0);
+    if (skillAiModal.polling || skillAiModal.hasPendingResult) {
+      setSkillAiModal((prev) => ({
+        ...prev,
+        open: true,
+      }));
+      return;
+    }
     setSkillAiModal((prev) => ({
       ...prev,
       open: true,
       loading: false,
       polling: false,
       taskId: null,
+      targetProjectId: projectId,
+      targetCaseId: currentCase.id,
+      targetCaseTitle: currentCase.title || '功能用例',
       stage: 'idle',
       stageText: '',
       errorMessage: '',
       reviewProvider: '',
       reviewRounds: 0,
       progress: 0,
-      taskLogs: [],
-      resultMdUrl: '',
       resultCaseCount: 0,
-      instructionText: '',
+      elapsedText: '',
+      requestStartedAt: 0,
+      hasPendingResult: false,
+      instructionText: DEFAULT_SKILL_AI_INSTRUCTION,
       selectedDocIds: [],
       requirementItems: [createSkillRequirementItem()],
     }));
   };
 
-  const closeAIModal = () => {
-    if (aiModal.loading) return;
-    setAiModal((prev) => ({ ...prev, open: false }));
-  };
-
-  const resetSkillAIModal = useCallback(() => {
-    setSkillAiStep(0);
+  const resetModelGenerateModal = useCallback(() => {
+    pendingModelGenerateResultRef.current = null;
     setSkillAiModal((prev) => ({
       ...prev,
       open: false,
       polling: false,
       taskId: null,
+      targetProjectId: null,
+      targetCaseId: null,
+      targetCaseTitle: '',
       progress: 0,
       stage: 'idle',
       stageText: '',
       errorMessage: '',
       reviewProvider: '',
       reviewRounds: 0,
-      taskLogs: [],
-      resultMdUrl: '',
       resultCaseCount: 0,
-      instructionText: '',
+      elapsedText: '',
+      requestStartedAt: 0,
+      hasPendingResult: false,
+      instructionText: DEFAULT_SKILL_AI_INSTRUCTION,
       selectedDocIds: [],
       requirementItems: [createSkillRequirementItem()],
     }));
   }, []);
 
-  const closeSkillAIModal = () => {
+  const closeModelGenerateModal = () => {
     if (skillAiModal.loading) return;
     Modal.confirm({
-      title: skillAiModal.polling ? '确认关闭生成弹窗？' : '确认取消当前操作？',
+      title: skillAiModal.polling ? '确认关闭模型生成弹窗？' : '确认取消当前操作？',
       content: skillAiModal.polling
         ? '关闭弹窗不会取消后台生成任务，后台仍会继续生成测试用例。确认关闭吗？'
         : '关闭后当前填写的需求、提示词和已选文档将被清空。确认继续吗？',
       okText: '确认',
       cancelText: '继续编辑',
-      onOk: resetSkillAIModal,
+      onOk: () => {
+        if (skillAiModal.polling) {
+          setSkillAiModal((prev) => ({
+            ...prev,
+            open: false,
+          }));
+          return;
+        }
+        resetModelGenerateModal();
+      },
     });
   };
 
-  const skillStepItems = [
-    { title: '明确需求' },
-    { title: '技能/提示' },
-    { title: '完成' },
-  ];
-
   const skillTaskProgressItems = [
     { title: '任务创建' },
-    { title: '组装需求和技能材料' },
+    { title: '组装需求和规则材料' },
     { title: '调用模型生成测试用例' },
     { title: '审查测试用例' },
     { title: '完成' },
@@ -3386,44 +3805,6 @@ const FunctionalCase = ({ project, dispatch }) => {
       return 1;
     }
     return 0;
-  };
-
-  const handleSkillStepNext = () => {
-    if (skillAiStep >= 2) return;
-    setSkillAiStep((prev) => Math.min(prev + 1, 2));
-  };
-
-  const handleSkillStepPrev = () => {
-    if (skillAiStep <= 0) return;
-    setSkillAiStep((prev) => Math.max(prev - 1, 0));
-  };
-
-
-  const handleAIUpload = (file) => {
-    if (!file?.type?.startsWith?.('image/')) {
-      message.warning('仅支持上传图片格式的需求截图');
-      return Upload.LIST_IGNORE;
-    }
-    setAiModal((prev) => ({
-      ...prev,
-      fileList: [...prev.fileList, file].slice(-6),
-    }));
-    return false;
-  };
-
-  const removeAIUpload = (target) => {
-    setAiModal((prev) => ({
-      ...prev,
-      fileList: prev.fileList.filter((item) => item.uid !== target.uid),
-    }));
-  };
-
-  const handleSkillAIUpload = (file) => {
-    if (!file?.type?.startsWith?.('image/')) {
-      message.warning('仅支持上传图片格式的需求截图');
-      return Upload.LIST_IGNORE;
-    }
-    return false;
   };
 
   const updateSkillRequirementItem = (itemKey, updater) => {
@@ -3519,57 +3900,26 @@ const FunctionalCase = ({ project, dispatch }) => {
     );
   };
 
-  const submitAIGenerate = async () => {
+  const submitModelGenerate = async () => {
     if (!currentCase || !projectId) {
       message.warning('请先选择项目和功能用例');
       return;
     }
-    const requirementText = aiModal.requirementText.trim();
-    const instructionText = aiModal.instructionText.trim();
-    if (!requirementText && !instructionText && aiModal.fileList.length === 0) {
-      message.warning('请至少输入需求描述、生成要求或上传一张需求截图');
-      return;
-    }
-    setAiModal((prev) => ({ ...prev, loading: true }));
-    try {
-      const images = await Promise.all(
-        aiModal.fileList.map((file) => readFileAsDataUrl(file.originFileObj || file)),
-      );
-      const res = await aiGenerateFunctionalCase({
-        project_id: projectId,
-        title: currentCase.title || '功能用例',
-        requirement_text: requirementText,
-        instruction_text: instructionText,
-        images,
-      });
-      if (res?.code !== 0) {
-        throw new Error(res?.msg || 'AI 生成失败');
-      }
-      const generatedTitle = res?.data?.title || currentCase.title || '功能用例';
-      const generatedData = sanitizeMindData(res?.data?.data || defaultCaseData(generatedTitle));
-      applyImportedData(generatedData, generatedTitle);
-      setAiModal((prev) => ({
-        ...prev,
-        open: false,
-        loading: false,
-        requirementText: '',
-        instructionText: '',
-        fileList: [],
-      }));
-      message.success(`AI 已生成用例，识别到 ${res?.data?.case_count || res?.data?.case_num || 0} 条候选用例，请检查后保存`);
-    } catch (error) {
-      setAiModal((prev) => ({ ...prev, loading: false }));
-      message.error(error?.message || 'AI 生成失败');
-    }
-  };
-
-  const submitSkillAIGenerate = async () => {
-    if (!currentCase || !projectId) {
-      message.warning('请先选择项目和功能用例');
-      return;
-    }
+    const requestStartedAt = Date.now();
     const instructionText = skillAiModal.instructionText.trim();
-    setSkillAiModal((prev) => ({ ...prev, loading: true }));
+    const targetProjectId = projectId;
+    const targetCaseId = currentCase.id;
+    const targetCaseTitle = currentCase.title || '功能用例';
+    pendingModelGenerateResultRef.current = null;
+    setSkillAiModal((prev) => ({
+      ...prev,
+      loading: true,
+      elapsedText: '',
+      requestStartedAt,
+      targetProjectId,
+      targetCaseId,
+      targetCaseTitle,
+    }));
     try {
       const requirementItems = await buildSkillRequirementItemsPayload();
       if (requirementItems.length === 0 && !instructionText) {
@@ -3585,41 +3935,138 @@ const FunctionalCase = ({ project, dispatch }) => {
         return `需求组${index + 1}\n${parts.join('\n')}`;
       }).join('\n\n');
 
-      const createRes = await createFunctionalCaseSkillTask({
+      const createRes = await generateFunctionalCaseByModel({
         project_id: projectId,
-        title: currentCase.title || '功能用例',
+        title: targetCaseTitle,
         requirement_text: requirementText,
         requirement_items: requirementItems,
         instruction_text: instructionText,
         doc_ids: skillAiModal.selectedDocIds,
       });
       if (createRes?.code !== 0) {
-        throw new Error(createRes?.msg || '技能生成任务创建失败');
+        throw new Error(createRes?.msg || '模型生成请求失败');
       }
-      const taskId = createRes?.data?.task_id;
+      const responseData = createRes?.data || {};
+      const generatedPayload = responseData?.result && typeof responseData.result === 'object' ? responseData.result : responseData;
+      if (generatedPayload?.data && typeof generatedPayload.data === 'object') {
+        const generatedTitle = generatedPayload.title || targetCaseTitle || '功能用例';
+        const generatedData = sanitizeMindData(generatedPayload.data || defaultCaseData(generatedTitle), generatedTitle);
+        const elapsedText = resolveSkillTaskElapsedText({
+          taskLogs: responseData?.task_logs || generatedPayload?.task_logs,
+          startedAt: generatedPayload.started_at || responseData?.started_at,
+          finishedAt: generatedPayload.finished_at || responseData?.finished_at,
+          fallbackStartedAt: requestStartedAt,
+          fallbackFinishedAt: Date.now(),
+        });
+        pendingModelGenerateResultRef.current = {
+          data: generatedData,
+          title: generatedTitle,
+          targetCaseId,
+          caseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+          reviewProvider: generatedPayload.review_provider || '',
+          reviewRounds: Number(generatedPayload.review_rounds || 0),
+          elapsedText,
+        };
+        if (!isFunctionalCaseRouteActive) {
+          queueGeneratedCaseResult({
+            taskId: responseData?.task_id || responseData?.id,
+            projectId: targetProjectId,
+            targetCaseId,
+            targetCaseTitle,
+            title: generatedTitle,
+            data: generatedData,
+            caseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+            reviewProvider: generatedPayload.review_provider || '',
+            reviewRounds: Number(generatedPayload.review_rounds || 0),
+            elapsedText,
+          });
+          setSkillAiModal((prev) => ({
+            ...prev,
+            open: false,
+            loading: false,
+            polling: false,
+            taskId: null,
+            targetCaseId,
+            targetCaseTitle,
+            progress: 100,
+            stage: 'done',
+            stageText: appendElapsedToSkillText(
+              `模型已生成 ${generatedPayload.case_count || generatedPayload.case_num || 0} 条候选用例，可点击通知中的“查看”前往结果页面`,
+              elapsedText,
+            ),
+            errorMessage: '',
+            reviewProvider: generatedPayload.review_provider || prev.reviewProvider || '',
+            reviewRounds: Number(generatedPayload.review_rounds || prev.reviewRounds || 0),
+            resultCaseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+            elapsedText: elapsedText || prev.elapsedText || '',
+            hasPendingResult: true,
+          }));
+          return;
+        }
+        const matchesCurrentCase = currentCase && Number(currentCase.id) === Number(targetCaseId);
+        if (matchesCurrentCase) {
+          applyPendingModelGenerateResult();
+        }
+        setSkillAiModal((prev) => ({
+          ...prev,
+          open: true,
+          loading: false,
+          polling: false,
+          taskId: null,
+          targetCaseId,
+          targetCaseTitle,
+          progress: 100,
+          stage: 'done',
+          stageText: matchesCurrentCase
+            ? appendElapsedToSkillText(`模型已生成 ${generatedPayload.case_count || generatedPayload.case_num || 0} 条候选用例，当前画布已同步最新结果`, elapsedText)
+            : appendElapsedToSkillText(`模型已生成 ${generatedPayload.case_count || generatedPayload.case_num || 0} 条候选用例，你已切换到其他用例，请切回“${targetCaseTitle}”后应用结果`, elapsedText),
+          errorMessage: matchesCurrentCase ? '' : prev.errorMessage,
+          reviewProvider: generatedPayload.review_provider || prev.reviewProvider || '',
+          reviewRounds: Number(generatedPayload.review_rounds || prev.reviewRounds || 0),
+          resultCaseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+          elapsedText: elapsedText || prev.elapsedText || '',
+          hasPendingResult: !matchesCurrentCase,
+        }));
+        if (!matchesCurrentCase) {
+          message.warning(appendElapsedToSkillText(`模型生成已完成，但当前不在原始用例“${targetCaseTitle}”上，结果尚未自动覆盖`, elapsedText));
+        }
+        return;
+      }
+      const taskId = responseData?.task_id || responseData?.id;
       if (!taskId) {
-        throw new Error('未获取到任务编号');
+        throw new Error('未获取到模型生成结果');
       }
+      registerFunctionalCaseActiveTask({
+        taskId,
+        projectId: targetProjectId,
+        targetCaseId,
+        targetCaseTitle,
+        requestStartedAt,
+        resultToken: buildFunctionalCaseResultToken(taskId, targetCaseId),
+      });
       setSkillAiModal((prev) => ({
         ...prev,
         loading: false,
         polling: true,
         taskId,
-        progress: Number(createRes?.data?.progress || 0),
-        stage: createRes?.data?.stage || 'queued',
-        stageText: '任务已创建，正在等待后台执行',
+        targetProjectId,
+        targetCaseId,
+        targetCaseTitle,
+        progress: Number(responseData?.progress || 0),
+        stage: responseData?.stage || 'queued',
+        stageText: responseData?.stage_text || '请求已提交，正在调用模型生成测试用例',
         errorMessage: '',
         reviewProvider: '',
         reviewRounds: 0,
-        taskLogs: [],
-        resultMdUrl: '',
         resultCaseCount: 0,
+        elapsedText: '',
+        requestStartedAt,
+        hasPendingResult: false,
       }));
-      setSkillAiStep(2);
-      message.success('技能生成任务已创建，正在后台执行');
+      message.success('模型生成请求已提交，正在后台执行');
     } catch (error) {
       setSkillAiModal((prev) => ({ ...prev, loading: false }));
-      message.error(error?.message || '技能生成失败');
+      message.error(error?.message || '模型生成失败');
     }
   };
 
@@ -4235,7 +4682,7 @@ const FunctionalCase = ({ project, dispatch }) => {
                     className="functional-ai-trigger"
                     icon={<span className="ai-icon-text">AI</span>}
                     disabled={!currentCase || !projectId}
-                    onClick={openSkillAIModal}
+                    onClick={openModelGenerateModal}
                   />
                 </Tooltip>
                 <Tooltip title="保存">
@@ -4545,276 +4992,215 @@ const FunctionalCase = ({ project, dispatch }) => {
       </Modal>
 
       <Modal
-        title="AI 生成测试用例"
-        open={aiModal.open}
-        onCancel={closeAIModal}
-        onOk={submitAIGenerate}
-        okText="开始润色"
-        cancelText="取消"
-        confirmLoading={aiModal.loading}
-        width={720}
-        className="functional-ai-modal"
-      >
-        <div className="functional-ai-modal-body">
-          <div className="functional-ai-tip">
-            支持上传需求截图、输入需求描述，并补充你的生成规范。生成完成后会直接覆盖当前画布内容，请检查后再保存。
-          </div>
-          <div className="functional-ai-field">
-            <div className="functional-ai-label">需求文档截图</div>
-            <Upload
-              accept={AI_UPLOAD_ACCEPT}
-              listType="picture-card"
-              fileList={aiModal.fileList}
-              beforeUpload={handleAIUpload}
-              onRemove={removeAIUpload}
-              multiple
-            >
-              {aiModal.fileList.length >= 6 ? null : (
-                <div className="functional-ai-upload-button">
-                  <UploadOutlined />
-                  <span>上传截图</span>
-                </div>
-              )}
-            </Upload>
-          </div>
-          <div className="functional-ai-field">
-            <div className="functional-ai-label">需求描述</div>
-            <Input.TextArea
-              rows={5}
-              placeholder="请输入需求背景、页面流程、前置条件、校验点等内容"
-              value={aiModal.requirementText}
-              onChange={(event) => setAiModal((prev) => ({ ...prev, requirementText: event.target.value }))}
-            />
-          </div>
-          <div className="functional-ai-field">
-            <div className="functional-ai-label">生成要求 / 返回格式要求</div>
-            <Input.TextArea
-              rows={6}
-              placeholder="例如：按前置条件/操作步骤/预期结果组织；覆盖正常、异常、边界场景；优先级节点使用 priority 图标；返回结果便于直接生成 xmind 用例"
-              value={aiModal.instructionText}
-              onChange={(event) => setAiModal((prev) => ({ ...prev, instructionText: event.target.value }))}
-            />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        title="技能生成测试用例"
+        title="模型生成测试用例"
         open={skillAiModal.open}
-        onCancel={closeSkillAIModal}
+        onCancel={closeModelGenerateModal}
         width={760}
         className="functional-ai-modal"
         footer={[
-          <Button key="cancel" onClick={closeSkillAIModal}>
-            取消
+          <Button key="cancel" onClick={closeModelGenerateModal} disabled={skillAiModal.loading}>
+            {skillAiModal.stage === 'done' ? '关闭' : '取消'}
           </Button>,
-          skillAiStep > 0 && skillAiStep < 2 ? (
-            <Button key="prev" onClick={handleSkillStepPrev} disabled={skillAiModal.polling || skillAiModal.loading}>
-              上一步
-            </Button>
-          ) : null,
-          skillAiStep < 1 ? (
-            <Button key="next" type="primary" onClick={handleSkillStepNext} disabled={skillAiModal.polling || skillAiModal.loading}>
-              下一步
-            </Button>
-          ) : null,
-          skillAiStep === 1 ? (
+          skillAiModal.hasPendingResult ? (
             <Button
-              key="start"
+              key="apply"
               type="primary"
-              onClick={submitSkillAIGenerate}
-              loading={skillAiModal.loading}
-              disabled={skillAiModal.polling}
+              onClick={applyPendingModelGenerateResult}
+              disabled={!currentCase || Number(currentCase.id) !== Number(skillAiModal.targetCaseId)}
             >
-              {skillAiModal.polling ? '生成中' : '开始生成'}
+              应用结果
             </Button>
           ) : null,
-          skillAiStep === 2 ? (
-            <Button key="done" type="primary" onClick={resetSkillAIModal} disabled={skillAiModal.polling || skillAiModal.loading}>
-              完成
-            </Button>
-          ) : null,
+          <Button
+            key="start"
+            type="primary"
+            onClick={submitModelGenerate}
+            loading={skillAiModal.loading}
+            disabled={skillAiModal.polling || skillAiModal.hasPendingResult}
+          >
+            {skillAiModal.stage === 'done' ? '重新生成' : '开始生成'}
+          </Button>,
         ]}
       >
         <div className="functional-ai-modal-body">
-          <Steps
-            current={skillAiStep}
-            items={skillStepItems}
-            className="functional-ai-steps"
-            style={{ marginBottom: 16 }}
-          />
-          {skillAiStep < 2 ? (
-            <div className="functional-ai-tip">
-              这条链路会把需求截图、需求文本、已选技能文档和系统规范一并送到后端任务目录，生成 Markdown 用例并由后端转换为画布数据覆盖当前画布。
-            </div>
-          ) : null}
+          <div className="functional-ai-tip">
+            支持按需求组上传截图、补充需求说明、关联设计链接，并选择已有规则文档。提交后会直接调用当前启用的模型生成测试用例，并覆盖当前画布。
+          </div>
 
-          {skillAiStep === 0 ? (
-            <>
-              <div className="functional-ai-field">
-                <div className="functional-ai-label">需求组</div>
-                <div style={{ color: '#6b7280', marginBottom: 12 }}>
-                  每个需求组都可以单独维护需求说明、需求图片和设计链接。生成时会按组装配，避免图片和文字错位。
+          <div className="functional-ai-field">
+            <div className="functional-ai-label">需求组</div>
+            <div style={{ color: '#6b7280', marginBottom: 12 }}>
+              每个需求组都可以单独维护说明、截图和设计链接，模型会按组装配，减少图片与文字错位。
+            </div>
+
+            {skillAiModal.requirementItems.map((item, itemIndex) => (
+              <div
+                key={item.key}
+                style={{
+                  padding: 16,
+                  marginBottom: 16,
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 10,
+                  background: '#fafbfc',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, color: '#111827' }}>{`需求组 ${itemIndex + 1}`}</div>
+                  <Button
+                    danger
+                    type="text"
+                    disabled={skillAiModal.polling}
+                    onClick={() => removeSkillRequirementItem(item.key)}
+                  >
+                    删除
+                  </Button>
                 </div>
 
-                {skillAiModal.requirementItems.map((item, itemIndex) => (
-                  <div
-                    key={item.key}
-                    style={{
-                      padding: 16,
-                      marginBottom: 16,
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 10,
-                      background: '#fafbfc',
+                <div className="functional-ai-field">
+                  <div className="functional-ai-label">需求组标题</div>
+                  <Input
+                    placeholder="例如：新增数据源第二步 / 列表查询区 / 原型A审批流"
+                    value={item.title}
+                    disabled={skillAiModal.polling}
+                    onChange={(event) => updateSkillRequirementItem(item.key, (current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))}
+                  />
+                </div>
+
+                <div className="functional-ai-field">
+                  <div className="functional-ai-label">需求说明</div>
+                  <Input.TextArea
+                    rows={4}
+                    placeholder="请输入这一组需求说明。支持只写说明、只传图片、只贴链接，或任意组合。"
+                    value={item.text}
+                    disabled={skillAiModal.polling}
+                    onChange={(event) => updateSkillRequirementItem(item.key, (current) => ({
+                      ...current,
+                      text: event.target.value,
+                    }))}
+                  />
+                </div>
+
+                <div className="functional-ai-field">
+                  <div className="functional-ai-label">关联需求图片</div>
+                  <Upload
+                    accept={AI_UPLOAD_ACCEPT}
+                    listType="picture-card"
+                    fileList={item.fileList}
+                    beforeUpload={(file) => handleSkillItemUpload(item.key, file)}
+                    onRemove={(file) => {
+                      removeSkillItemUpload(item.key, file);
+                      return false;
                     }}
+                    multiple
+                    disabled={skillAiModal.polling}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <div style={{ fontWeight: 600, color: '#111827' }}>{`需求组 ${itemIndex + 1}`}</div>
+                    {item.fileList.length >= 9 ? null : (
+                      <div className="functional-ai-upload-button">
+                        <UploadOutlined />
+                        <span>上传截图</span>
+                      </div>
+                    )}
+                  </Upload>
+                </div>
+
+                <div className="functional-ai-field">
+                  <div className="functional-ai-label">关联设计链接</div>
+                  {(item.designLinks || ['']).map((link, linkIndex) => (
+                    <div key={`${item.key}_link_${linkIndex}`} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <Input
+                        placeholder={DESIGN_LINK_PLACEHOLDER}
+                        value={link}
+                        disabled={skillAiModal.polling}
+                        onChange={(event) => updateSkillRequirementLink(item.key, linkIndex, event.target.value)}
+                      />
                       <Button
                         danger
-                        type="text"
                         disabled={skillAiModal.polling}
-                        onClick={() => removeSkillRequirementItem(item.key)}
+                        onClick={() => removeSkillRequirementLink(item.key, linkIndex)}
                       >
                         删除
                       </Button>
                     </div>
-
-                    <div className="functional-ai-field">
-                      <div className="functional-ai-label">需求组标题</div>
-                      <Input
-                        placeholder="例如：新增数据源第二步 / 列表查询区 / 原型A审批流"
-                        value={item.title}
-                        disabled={skillAiModal.polling}
-                        onChange={(event) => updateSkillRequirementItem(item.key, (current) => ({
-                          ...current,
-                          title: event.target.value,
-                        }))}
-                      />
-                    </div>
-
-                    <div className="functional-ai-field">
-                      <div className="functional-ai-label">需求说明</div>
-                      <Input.TextArea
-                        rows={4}
-                        placeholder="请输入这一组需求说明。支持只写说明、只传图片、只贴链接，或任意组合。"
-                        value={item.text}
-                        disabled={skillAiModal.polling}
-                        onChange={(event) => updateSkillRequirementItem(item.key, (current) => ({
-                          ...current,
-                          text: event.target.value,
-                        }))}
-                      />
-                    </div>
-
-                    <div className="functional-ai-field">
-                      <div className="functional-ai-label">关联需求图片</div>
-                      <Upload
-                        accept={AI_UPLOAD_ACCEPT}
-                        listType="picture-card"
-                        fileList={item.fileList}
-                        beforeUpload={(file) => handleSkillItemUpload(item.key, file)}
-                        onRemove={(file) => {
-                          removeSkillItemUpload(item.key, file);
-                          return false;
-                        }}
-                        multiple
-                        disabled={skillAiModal.polling}
-                      >
-                        {item.fileList.length >= 9 ? null : (
-                          <div className="functional-ai-upload-button">
-                            <UploadOutlined />
-                            <span>上传截图</span>
-                          </div>
-                        )}
-                      </Upload>
-                    </div>
-
-                    <div className="functional-ai-field">
-                      <div className="functional-ai-label">关联设计链接</div>
-                      {(item.designLinks || ['']).map((link, linkIndex) => (
-                        <div key={`${item.key}_link_${linkIndex}`} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                          <Input
-                            placeholder={DESIGN_LINK_PLACEHOLDER}
-                            value={link}
-                            disabled={skillAiModal.polling}
-                            onChange={(event) => updateSkillRequirementLink(item.key, linkIndex, event.target.value)}
-                          />
-                          <Button
-                            danger
-                            disabled={skillAiModal.polling}
-                            onClick={() => removeSkillRequirementLink(item.key, linkIndex)}
-                          >
-                            删除
-                          </Button>
-                        </div>
-                      ))}
-                      <Button disabled={skillAiModal.polling} onClick={() => addSkillRequirementLink(item.key)}>
-                        新增链接
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-
-                <Button type="dashed" block disabled={skillAiModal.polling} onClick={addSkillRequirementItem}>
-                  新增需求组
-                </Button>
-              </div>
-            </>
-          ) : null}
-
-          {skillAiStep === 1 ? (
-            <>
-              <div className="functional-ai-field">
-                <div className="functional-ai-label">选择技能 / 文档</div>
-                <Select
-                  mode="multiple"
-                  allowClear
-                  style={{ width: '100%' }}
-                  placeholder="选择当前用户可见的技能文档或普通文档"
-                  options={skillDocOptions}
-                  value={skillAiModal.selectedDocIds}
-                  loading={loadingSkillDocs}
-                  disabled={skillAiModal.polling}
-                  onChange={(value) => setSkillAiModal((prev) => ({ ...prev, selectedDocIds: value }))}
-                />
-              </div>
-              <div className="functional-ai-field">
-                <div className="functional-ai-label">提示词 / 生成目标</div>
-                <Input.TextArea
-                  rows={6}
-                  placeholder="例如：根据上传的需求文档生成测试用例，并参考已选技能补齐正常、异常和边界场景"
-                  value={skillAiModal.instructionText}
-                  disabled={skillAiModal.polling}
-                  onChange={(event) => setSkillAiModal((prev) => ({ ...prev, instructionText: event.target.value }))}
-                />
-              </div>
-            </>
-          ) : null}
-
-          {skillAiStep === 2 ? (
-            <>
-              <div className="functional-ai-field">
-                <div className="functional-ai-label">任务进度</div>
-                <div style={{ padding: 12, background: '#f7f9fc', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                  <Steps
-                    current={resolveSkillTaskProgressIndex()}
-                    size="small"
-                    direction="vertical"
-                    items={skillTaskProgressItems}
-                  />
-                  <div style={{ color: '#1f2937', marginTop: 10 }}>{skillAiModal.stageText || '等待执行'}</div>
-                  {skillAiModal.reviewProvider ? (
-                    <div style={{ color: '#6b7280', marginTop: 4 }}>
-                      {`审查模型：${skillAiModal.reviewProvider} · 审查轮次：${skillAiModal.reviewRounds || 0}`}
-                    </div>
-                  ) : null}
-                  {skillAiModal.errorMessage ? (
-                    <div style={{ color: '#dc2626', marginTop: 4 }}>{skillAiModal.errorMessage}</div>
-                  ) : null}
+                  ))}
+                  <Button disabled={skillAiModal.polling} onClick={() => addSkillRequirementLink(item.key)}>
+                    新增链接
+                  </Button>
                 </div>
               </div>
-            </>
+            ))}
+
+            <Button type="dashed" block disabled={skillAiModal.polling} onClick={addSkillRequirementItem}>
+              新增需求组
+            </Button>
+          </div>
+
+          <div className="functional-ai-field">
+            <div className="functional-ai-label">规则文档 / 参考文档</div>
+            <Select
+              mode="multiple"
+              allowClear
+              style={{ width: '100%' }}
+              placeholder="选择当前用户可见的规则文档、模板文档或普通说明文档"
+              options={skillDocOptions}
+              value={skillAiModal.selectedDocIds}
+              loading={loadingSkillDocs}
+              disabled={skillAiModal.polling}
+              onChange={(value) => setSkillAiModal((prev) => ({ ...prev, selectedDocIds: value }))}
+            />
+          </div>
+
+          <div className="functional-ai-field">
+            <div className="functional-ai-label">生成要求 / 审查要求</div>
+            <Input.TextArea
+              rows={6}
+              placeholder="例如：按前置条件/操作步骤/预期结果组织；覆盖正常、异常、边界场景；结合已选规则文档补齐命名规范、模板要求和审查项"
+              value={skillAiModal.instructionText}
+              disabled={skillAiModal.polling}
+              onChange={(event) => setSkillAiModal((prev) => ({ ...prev, instructionText: event.target.value }))}
+            />
+          </div>
+
+          {(skillAiModal.polling || skillAiModal.stageText || skillAiModal.errorMessage || skillAiModal.stage === 'done') ? (
+            <div className="functional-ai-field">
+              <div className="functional-ai-label">生成状态</div>
+              <div style={{ padding: 12, background: '#f7f9fc', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                <Steps
+                  current={resolveSkillTaskProgressIndex()}
+                  size="small"
+                  direction="vertical"
+                  items={skillTaskProgressItems}
+                />
+                <div style={{ color: '#1f2937', marginTop: 10 }}>
+                  {skillAiModal.stageText || (skillAiModal.stage === 'done' ? '本轮模型生成已完成。' : '等待执行')}
+                </div>
+                {skillAiModal.hasPendingResult && skillAiModal.targetCaseTitle ? (
+                  <div style={{ color: '#b45309', marginTop: 4 }}>
+                    {`当前结果属于“${skillAiModal.targetCaseTitle}”，请切回该用例后点击“应用结果”。`}
+                  </div>
+                ) : null}
+                {skillAiModal.resultCaseCount ? (
+                  <div style={{ color: '#6b7280', marginTop: 4 }}>
+                    {`候选用例数：${skillAiModal.resultCaseCount}`}
+                  </div>
+                ) : null}
+                {skillAiModal.elapsedText ? (
+                  <div style={{ color: '#6b7280', marginTop: 4 }}>
+                    {`生成耗时：${skillAiModal.elapsedText}`}
+                  </div>
+                ) : null}
+                {skillAiModal.reviewProvider ? (
+                  <div style={{ color: '#6b7280', marginTop: 4 }}>
+                    {`审查模型：${skillAiModal.reviewProvider} · 审查轮次：${skillAiModal.reviewRounds || 0}`}
+                  </div>
+                ) : null}
+                {skillAiModal.errorMessage ? (
+                  <div style={{ color: '#dc2626', marginTop: 4 }}>{skillAiModal.errorMessage}</div>
+                ) : null}
+              </div>
+            </div>
           ) : null}
         </div>
       </Modal>

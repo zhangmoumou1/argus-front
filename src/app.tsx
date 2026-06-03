@@ -7,11 +7,12 @@ import { history } from '@umijs/max';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 import { currentUser as queryCurrentUser, LoginUser } from './services/auth';
-import React, { useEffect } from 'react';
+import { queryFunctionalCaseGenerateTask } from './services/functionalCase';
+import React, { useEffect, useRef } from 'react';
 import NoTableData from '@/assets/NoSearch.svg';
 import routesConfig from '../config/routes';
 
-import { Breadcrumb, ConfigProvider, Empty, message, Spin } from 'antd';
+import { Breadcrumb, Button, ConfigProvider, Empty, message, notification, Spin } from 'antd';
 import {
   BankOutlined,
   AreaChartOutlined,
@@ -32,8 +33,290 @@ declare global {
       dirty?: boolean;
       path?: string;
     };
+    __FUNCTIONAL_CASE_TASK_POLLING__?: boolean;
   }
 }
+
+const FUNCTIONAL_CASE_ROUTE_PATH = '/scenario/functionalCase';
+const FUNCTIONAL_CASE_RESULT_STORAGE_PREFIX = 'functional_case_skill_result_';
+const FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY = 'functional_case_skill_active_tasks';
+
+const isFunctionalCaseRoutePath = (pathname = '') => {
+  const cleanPath = String(pathname || '').trim().toLowerCase();
+  return cleanPath === '/scenario/functionalcase' || cleanPath === '/apitest/functionalcase';
+};
+
+const buildFunctionalCaseResultToken = (taskId?: string | number | null, caseId?: string | number | null) => {
+  const rawTaskId = String(taskId || '').trim();
+  if (rawTaskId) return rawTaskId;
+  return `case_${caseId || 'unknown'}_${Date.now()}`;
+};
+
+const buildFunctionalCaseResultUrl = ({
+  projectId,
+  caseId,
+  resultToken,
+}: {
+  projectId?: string | number | null;
+  caseId?: string | number | null;
+  resultToken?: string | number | null;
+}) => {
+  const query = new URLSearchParams();
+  if (projectId) query.set('projectId', String(projectId));
+  if (caseId) query.set('caseId', String(caseId));
+  if (resultToken) query.set('resultToken', String(resultToken));
+  const search = query.toString();
+  return search ? `${FUNCTIONAL_CASE_ROUTE_PATH}?${search}` : FUNCTIONAL_CASE_ROUTE_PATH;
+};
+
+const getFunctionalCaseResultStorageKey = (resultToken: string) => `${FUNCTIONAL_CASE_RESULT_STORAGE_PREFIX}${resultToken}`;
+
+const persistFunctionalCaseResult = (resultToken: string, payload: Record<string, any>) => {
+  if (!resultToken || !payload) return;
+  try {
+    sessionStorage.setItem(getFunctionalCaseResultStorageKey(resultToken), JSON.stringify(payload));
+  } catch (error) {
+    // ignore storage quota errors
+  }
+};
+
+type FunctionalCaseActiveTask = {
+  taskId: number | string;
+  projectId?: number | string | null;
+  targetCaseId?: number | string | null;
+  targetCaseTitle?: string;
+  requestStartedAt?: number;
+  resultToken?: string;
+};
+
+const readFunctionalCaseActiveTasks = (): FunctionalCaseActiveTask[] => {
+  try {
+    const raw = sessionStorage.getItem(FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.taskId) : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const writeFunctionalCaseActiveTasks = (tasks: FunctionalCaseActiveTask[]) => {
+  try {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      sessionStorage.removeItem(FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY);
+      return;
+    }
+    sessionStorage.setItem(FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  } catch (error) {
+    // ignore storage errors
+  }
+};
+
+const removeFunctionalCaseActiveTask = (taskId?: number | string | null) => {
+  if (!taskId && taskId !== 0) return;
+  const taskIdText = String(taskId);
+  const remainTasks = readFunctionalCaseActiveTasks().filter((item) => String(item?.taskId) !== taskIdText);
+  writeFunctionalCaseActiveTasks(remainTasks);
+};
+
+const parseFunctionalCaseTimeToMs = (value: unknown) => {
+  if (!value && value !== 0) return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? value : value * 1000;
+  }
+  const raw = String(value).trim();
+  if (!raw) return 0;
+  if (/^\d+$/.test(raw)) {
+    const numericValue = Number(raw);
+    return numericValue > 1e12 ? numericValue : numericValue * 1000;
+  }
+  const parsed = new Date(raw.replace('T', ' ').replace(/-/g, '/')).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatFunctionalCaseElapsedText = (durationMs: number) => {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return '';
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}秒`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}分钟${seconds}秒`;
+};
+
+const resolveFunctionalCaseElapsedText = ({
+  taskLogs,
+  startedAt,
+  finishedAt,
+  fallbackStartedAt,
+  fallbackFinishedAt,
+}: {
+  taskLogs?: any[];
+  startedAt?: unknown;
+  finishedAt?: unknown;
+  fallbackStartedAt?: unknown;
+  fallbackFinishedAt?: unknown;
+}) => {
+  const logList = Array.isArray(taskLogs) ? taskLogs : [];
+  const firstLogTime = parseFunctionalCaseTimeToMs(logList[0]?.time);
+  const lastLogTime = parseFunctionalCaseTimeToMs(logList[logList.length - 1]?.time);
+  const startMs = parseFunctionalCaseTimeToMs(startedAt) || firstLogTime || parseFunctionalCaseTimeToMs(fallbackStartedAt);
+  const endMs = parseFunctionalCaseTimeToMs(finishedAt) || lastLogTime || parseFunctionalCaseTimeToMs(fallbackFinishedAt);
+  if (!startMs || !endMs || endMs < startMs) return '';
+  return formatFunctionalCaseElapsedText(endMs - startMs);
+};
+
+const appendFunctionalCaseElapsedText = (text = '', elapsedText = '') => {
+  if (!elapsedText) return text;
+  if (!text) return `耗时 ${elapsedText}`;
+  if (String(text).includes('耗时')) return text;
+  return `${text}，耗时 ${elapsedText}`;
+};
+
+const FunctionalCaseTaskWatcher = () => {
+  const timerRef = useRef<number | null>(null);
+  const pollingRef = useRef(false);
+  const pollTasksRef = useRef<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const scheduleNext = (delay = 2000) => {
+      if (cancelled) return;
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+      }
+      timerRef.current = window.setTimeout(() => {
+        void pollTasksRef.current?.();
+      }, delay);
+    };
+
+    const pollTasks = async () => {
+      if (cancelled || pollingRef.current) return;
+      const currentPath = history.location?.pathname || '';
+      const routeActive = isFunctionalCaseRoutePath(currentPath);
+      const pagePolling = Boolean(window.__FUNCTIONAL_CASE_TASK_POLLING__);
+      const activeTasks = readFunctionalCaseActiveTasks();
+      if (activeTasks.length === 0) {
+        scheduleNext(3000);
+        return;
+      }
+      if (routeActive && pagePolling) {
+        scheduleNext(2000);
+        return;
+      }
+
+      pollingRef.current = true;
+      try {
+        for (const task of activeTasks) {
+          const res = await queryFunctionalCaseGenerateTask({ id: task.taskId });
+          if (cancelled) return;
+          if (res?.code !== 0) {
+            continue;
+          }
+          const statusData = res?.data || {};
+          const generatedPayload = statusData?.result && typeof statusData.result === 'object' ? statusData.result : statusData;
+
+          if (generatedPayload?.data && typeof generatedPayload.data === 'object') {
+            const resultToken = String(task.resultToken || buildFunctionalCaseResultToken(task.taskId, task.targetCaseId));
+            const caseCount = Number(generatedPayload.case_count || generatedPayload.case_num || 0);
+            const elapsedText = resolveFunctionalCaseElapsedText({
+              taskLogs: statusData.task_logs,
+              startedAt: generatedPayload.started_at || statusData.started_at,
+              finishedAt: generatedPayload.finished_at || statusData.finished_at,
+              fallbackStartedAt: task.requestStartedAt,
+              fallbackFinishedAt: Date.now(),
+            });
+            persistFunctionalCaseResult(resultToken, {
+              ...task,
+              resultToken,
+              title: generatedPayload.title || task.targetCaseTitle || '功能用例',
+              targetCaseTitle: task.targetCaseTitle || generatedPayload.title || '功能用例',
+              data: generatedPayload.data,
+              caseCount,
+              reviewProvider: generatedPayload.review_provider || statusData.review_provider || '',
+              reviewRounds: Number(generatedPayload.review_rounds || statusData.review_rounds || 0),
+              elapsedText,
+            });
+
+            const shouldNotify = !routeActive || !pagePolling;
+            if (shouldNotify) {
+              const targetTitle = task.targetCaseTitle || generatedPayload.title || '功能用例';
+              const description = appendFunctionalCaseElapsedText(
+                `功能用例“${targetTitle}”已生成完成${caseCount ? `，识别到 ${caseCount} 条候选用例` : ''}`,
+                elapsedText,
+              );
+              const notificationKey = `functional_case_generate_${resultToken}`;
+              notification.success({
+                key: notificationKey,
+                message: '用例生成完成',
+                description,
+                duration: 0,
+                btn: (
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={() => {
+                      notification.destroy(notificationKey);
+                      history.push(buildFunctionalCaseResultUrl({
+                        projectId: task.projectId,
+                        caseId: task.targetCaseId,
+                        resultToken,
+                      }));
+                    }}
+                  >
+                    查看
+                  </Button>
+                ),
+              });
+            }
+
+            removeFunctionalCaseActiveTask(task.taskId);
+            continue;
+          }
+
+          const status = String(statusData.status || statusData.stage || '').toLowerCase();
+          if (status === 'failed' || status.includes('fail')) {
+            notification.error({
+              message: '模型生成失败',
+              description: statusData.error_message || `功能用例“${task.targetCaseTitle || task.targetCaseId || ''}”生成失败`,
+            });
+            removeFunctionalCaseActiveTask(task.taskId);
+          }
+        }
+        const latestTasks = readFunctionalCaseActiveTasks();
+        writeFunctionalCaseActiveTasks(latestTasks);
+        if (latestTasks.length === 0) {
+          scheduleNext(3000);
+          return;
+        }
+      } catch (error) {
+        // keep tasks and retry later
+      } finally {
+        pollingRef.current = false;
+        scheduleNext(2000);
+      }
+    };
+
+    pollTasksRef.current = pollTasks;
+    void pollTasks();
+    const unlisten = history.listen(() => {
+      void pollTasks();
+    });
+    return () => {
+      cancelled = true;
+      pollingRef.current = false;
+      pollTasksRef.current = null;
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+      }
+      unlisten?.();
+    };
+  }, []);
+
+  return null;
+};
 
 const getFullPath = (currPath = '', parentPath = '') => {
   if (!currPath) return parentPath;
@@ -477,6 +760,16 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     ...initialState?.settings,
   };
 };
+
+export function rootContainer(container: React.ReactNode) {
+  // Keep the skill-task watcher alive across route changes, including layout-less pages.
+  return (
+    <>
+      <FunctionalCaseTaskWatcher />
+      {container}
+    </>
+  );
+}
 
 export const request = {
   ...errorConfig,
