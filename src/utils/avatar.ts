@@ -30,4 +30,18 @@ const resolveLastDigit = (value) => {
 
 export const getAvatarById = (value) => AVATAR_MAP[resolveLastDigit(value)] || AVATAR_MAP['0'];
 
-export const getAvatarByUser = (user) => getAvatarById(user?.id);
+const resolveAvatarUrl = (value) => {
+  const text = String(value ?? '').trim();
+  if (!text) {
+    return '';
+  }
+  if (/^(https?:)?\/\//i.test(text) || text.startsWith('data:') || text.startsWith('blob:')) {
+    return text;
+  }
+  if (text.startsWith('/')) {
+    return text;
+  }
+  return `/${text.replace(/^\/+/, '')}`;
+};
+
+export const getAvatarByUser = (user) => resolveAvatarUrl(user?.avatar) || getAvatarById(user?.id);

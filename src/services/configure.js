@@ -355,6 +355,20 @@ export async function uploadFile(params) {
   });
 }
 
+export async function uploadFiles(params) {
+  const formData = new FormData();
+  (params.files || []).forEach((item) => {
+    formData.append('files', item.originFileObj || item);
+  });
+  formData.append('paths', JSON.stringify(params.paths || []));
+  return request(`${CONFIG.URL}/oss/upload/batch`, {
+    method: 'POST',
+    data: formData,
+    requestType: 'form',
+    headers: auth.headers(false),
+  });
+}
+
 export async function uploadKnowledgeFile(params) {
   const formData = new FormData();
   formData.append('file', params.file);
@@ -367,9 +381,18 @@ export async function uploadKnowledgeFile(params) {
   });
 }
 
-export async function listFile() {
+export async function listFile(params) {
   return request(`${CONFIG.URL}/oss/list`, {
     method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
+export async function detailFile(params) {
+  return request(`${CONFIG.URL}/oss/detail`, {
+    method: 'GET',
+    params,
     headers: auth.headers(),
   });
 }

@@ -8,6 +8,7 @@ import Articles from './components/Articles';
 import Applications from './components/Applications';
 import { queryCurrent } from './service';
 import styles from './Center.less';
+import { getAvatarByUser } from '@/utils/avatar';
 const operationTabList = [
   {
     key: 'articles',
@@ -212,7 +213,7 @@ const Center = () => {
             {!loading && currentUser && (
               <div>
                 <div className={styles.avatarHolder}>
-                  <img alt="" src={currentUser.avatar} />
+                  <img alt="" src={getAvatarByUser(currentUser)} />
                   <div className={styles.name}>{currentUser.name}</div>
                   <div>{currentUser?.signature}</div>
                 </div>

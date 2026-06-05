@@ -18,7 +18,13 @@ const SystemConfig = ({dispatch, gconfig, loading}) => {
   const onSetField = () => {
     const {email, oss, yapi} = configuration;
     form.setFieldsValue(email);
-    form.setFieldsValue(oss);
+    form.setFieldsValue({
+      region: 'us-east-1',
+      use_ssl: false,
+      force_path_style: true,
+      presign_expire: 3600,
+      ...oss,
+    });
     form.setFieldsValue(yapi);
   }
 
@@ -56,7 +62,12 @@ const SystemConfig = ({dispatch, gconfig, loading}) => {
         "access_key_id": values.access_key_id,
         "access_key_secret": values.access_key_secret,
         "bucket": values.bucket,
-        "endpoint": values.endpoint
+        "endpoint": values.endpoint,
+        "avatar_bucket": values.avatar_bucket,
+        "region": values.region,
+        "use_ssl": !!values.use_ssl,
+        "force_path_style": values.force_path_style !== false,
+        "presign_expire": values.presign_expire,
       }
     }
     dispatch({

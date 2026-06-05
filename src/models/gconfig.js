@@ -418,8 +418,8 @@ export default {
       }
     },
 
-    * listOssFile({_}, {call, put}) {
-      const res = yield call(listFile);
+    * listOssFile({payload}, {call, put}) {
+      const res = yield call(listFile, payload);
       if (auth.response(res)) {
         yield put({
           type: 'save',

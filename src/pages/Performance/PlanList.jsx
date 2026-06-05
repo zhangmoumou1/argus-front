@@ -24,14 +24,12 @@ import {
   Table,
   Tag,
   TreeSelect,
-  Upload,
 } from 'antd';
 import {
   DeleteOutlined,
   LineChartOutlined,
   PlusOutlined,
   ReloadOutlined,
-  UploadOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import {
@@ -44,13 +42,14 @@ import {
   queryPerformancePlanSource,
   queryPerformanceCasePreview,
   updatePerformancePlan,
-  uploadPerformanceParameterFile,
   validatePerformancePlanParameters,
 } from '@/services/performance';
+import { listFile } from '@/services/configure';
 import { listApiEndpoints, listApiEndpointVersions, listApiServices } from '@/services/interfaceManage';
 import { listTestPlanCaseTree } from '@/services/testplan';
 import auth from '@/utils/auth';
 import UserLink from '@/components/Button/UserLink';
+import CONFIG from '@/consts/config';
 import {
   PerformanceDataTableCard,
   PerformanceModalFrame,
@@ -171,6 +170,56 @@ const prettyJson = (value, fallback = '{}') => {
   } catch (e) {
     return fallback;
   }
+};
+
+const parseCsvLine = (line, delimiter = ',') => {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === delimiter && !inQuotes) {
+      values.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  values.push(current);
+  return values.map((item) => item.trim());
+};
+
+const parseCsvPreview = (text, delimiter = ',', limit = 10) => {
+  const lines = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '');
+  if (!lines.length) {
+    return { columns: [], rows: [], row_count: 0 };
+  }
+  const columns = parseCsvLine(lines[0], delimiter);
+  const rows = lines.slice(1, limit + 1).map((line) => {
+    const values = parseCsvLine(line, delimiter);
+    return columns.reduce((acc, column, idx) => ({
+      ...acc,
+      [column || `column_${idx + 1}`]: values[idx] ?? '',
+    }), {});
+  });
+  return {
+    columns,
+    rows,
+    row_count: Math.max(lines.length - 1, 0),
+  };
 };
 
 const toCaseKeys = (caseList) => {
@@ -331,10 +380,37 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
       setParameterFiles([]);
       return;
     }
-    const res = await listPerformanceParameterFiles({ project_id: value });
-    if (auth.response(res)) {
-      setParameterFiles(normalizeList(res.data));
-    }
+    const [legacyRes, bucketRes] = await Promise.all([
+      listPerformanceParameterFiles({ project_id: value }),
+      listFile({ suffix: '.csv' }),
+    ]);
+
+    const legacyFiles = auth.response(legacyRes, false)
+      ? normalizeList(legacyRes.data).map((item) => ({
+        ...item,
+        option_type: 'legacy',
+        option_label: item.name || item.file_name || `参数文件#${item.id}`,
+      }))
+      : [];
+
+    const bucketFiles = auth.response(bucketRes, false)
+      ? normalizeList(bucketRes.data)
+        .filter((item) => !item?.is_dir && /\.csv$/i.test(String(item?.file_path || '')))
+        .map((item) => ({
+          ...item,
+          id: `bucket:${item.file_path}`,
+          option_type: 'bucket',
+          name: item.name || item.file_path.split('/').pop(),
+          row_count: item.file_size || '-',
+          option_label: item.file_path,
+        }))
+      : [];
+
+    const merged = [...bucketFiles, ...legacyFiles].filter((item, index, list) => (
+      list.findIndex((candidate) => String(candidate.id) === String(item.id)) === index
+    ));
+
+    setParameterFiles(merged);
   };
 
   const loadCasePreview = async (caseList) => {
@@ -352,6 +428,18 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
   const loadParameterPreview = async (fileId) => {
     if (!fileId) {
       setParameterPreview(null);
+      return;
+    }
+    if (String(fileId).startsWith('bucket:')) {
+      const filepath = String(fileId).replace(/^bucket:/, '').trim();
+      const res = await fetch(`${CONFIG.URL}/oss/download?filepath=${encodeURIComponent(filepath)}`);
+      if (!res.ok) {
+        message.error('读取 bucket CSV 文件失败');
+        setParameterPreview(null);
+        return;
+      }
+      const text = await res.text();
+      setParameterPreview(parseCsvPreview(text));
       return;
     }
     const res = await previewPerformanceParameterFile({ id: fileId });
@@ -1225,36 +1313,9 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
 
                         <Card title="文件变量" size="small">
                           <Space style={{ marginBottom: 12 }}>
-                            <Upload
-                              accept=".csv"
-                              showUploadList={false}
-                              customRequest={async ({ file, onSuccess, onError }) => {
-                                try {
-                                  const selectedProjectId = editForm.getFieldValue('project_id');
-                                  if (!selectedProjectId) {
-                                    message.warning('请先选择所属项目，再上传参数文件');
-                                    onError?.(new Error('missing project_id'));
-                                    return;
-                                  }
-                                  const formData = new FormData();
-                                  formData.append('project_id', selectedProjectId);
-                                  formData.append('name', file.name.replace(/\.csv$/i, ''));
-                                  formData.append('file', file);
-                                  const res = await uploadPerformanceParameterFile(formData);
-                                  if (auth.response(res, true)) {
-                                    await loadParameterFiles(editForm.getFieldValue('project_id'));
-                                    onSuccess?.(res);
-                                  } else {
-                                    onError?.(new Error(res?.msg || '上传失败'));
-                                  }
-                                } catch (error) {
-                                  onError?.(error);
-                                }
-                              }}
-                            >
-                              <Button icon={<UploadOutlined />}>上传 CSV 参数文件</Button>
-                            </Upload>
-                            <span style={{ color: '#64748b', fontSize: 12 }}>支持 CSV，建议首行作为字段名</span>
+                            <Button icon={<ReloadOutlined />} onClick={() => loadParameterFiles(editForm.getFieldValue('project_id'))}>
+                              获取OSS存储CSV文件
+                            </Button>
                           </Space>
                           <Form.List name={['parameter_config', 'file_variables']}>
                             {(fields, { add, remove }) => (
@@ -1262,18 +1323,34 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
                                 {fields.map((field) => (
                                   <Card key={field.key} size="small" style={{ marginBottom: 12, background: '#fafcff' }}>
                                     <Row gutter={12}>
-                                      <Col span={8}>
+                                      <Col span={24}>
                                         <Form.Item {...field} name={[field.name, 'file_id']} label="参数文件">
-                                          <Select placeholder="选择参数文件" onChange={loadParameterPreview}>
+                                          <Select
+                                            showSearch
+                                            style={{ width: '100%' }}
+                                            placeholder="选择CSV"
+                                            optionFilterProp="label"
+                                            optionLabelProp="label"
+                                            dropdownMatchSelectWidth={false}
+                                            onChange={loadParameterPreview}
+                                          >
                                             {parameterFiles.map((item) => (
-                                              <Option key={item.id} value={item.id}>
-                                                {item.name} ({item.row_count} 行)
+                                              <Option
+                                                key={item.id}
+                                                value={item.id}
+                                                label={item.option_label}
+                                              >
+                                                {item.option_type === 'bucket'
+                                                  ? item.file_path
+                                                  : `[历史参数文件] ${item.option_label} (${item.row_count})`}
                                               </Option>
                                             ))}
                                           </Select>
                                         </Form.Item>
                                       </Col>
-                                      <Col span={6}>
+                                    </Row>
+                                    <Row gutter={12}>
+                                      <Col span={8}>
                                         <Form.Item {...field} name={[field.name, 'read_mode']} label="读取策略">
                                           <Select>
                                             <Option value="CIRCULAR">循环读取</Option>
@@ -1287,7 +1364,7 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
                                           <Switch />
                                         </Form.Item>
                                       </Col>
-                                      <Col span={6} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                      <Col span={12} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                         <Space>
                                           <Button type="text" onClick={() => loadParameterPreview(editForm.getFieldValue(['parameter_config', 'file_variables', field.name, 'file_id']))}>预览</Button>
                                           <Button type="text" danger onClick={() => remove(field.name)}>移除</Button>

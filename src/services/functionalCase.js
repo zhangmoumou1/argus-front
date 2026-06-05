@@ -152,3 +152,14 @@ export async function uploadFunctionalCaseNodeImage(file) {
     headers: auth.headers(false),
   });
 }
+
+export async function uploadFunctionalCaseNodeAttachment(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request(`${CONFIG.URL}/functional-case/file/attachment/upload`, {
+    method: 'POST',
+    data: formData,
+    requestType: 'form',
+    headers: auth.headers(false),
+  });
+}

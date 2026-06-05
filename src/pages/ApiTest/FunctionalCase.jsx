@@ -83,6 +83,7 @@ import {
   queryFunctionalCaseFile,
   generateFunctionalCaseByModel,
   queryFunctionalCaseGenerateTask,
+  uploadFunctionalCaseNodeAttachment,
   uploadFunctionalCaseNodeImage,
   updateFunctionalCaseDirectory,
   updateFunctionalCaseFile,
@@ -1391,6 +1392,7 @@ const FunctionalCase = ({ project, dispatch }) => {
   const [nodeImagePreview, setNodeImagePreview] = useState({ open: false, url: '' });
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
   const [formulaText, setFormulaText] = useState('');
   const [directoryName, setDirectoryName] = useState('');
   const [caseTitle, setCaseTitle] = useState('');
@@ -3426,6 +3428,57 @@ const FunctionalCase = ({ project, dispatch }) => {
     setAttachmentModal({ open: false });
   };
 
+  const removeNodeImage = () => {
+    execNodeCommand('SET_NODE_IMAGE', { url: null });
+    setImageUrl('');
+    message.success('节点图片已删除');
+  };
+
+  const removeNodeAttachment = () => {
+    execNodeCommand('SET_NODE_ATTACHMENT', '', '');
+    setAttachmentUrl('');
+    setAttachmentName('');
+    message.success('节点附件已删除');
+  };
+
+  const handleNodeAttachmentUpload = async (file) => {
+    try {
+      setAttachmentUploading(true);
+      const res = await uploadFunctionalCaseNodeAttachment(file);
+      if (res?.code !== 0) {
+        message.warning(res?.msg || '附件上传失败，请重试');
+        return Upload.LIST_IGNORE;
+      }
+      const staticUrl = String(res?.data?.url || '').trim();
+      if (!staticUrl) {
+        message.warning('附件上传成功但未返回访问地址');
+        return Upload.LIST_IGNORE;
+      }
+      const backendBase = String(CONFIG.URL || '').replace(/\/$/, '');
+      const absoluteUrl = staticUrl.startsWith('http')
+        ? staticUrl
+        : `${backendBase}${staticUrl.startsWith('/') ? staticUrl : `/${staticUrl}`}`;
+      setAttachmentUrl(absoluteUrl);
+      setAttachmentName(String(res?.data?.name || file?.name || '').trim());
+      const activeNode = getActiveNode();
+      if (activeNode && mindRef.current) {
+        mindRef.current.execCommand(
+          'SET_NODE_ATTACHMENT',
+          activeNode,
+          absoluteUrl,
+          String(res?.data?.name || file?.name || '').trim(),
+        );
+        markCaseDirty();
+      }
+      message.success('附件已上传，可直接保存到当前节点');
+    } catch (error) {
+      message.error(error?.message || '附件上传失败');
+    } finally {
+      setAttachmentUploading(false);
+    }
+    return Upload.LIST_IGNORE;
+  };
+
   const submitFormula = () => {
     if (!formulaText.trim()) {
       message.warning('请输入公式');
@@ -4953,6 +5006,9 @@ const FunctionalCase = ({ project, dispatch }) => {
         >
           <Button loading={imageUploading} icon={<UploadOutlined />}>上传本地图片</Button>
         </Upload>
+        <Button style={{ marginLeft: 8 }} onClick={removeNodeImage} disabled={!imageUrl}>
+          删除图片
+        </Button>
         {imageUrl ? (
           <div style={{ marginTop: 12, border: '1px solid #f0f0f0', borderRadius: 8, padding: 8 }}>
             <img
@@ -4973,6 +5029,18 @@ const FunctionalCase = ({ project, dispatch }) => {
       >
         <Input style={{ marginBottom: 12 }} placeholder="附件名称" value={attachmentName} onChange={(e) => setAttachmentName(e.target.value)} />
         <Input placeholder="附件 URL" value={attachmentUrl} onChange={(e) => setAttachmentUrl(e.target.value)} />
+        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Upload
+            showUploadList={false}
+            beforeUpload={handleNodeAttachmentUpload}
+            disabled={attachmentUploading}
+          >
+            <Button loading={attachmentUploading} icon={<UploadOutlined />}>上传本地附件</Button>
+          </Upload>
+          <Button onClick={removeNodeAttachment} disabled={!attachmentUrl && !attachmentName}>
+            删除附件
+          </Button>
+        </div>
       </Modal>
 
       <Modal
