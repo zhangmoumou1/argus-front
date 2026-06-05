@@ -203,9 +203,9 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ variant = 'header' }
       label: '个人信息',
     },
     {
-      key: 'reset-password',
+      key: 'settings',
       icon: <SettingOutlined />,
-      label: '重置密码',
+      label: '个人设置',
     },
     {
       type: 'divider' as const,
@@ -297,3 +297,6 @@ const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({ variant = 'header' }
 };
 
 export default AvatarDropdown;
+
+
+

@@ -64,7 +64,7 @@ const Settings = () => {
         return <BaseView />;
 
       case 'security':
-        return <SecurityView />;
+        return <SecurityView onSelectMenu={(key) => setInitConfig((prev) => ({ ...prev, selectKey: key }))} />;
 
       case 'notification':
         return <NotificationView />;
@@ -105,3 +105,4 @@ const Settings = () => {
 };
 
 export default Settings;
+

@@ -1,66 +1,64 @@
-import React from 'react';
-import {UploadOutlined} from '@ant-design/icons';
-import {Button, Form, Upload} from 'antd';
-import ProForm, {ProFormText,} from '@ant-design/pro-form';
-import {connect} from '@umijs/max';
+import React, { useEffect } from 'react';
+import ProForm, { ProFormText } from '@ant-design/pro-form';
+import { connect } from '@umijs/max';
+import { Form } from 'antd';
 import styles from './BaseView.less';
-import CONFIG from "@/consts/config";
+import { getAvatarByUser } from '@/utils/avatar';
 
 const validatorPhone = (rule, value, callback) => {
   callback();
-}; // 头像组件 方便以后独立，增加裁剪之类的功能
+};
 
-const AvatarView = ({avatar, dispatch}) => (
+const AvatarView = ({ avatar }) => (
   <>
     <div className={styles.avatar_title}>头像</div>
     <div className={styles.avatar}>
-      <img src={avatar} alt="avatar"/>
+      <img src={avatar} alt="avatar" />
     </div>
-    <Upload showUploadList={false} customRequest={fileData => {
-      dispatch({
-        type: 'user/avatar',
-        payload: {
-          file: fileData.file,
-        }
-      })
-    }} fileList={[]}>
-      <div className={styles.button_view}>
-        <Button>
-          <UploadOutlined/>
-          更换头像
-        </Button>
-      </div>
-    </Upload>
+    <div className={styles.button_view} style={{ color: '#999', fontSize: 12 }}>
+      头像由系统自动生成
+    </div>
   </>
 );
 
-const BaseView = ({user, loading, dispatch}) => {
-  const {currentUser} = user;
+const BaseView = ({ user, loading, dispatch }) => {
+  const { currentUser } = user;
   const [form] = Form.useForm();
+
+  useEffect(() => {
+    dispatch({
+      type: 'user/fetchCurrent',
+    });
+  }, [dispatch]);
+
+  useEffect(() => {
+    form.setFieldsValue({
+      name: currentUser?.name || '',
+      email: currentUser?.email || '',
+      phone: currentUser?.phone || '',
+    });
+  }, [currentUser?.name, currentUser?.email, currentUser?.phone, form]);
 
   const getAvatarURL = () => {
     if (currentUser) {
-      if (currentUser.avatar) {
-        return currentUser.avatar;
-      }
-      return CONFIG.AVATAR_URL;
+      return getAvatarByUser(currentUser);
     }
-
-    return '';
+    return getAvatarByUser({ id: 0 });
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     const values = form.getFieldsValue();
-    dispatch({
+    await dispatch({
       type: 'user/updateUser',
       payload: {
         ...values,
         id: currentUser.id,
       },
-    })
-    dispatch({
-      type: 'user/fetchCurrent'
-    })
+    });
+    await dispatch({
+      type: 'user/fetchCurrent',
+    });
+    return true;
   };
 
   return (
@@ -69,9 +67,15 @@ const BaseView = ({user, loading, dispatch}) => {
         <>
           <div className={styles.left}>
             <ProForm
+              key={`${currentUser?.id || 'current'}-${currentUser?.updated_at || ''}-${currentUser?.phone || ''}`}
               form={form}
               layout="vertical"
               onFinish={handleFinish}
+              initialValues={{
+                name: currentUser?.name || '',
+                email: currentUser?.email || '',
+                phone: currentUser?.phone || '',
+              }}
               submitter={{
                 resetButtonProps: {
                   style: {
@@ -82,7 +86,6 @@ const BaseView = ({user, loading, dispatch}) => {
                   children: '更新基本信息',
                 },
               }}
-              initialValues={{...currentUser, phone: currentUser?.phone}}
               hideRequiredMark
             >
               <ProFormText
@@ -125,7 +128,7 @@ const BaseView = ({user, loading, dispatch}) => {
             </ProForm>
           </div>
           <div className={styles.right}>
-            <AvatarView avatar={getAvatarURL()} dispatch={dispatch}/>
+            <AvatarView avatar={getAvatarURL()} />
           </div>
         </>
       )}
@@ -133,4 +136,6 @@ const BaseView = ({user, loading, dispatch}) => {
   );
 };
 
-export default connect(({user}) => ({user}))(BaseView);
+export default connect(({ user }) => ({ user }))(BaseView);
+
+
