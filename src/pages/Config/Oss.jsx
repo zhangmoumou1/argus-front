@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { PageContainer } from '@ant-design/pro-components';
-import {
-  Badge,
-  Breadcrumb,
-  Button,
+  import {
+    Badge,
+    Breadcrumb,
+    Button,
   Card,
   Col,
   Descriptions,
@@ -13,13 +13,12 @@ import {
   Image,
   Input,
   List,
-  message,
-  Modal,
-  Row,
-  Segmented,
-  Space,
-  Spin,
-  Tabs,
+    message,
+    Modal,
+    Row,
+    Space,
+    Spin,
+    Tabs,
   Table,
   Tag,
   Typography,
@@ -302,7 +301,6 @@ export default function Oss() {
   const [detailState, setDetailState] = useState(null);
   const [taskVisible, setTaskVisible] = useState(false);
   const [uploadTasks, setUploadTasks] = useState([]);
-  const [uploadMode, setUploadMode] = useState('file');
   const [uploadSelection, setUploadSelection] = useState({
     count: 0,
     totalSize: 0,
@@ -424,12 +422,12 @@ export default function Oss() {
     }
   };
 
-  const openNativePicker = () => {
-    if (uploadMode === 'folder') {
-      folderInputRef.current?.click();
-      return;
-    }
+  const openFilePicker = () => {
     fileInputRef.current?.click();
+  };
+
+  const openFolderPicker = () => {
+    folderInputRef.current?.click();
   };
 
   const handleDrop = (event) => {
@@ -764,15 +762,15 @@ export default function Oss() {
     }
     const taskItems = appendUploadTasks(entries);
     setTaskVisible(true);
+    setUploadVisible(false);
+    form.resetFields();
+    clearUploadFiles();
     setUploadSubmitting(true);
     try {
       const hasSuccess = await uploadEntriesInParallel(entries, taskItems);
       if (hasSuccess) {
         await loadItems(currentPath);
       }
-      setUploadVisible(false);
-      form.resetFields();
-      clearUploadFiles();
     } finally {
       setUploadSubmitting(false);
     }
@@ -940,34 +938,30 @@ export default function Oss() {
           <Form.Item label="当前目录">
             <Input value={currentPath || '/'} disabled />
           </Form.Item>
-          <Form.Item
-            label="目标相对路径"
-            name="relative_path"
-            extra="单文件时可直接填写子目录/文件名；文件夹上传时这里会作为统一前缀追加到文件夹相对路径前"
-          >
-            <Input placeholder="留空则使用原文件名上传到当前目录" />
-          </Form.Item>
-          <Form.Item label="上传方式">
-            <Segmented
-              value={uploadMode}
-              onChange={setUploadMode}
-              options={[
-                { label: '文件', value: 'file' },
-                { label: '文件夹', value: 'folder' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item label="对象" required extra={`支持文件和整个文件夹上传，单次最多${MAX_UPLOAD_COUNT}个对象`}>
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={openNativePicker}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  openNativePicker();
-                }
-              }}
+            <Form.Item
+              label="目标相对路径"
+              name="relative_path"
+              extra="单文件时可直接填写子目录/文件名；文件夹上传时这里会作为统一前缀追加到文件夹相对路径前"
+            >
+              <Input placeholder="留空则使用原文件名上传到当前目录" />
+            </Form.Item>
+            <Form.Item label="上传方式">
+              <Space>
+                <Button onClick={openFilePicker}>文件</Button>
+                <Button onClick={openFolderPicker}>文件夹</Button>
+              </Space>
+            </Form.Item>
+            <Form.Item label="对象" required extra={`支持文件和整个文件夹上传，单次最多${MAX_UPLOAD_COUNT}个对象`}>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={openFilePicker}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openFilePicker();
+                  }
+                }}
               onDragEnter={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
