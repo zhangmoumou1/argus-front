@@ -397,6 +397,14 @@ export async function detailFile(params) {
   });
 }
 
+export async function createFolder(params) {
+  return request(`${CONFIG.URL}/oss/create-folder`, {
+    method: 'POST',
+    params,
+    headers: auth.headers(),
+  });
+}
+
 export async function deleteFile(params) {
   return request(`${CONFIG.URL}/oss/delete`, {
     method: 'GET',

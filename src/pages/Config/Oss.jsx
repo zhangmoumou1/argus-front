@@ -24,17 +24,16 @@ import { PageContainer } from '@ant-design/pro-components';
   Typography,
 } from 'antd';
 import {
-  ArrowUpOutlined,
   EyeOutlined,
   FileOutlined,
   FolderOpenOutlined,
+  InfoCircleOutlined,
   InboxOutlined,
   PlusOutlined,
-  ReloadOutlined,
   DeleteOutlined,
   DownloadOutlined,
 } from '@ant-design/icons';
-import { deleteFile, detailFile, listFile, uploadFile } from '@/services/configure';
+import { createFolder, deleteFile, detailFile, listFile, uploadFile } from '@/services/configure';
 import auth from '@/utils/auth';
 import CONFIG from '@/consts/config';
 const MAX_UPLOAD_COUNT = 100;
@@ -290,9 +289,12 @@ const formatFileSize = (size) => {
 export default function Oss() {
   const [form] = Form.useForm();
   const [items, setItems] = useState([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploadVisible, setUploadVisible] = useState(false);
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
+  const [createFolderVisible, setCreateFolderVisible] = useState(false);
+  const [createFolderSubmitting, setCreateFolderSubmitting] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewState, setPreviewState] = useState(EMPTY_PREVIEW_STATE);
@@ -310,6 +312,7 @@ export default function Oss() {
   const [search, setSearch] = useState('');
   const [currentPath, setCurrentPath] = useState('');
   const relativePathValue = Form.useWatch('relative_path', form);
+  const [createFolderForm] = Form.useForm();
   const uploadFilesRef = useRef([]);
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
@@ -542,6 +545,19 @@ export default function Oss() {
     window.URL.revokeObjectURL(objectUrl);
   };
 
+  const downloadSelectedObjects = async () => {
+    const selectedFiles = dataSource.filter((item) => selectedRowKeys.includes(item.file_path) && !item?.is_dir);
+    if (!selectedFiles.length) {
+      message.warning('请选择可下载的文件对象');
+      return;
+    }
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      // Keep browser download prompts orderly for batch actions.
+      // eslint-disable-next-line no-await-in-loop
+      await downloadObject(selectedFiles[index]);
+    }
+  };
+
   const loadItems = async (prefix = currentPath) => {
     setLoading(true);
     const res = await listFile({
@@ -560,6 +576,7 @@ export default function Oss() {
 
   useEffect(() => {
     loadItems(currentPath);
+    setSelectedRowKeys([]);
   }, [currentPath]);
 
   useEffect(() => () => {
@@ -598,18 +615,29 @@ export default function Oss() {
   const breadcrumbItems = [
     {
       title: (
-        <Space size={8}>
-          <Tag color="blue" style={{ marginInlineEnd: 0 }}>Bucket</Tag>
-          <a onClick={() => setCurrentPath('')}>
-            <Typography.Text strong style={{ color: '#1677ff' }}>public</Typography.Text>
-          </a>
+        <Space size={8} align="center">
+          <Tag color="blue" style={{ marginInlineEnd: 0, fontSize: 15, lineHeight: '24px', paddingInline: 10 }}>
+            Bucket
+          </Tag>
+          <Space size={6} align="center">
+            <a onClick={() => setCurrentPath('')}>
+              <Typography.Text strong style={{ color: '#1677ff', fontSize: 16 }}>public</Typography.Text>
+            </a>
+            <Typography.Text
+              type="secondary"
+              title="对象存储采用 S3 兼容对象模型，适用于 MinIO、RustFS 等同类对象存储服务。"
+              style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help', fontSize: 16 }}
+            >
+              <InfoCircleOutlined />
+            </Typography.Text>
+          </Space>
         </Space>
       ),
     },
     ...splitPath(currentPath).map((segment, index, array) => ({
       title: (
         <a onClick={() => setCurrentPath(array.slice(0, index + 1).join('/'))}>
-          <Typography.Text>{segment}</Typography.Text>
+          <Typography.Text style={{ fontSize: 16, color: '#1677ff' }}>{segment}</Typography.Text>
         </a>
       ),
     })),
@@ -626,10 +654,29 @@ export default function Oss() {
     try {
       const title = previewTitle(record);
       const suffix = getFileSuffix(record?.file_path);
+      const directPreviewUrl = String(record?.view_url || '').trim();
       if (DOC_PREVIEW_SUFFIXES.has(suffix)) {
         await loadOfficePreview(record, title);
         return;
       }
+
+      if (IMAGE_PREVIEW_SUFFIXES.has(suffix) && directPreviewUrl) {
+        setPreviewState({ ...EMPTY_PREVIEW_STATE, type: 'image', title, url: directPreviewUrl });
+        return;
+      }
+      if (VIDEO_PREVIEW_SUFFIXES.has(suffix) && directPreviewUrl) {
+        setPreviewState({ ...EMPTY_PREVIEW_STATE, type: 'video', title, url: directPreviewUrl });
+        return;
+      }
+      if (AUDIO_PREVIEW_SUFFIXES.has(suffix) && directPreviewUrl) {
+        setPreviewState({ ...EMPTY_PREVIEW_STATE, type: 'audio', title, url: directPreviewUrl });
+        return;
+      }
+      if (PDF_PREVIEW_SUFFIXES.has(suffix) && directPreviewUrl) {
+        setPreviewState({ ...EMPTY_PREVIEW_STATE, type: 'pdf', title, url: directPreviewUrl });
+        return;
+      }
+
       const res = await fetch(`${CONFIG.URL}/oss/download?filepath=${encodeURIComponent(record.file_path)}`, {
         headers: auth.headers(false),
       });
@@ -776,6 +823,27 @@ export default function Oss() {
     }
   };
 
+  const onCreateFolder = async () => {
+    const values = await createFolderForm.validateFields();
+    const folderName = String(values.name || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    if (!folderName) {
+      message.error('请输入文件夹名称');
+      return;
+    }
+    const filepath = joinPath(currentPath, folderName);
+    setCreateFolderSubmitting(true);
+    try {
+      const res = await createFolder({ filepath });
+      if (auth.response(res, true)) {
+        setCreateFolderVisible(false);
+        createFolderForm.resetFields();
+        await loadItems(currentPath);
+      }
+    } finally {
+      setCreateFolderSubmitting(false);
+    }
+  };
+
   const columns = [
     {
       title: '名称',
@@ -784,9 +852,23 @@ export default function Oss() {
         <Space>
           {record?.is_dir ? <FolderOpenOutlined style={{ color: '#1677ff' }} /> : <FileOutlined style={{ color: '#64748b' }} />}
           {record?.is_dir ? (
-            <a onClick={() => setCurrentPath(record.file_path)}>{record.name || record.file_path}</a>
+            <a
+              onClick={() => setCurrentPath(record.file_path)}
+              style={{ color: '#1677ff', cursor: 'pointer', textDecoration: 'none' }}
+              onMouseEnter={(event) => { event.currentTarget.style.textDecoration = 'underline'; }}
+              onMouseLeave={(event) => { event.currentTarget.style.textDecoration = 'none'; }}
+            >
+              {record.name || record.file_path}
+            </a>
           ) : (
-            <a onClick={() => openDetail(record)}>{record.name || record.file_path}</a>
+            <a
+              onClick={() => openDetail(record)}
+              style={{ color: '#0f172a', cursor: 'pointer', textDecoration: 'none' }}
+              onMouseEnter={(event) => { event.currentTarget.style.textDecoration = 'underline'; }}
+              onMouseLeave={(event) => { event.currentTarget.style.textDecoration = 'none'; }}
+            >
+              {record.name || record.file_path}
+            </a>
           )}
         </Space>
       ),
@@ -843,52 +925,67 @@ export default function Oss() {
     },
   ];
 
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: setSelectedRowKeys,
+    getCheckboxProps: (record) => ({
+      disabled: !!record?.is_dir,
+    }),
+  };
+
   return (
     <PageContainer title={false} breadcrumb={null}>
       <Card>
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Row gutter={[12, 12]} align="middle">
-            <Col flex="auto">
+            <Col span={24}>
               <Breadcrumb items={breadcrumbItems} />
-            </Col>
-            <Col>
-              <Space>
-                <Button
-                  icon={<ArrowUpOutlined />}
-                  disabled={!currentPath}
-                  onClick={() => setCurrentPath(splitPath(currentPath).slice(0, -1).join('/'))}
-                >
-                  上级目录
-                </Button>
-                <Button icon={<ReloadOutlined />} onClick={() => loadItems(currentPath)}>
-                  刷新
-                </Button>
-                <span style={{ display: 'inline-block', marginRight: 12 }}>
-                  <Badge count={groupedTasks.uploading.length} size="small" offset={[-2, 6]}>
-                    <Button onClick={() => setTaskVisible(true)}>
-                      任务管理
-                    </Button>
-                  </Badge>
-                </span>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setUploadVisible(true)}>
-                  上传对象
-                </Button>
-              </Space>
             </Col>
           </Row>
 
           <Row gutter={[12, 12]}>
-            <Col span={24}>
+            <Col flex="420px">
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="按名称或路径过滤当前目录内容"
               />
             </Col>
+            <Col flex="auto">
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Space>
+                  <Button onClick={() => loadItems(currentPath)}>
+                    刷新
+                  </Button>
+                  <Button onClick={() => setCreateFolderVisible(true)}>
+                    创建文件夹
+                  </Button>
+                  <Button onClick={downloadSelectedObjects} disabled={!selectedRowKeys.length}>
+                    批量下载
+                  </Button>
+                  <span style={{ display: 'inline-flex', marginRight: 16 }}>
+                    <Badge
+                      count={groupedTasks.uploading.length}
+                      size="small"
+                      offset={[5, -10]}
+                      styles={{ indicator: { boxShadow: '0 0 0 1px #fff' } }}
+                    >
+                      <Button onClick={() => setTaskVisible(true)}>
+                        任务管理
+                      </Button>
+                    </Badge>
+                  </span>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setUploadVisible(true)}>
+                    上传对象
+                  </Button>
+                </Space>
+              </div>
+            </Col>
           </Row>
 
           <Table
             rowKey={(record) => record.file_path}
+            rowSelection={rowSelection}
             loading={loading}
             dataSource={dataSource}
             columns={columns}
@@ -901,6 +998,38 @@ export default function Oss() {
           />
         </Space>
       </Card>
+
+      <Modal
+        title="创建文件夹"
+        open={createFolderVisible}
+        onCancel={() => {
+          if (!createFolderSubmitting) {
+            setCreateFolderVisible(false);
+          }
+        }}
+        onOk={onCreateFolder}
+        okText={createFolderSubmitting ? '创建中...' : '创建'}
+        okButtonProps={{ loading: createFolderSubmitting }}
+        cancelButtonProps={{ disabled: createFolderSubmitting }}
+        destroyOnClose
+      >
+        <Form form={createFolderForm} layout="vertical">
+          <Form.Item label="当前目录">
+            <Input value={currentPath || '/'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="文件夹名称"
+            name="name"
+            rules={[
+              { required: true, message: '请输入文件夹名称' },
+              { pattern: /^[^\\/:*?"<>|]+$/, message: '文件夹名称不能包含 \\ / : * ? \" < > |' },
+            ]}
+            extra="仅输入当前层级的新文件夹名称"
+          >
+            <Input placeholder="例如：images" maxLength={128} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title="上传对象到 public bucket"
@@ -945,12 +1074,12 @@ export default function Oss() {
             >
               <Input placeholder="留空则使用原文件名上传到当前目录" />
             </Form.Item>
-            <Form.Item label="上传方式">
-              <Space>
-                <Button onClick={openFilePicker}>文件</Button>
-                <Button onClick={openFolderPicker}>文件夹</Button>
-              </Space>
-            </Form.Item>
+              <Form.Item label="上传方式">
+                <Space>
+                <Button type="primary" onClick={openFilePicker}>文件</Button>
+                <Button type="primary" onClick={openFolderPicker}>文件夹</Button>
+                </Space>
+              </Form.Item>
             <Form.Item label="对象" required extra={`支持文件和整个文件夹上传，单次最多${MAX_UPLOAD_COUNT}个对象`}>
               <div
                 role="button"

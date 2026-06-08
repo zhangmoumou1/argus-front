@@ -327,7 +327,7 @@ export default [
       },
       {
         path: '/config/oss',
-        name: 'OSS管理',
+        name: '对象存储',
         component: './Config/Oss',
       },
     ],
