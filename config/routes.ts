@@ -210,6 +210,34 @@ export default [
     ],
   },
   {
+    path: '/ui-test',
+    icon: 'deploymentUnit',
+    name: 'UI测试',
+    routes: [
+      {
+        path: '/ui-test/cases',
+        name: '用例库',
+        component: './UITest/CaseLibrary',
+      },
+      {
+        path: '/ui-test/plans',
+        name: '测试计划',
+        component: './UITest/PlanList',
+      },
+      {
+        path: '/ui-test/runs/:id',
+        hideInMenu: true,
+        name: '执行报告详情',
+        component: './UITest/RunDetail',
+      },
+      {
+        path: '/ui-test/runs',
+        name: '执行报告',
+        component: './UITest/RunList',
+      },
+    ],
+  },
+  {
     path: '/apiTest/interface',
     hideInMenu: true,
     redirect: '/asset/interface',
@@ -457,3 +485,4 @@ export default [
     component: './404',
   },
 ];
+

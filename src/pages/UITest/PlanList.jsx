@@ -1,0 +1,763 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Row,
+  Segmented,
+  Select,
+  Space,
+  Steps,
+  Switch,
+  Table,
+  Tag,
+  message,
+} from 'antd';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  ExperimentOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  SyncOutlined,
+  ThunderboltOutlined,
+  UnorderedListOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
+import { listProject } from '@/services/project';
+import auth from '@/utils/auth';
+import {
+  deleteUiTestPlan,
+  getUiTestPlanDetail,
+  listUiTestPlanCandidates,
+  listUiTestPlans,
+  runUiTestPlan,
+  saveUiTestPlan,
+  switchUiTestPlan,
+} from '@/services/uiTest';
+import {
+  PillButton,
+  RefreshButton,
+  SectionCard,
+  UiEmpty,
+  UiTestPage,
+  actionSplit,
+  getUiTestProjectSelectValue,
+  normalizeApiList,
+  normalizeApiPage,
+  pickUiTestProjectId,
+  uiPalette,
+  uiStatusTag,
+  useUiTestProject,
+} from './shared';
+
+const defaultForm = {
+  project_id: undefined,
+  name: '',
+  description: '',
+  env_name: '',
+  base_url: '',
+  browser: 'chromium',
+  headless: true,
+  ordered: true,
+  cron: '',
+  retry_times: 0,
+  status: 'enabled',
+  case_ref_ids: [],
+  midscene_provider: '',
+  analysis_provider: '',
+  record_video: true,
+  record_trace: true,
+  capture_screenshot: true,
+};
+
+const wizardSteps = [
+  { title: '基本信息', icon: <UnorderedListOutlined /> },
+  { title: '选择用例', icon: <ExperimentOutlined /> },
+  { title: '执行配置', icon: <SettingOutlined /> },
+];
+
+const planStatusFilters = [
+  { label: '全部', value: '' },
+  { label: '启用', value: 'enabled' },
+  { label: '停用', value: 'disabled' },
+];
+
+const cardSectionStyle = {
+  borderRadius: 14,
+  border: `1px solid ${uiPalette.border}`,
+  background: uiPalette.cardBg,
+  padding: '20px 24px',
+  marginBottom: 16,
+};
+
+const PlanList = () => {
+  const [projectId, setProjectId] = useUiTestProject();
+  const [projects, setProjects] = useState([]);
+  const [plans, setPlans] = useState([]);
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [candidateGroups, setCandidateGroups] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [runLoading, setRunLoading] = useState({});
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+  const [form] = Form.useForm();
+  const selectedPlanProjectId = Form.useWatch('project_id', form);
+  const selectedCaseIds = Form.useWatch('case_ref_ids', form) || [];
+
+  const fetchProjects = async () => {
+    const res = await listProject({ page: 1, size: 1000 });
+    if (auth.response(res)) {
+      const list = normalizeApiList(res);
+      setProjects(list);
+      const nextProjectId = pickUiTestProjectId(list, projectId);
+      if (nextProjectId !== undefined && String(nextProjectId) !== String(projectId)) {
+        setProjectId(nextProjectId);
+      }
+    }
+  };
+
+  const fetchPlans = async (
+    pid = projectId,
+    page = pagination.current,
+    size = pagination.pageSize,
+  ) => {
+    if (!pid) return;
+    setLoading(true);
+    const planRes = await listUiTestPlans({
+      project_id: pid,
+      keyword,
+      status: statusFilter,
+      page,
+      size,
+      paged: true,
+    });
+    setLoading(false);
+    if (auth.response(planRes)) {
+      const pageData = normalizeApiPage(planRes, { page, size });
+      setPlans(pageData.list);
+      setPagination({
+        current: pageData.page,
+        pageSize: pageData.size,
+        total: pageData.total,
+      });
+    }
+  };
+
+  const fetchCandidateCases = async (pid) => {
+    if (!pid) {
+      setCandidateGroups([]);
+      return;
+    }
+    setCandidateLoading(true);
+    const candidateRes = await listUiTestPlanCandidates({ project_id: pid });
+    setCandidateLoading(false);
+    if (auth.response(candidateRes, false)) {
+      setCandidateGroups(normalizeApiList(candidateRes));
+    } else {
+      setCandidateGroups([]);
+    }
+  };
+
+  const openCreate = () => {
+    setEditingPlan(null);
+    setDetail(null);
+    setCandidateGroups([]);
+    form.setFieldsValue({
+      ...defaultForm,
+      project_id: projectId,
+    });
+    setCurrentStep(0);
+    setModalOpen(true);
+  };
+
+  const openEdit = async (record) => {
+    const res = await getUiTestPlanDetail({ id: record.id });
+    if (auth.response(res)) {
+      const data = res.data || res;
+      setEditingPlan(record);
+      setDetail(data);
+      setCandidateGroups([]);
+      const runnerConfig = data.runner_config || {};
+      form.setFieldsValue({
+        ...defaultForm,
+        ...data,
+        ...runnerConfig,
+        project_id: data.project_id,
+        case_ref_ids: (data.cases || []).map((item) => item.case_ref_id),
+      });
+      setCurrentStep(0);
+      setModalOpen(true);
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      const targetProjectId = Number(values.project_id || 0);
+      if (!targetProjectId) {
+        message.warning('请先选择项目');
+        return;
+      }
+      setSubmitting(true);
+      const payload = {
+        ...values,
+        id: editingPlan?.id,
+        project_id: targetProjectId,
+        selected_case_ref_ids: values.case_ref_ids,
+      };
+      const res = await saveUiTestPlan(payload);
+      setSubmitting(false);
+      if (auth.response(res, true)) {
+        setModalOpen(false);
+        if (targetProjectId !== projectId) {
+          setProjectId(targetProjectId);
+        } else {
+          fetchPlans(targetProjectId, pagination.current, pagination.pageSize);
+        }
+      }
+    } catch (err) {
+      // validation error, go to the step with errors
+    }
+  };
+
+  const handleRun = async (id) => {
+    setRunLoading((prev) => ({ ...prev, [id]: true }));
+    const res = await runUiTestPlan({ id });
+    setRunLoading((prev) => ({ ...prev, [id]: false }));
+    if (auth.response(res, true)) {
+      message.success('计划已加入执行队列');
+      fetchPlans(projectId, pagination.current, pagination.pageSize);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const res = await deleteUiTestPlan({ id });
+    if (auth.response(res, true)) {
+      fetchPlans(projectId, pagination.current, pagination.pageSize);
+    }
+  };
+
+  const handleSwitch = async (record, checked) => {
+    const res = await switchUiTestPlan({ id: record.id, status: checked });
+    if (auth.response(res, true)) {
+      fetchPlans(projectId, pagination.current, pagination.pageSize);
+    }
+  };
+
+  const nextStep = async () => {
+    try {
+      if (currentStep === 0) {
+        await form.validateFields(['project_id', 'name']);
+      } else if (currentStep === 1) {
+        await form.validateFields(['case_ref_ids']);
+      }
+      setCurrentStep((prev) => Math.min(prev + 1, wizardSteps.length - 1));
+    } catch {
+      // stay on current step
+    }
+  };
+
+  const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 0));
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  useEffect(() => {
+    if (projectId) fetchPlans(projectId, 1, pagination.pageSize);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId) fetchPlans(projectId, 1, pagination.pageSize);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    if (!selectedPlanProjectId) {
+      setCandidateGroups([]);
+      return;
+    }
+    fetchCandidateCases(selectedPlanProjectId);
+  }, [modalOpen, selectedPlanProjectId]);
+
+  const filteredPlans = useMemo(() => {
+    return plans;
+  }, [plans]);
+
+  const candidateOptions = useMemo(
+    () =>
+      candidateGroups.map((group) => ({
+        label: `${group.file_title} (${group.ui_case_count || (group.nodes || []).length})`,
+        options: (group.nodes || []).map((item) => ({
+          label: `${item.node_path} (${item.step_count || 0}步)`,
+          value: item.id,
+        })),
+      })),
+    [candidateGroups],
+  );
+
+  const totalCandidates = candidateGroups.reduce(
+    (sum, group) => sum + (group.ui_case_count || (group.nodes || []).length || 0),
+    0,
+  );
+
+  const invalidCases = (detail?.cases || []).filter((item) => item.status !== 'valid');
+
+  const columns = [
+    {
+      title: '计划名称',
+      dataIndex: 'name',
+      key: 'name',
+      render: (value, record) => (
+        <div>
+          <a onClick={() => openEdit(record)} style={{ fontWeight: 600 }}>{value}</a>
+          {record.description && (
+            <div style={{ color: uiPalette.subtle, fontSize: 12, marginTop: 2, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {record.description}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: '执行配置',
+      key: 'config',
+      render: (_, record) => (
+        <Space wrap size={[6, 4]}>
+          <Tag style={{ borderRadius: 999, border: 'none', background: '#ede9fe', color: '#7c3aed' }}>
+            {record.browser || 'chromium'}
+          </Tag>
+          <Tag style={{ borderRadius: 999, border: 'none', background: record.headless ? '#f1f5f9' : '#fef3c7', color: record.headless ? '#475569' : '#92400e' }}>
+            {record.headless ? '无头' : '有头'}
+          </Tag>
+          <Tag style={{ borderRadius: 999, border: 'none', background: '#dbeafe', color: '#1d4ed8' }}>
+            {record.ordered ? '顺序' : '并发'}
+          </Tag>
+          <Tag style={{ borderRadius: 999, border: 'none', background: '#fce7f3', color: '#be185d' }}>
+            重试 {record.retry_times || 0}
+          </Tag>
+          <Tag icon={<ThunderboltOutlined />} style={{ borderRadius: 999, border: 'none', background: '#dbeafe', color: '#1d4ed8' }}>
+            {record.case_count || 0} 用例
+          </Tag>
+        </Space>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 120,
+      render: (value, record) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Switch
+            checked={record.status === 'enabled'}
+            onChange={(checked) => handleSwitch(record, checked)}
+            size="small"
+          />
+          {uiStatusTag(value)}
+        </div>
+      ),
+    },
+    {
+      title: '调度',
+      dataIndex: 'cron',
+      key: 'cron',
+      width: 160,
+      render: (value) => value ? (
+        <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+          {value}
+        </Tag>
+      ) : (
+        <span style={{ color: '#cbd5e1' }}>手动执行</span>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 180,
+      render: (_, record) => (
+        <Space split={actionSplit}>
+          <a onClick={() => openEdit(record)}>
+            <Space size={4}><EditOutlined /> 编辑</Space>
+          </a>
+          <a onClick={() => handleRun(record.id)} style={{ color: uiPalette.success }}>
+            <Space size={4}>
+              {runLoading[record.id] ? <SyncOutlined spin /> : <PlayCircleOutlined />}
+              执行
+            </Space>
+          </a>
+          <Popconfirm
+            title="确认删除该计划？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确认"
+            cancelText="取消"
+          >
+            <a style={{ color: uiPalette.error }}>
+              <Space size={4}><DeleteOutlined /></Space>
+            </a>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  const modalFooter = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ color: uiPalette.subtle, fontSize: 12 }}>
+        {currentStep + 1} / {wizardSteps.length}
+        {selectedCaseIds.length ? ` · 已选 ${selectedCaseIds.length} 个用例` : ''}
+      </div>
+      <Space>
+        <PillButton onClick={() => setModalOpen(false)}>取消</PillButton>
+        {currentStep > 0 && <PillButton onClick={prevStep}>上一步</PillButton>}
+        {currentStep < wizardSteps.length - 1 && (
+          <PillButton type="primary" onClick={nextStep}>
+            下一步
+          </PillButton>
+        )}
+        {currentStep === wizardSteps.length - 1 && (
+          <PillButton type="primary" loading={submitting} onClick={handleSubmit}>
+            保存计划
+          </PillButton>
+        )}
+      </Space>
+    </div>
+  );
+
+  return (
+    <UiTestPage
+      toolbar={
+        <Row gutter={[12, 12]} align="middle">
+          <Col xs={24} md={6}>
+            <Select
+              value={getUiTestProjectSelectValue(projects, projectId)}
+              style={{ width: '100%' }}
+              placeholder={projects.length ? '选择项目' : '加载项目...'}
+              loading={!projects.length}
+              onChange={setProjectId}
+              options={projects.map((item) => ({ label: item.name, value: item.id }))}
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Segmented
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={planStatusFilters}
+              block
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Input
+              value={keyword}
+              placeholder="搜索计划 / 浏览器 / Cron"
+              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+              onChange={(e) => setKeyword(e.target.value)}
+              onPressEnter={() => fetchPlans(projectId, 1, pagination.pageSize)}
+              allowClear
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Space>
+              <PillButton type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                新建计划
+              </PillButton>
+              <RefreshButton onClick={() => fetchPlans(projectId, pagination.current, pagination.pageSize)} loading={loading} />
+            </Space>
+          </Col>
+        </Row>
+      }
+    >
+      <SectionCard
+        title="计划列表"
+        description="运行策略、调度状态和用例覆盖"
+        extra={<span style={{ color: uiPalette.subtle, fontSize: 13 }}>共 {pagination.total || filteredPlans.length} 个计划</span>}
+      >
+        <Table
+          rowKey="id"
+          loading={loading}
+          dataSource={filteredPlans}
+          size="middle"
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 个计划`,
+          }}
+          onChange={(nextPagination) => fetchPlans(projectId, nextPagination.current, nextPagination.pageSize)}
+          locale={{ emptyText: <UiEmpty description="当前项目还没有 UI 测试计划，点击「新建计划」创建" /> }}
+          columns={columns}
+        />
+      </SectionCard>
+
+      <Modal
+        open={modalOpen}
+        title={
+          <Space>
+            <ExperimentOutlined style={{ color: uiPalette.primary }} />
+            <span>{editingPlan ? `编辑计划 #${editingPlan.id}` : '新建 UI 测试计划'}</span>
+          </Space>
+        }
+        width={920}
+        onCancel={() => setModalOpen(false)}
+        footer={modalFooter}
+        destroyOnClose
+        styles={{
+          content: {
+            borderRadius: 20,
+            padding: 0,
+            overflow: 'hidden',
+          },
+          header: {
+            padding: '20px 24px 16px',
+            borderBottom: `1px solid ${uiPalette.border}`,
+            marginBottom: 0,
+          },
+          body: {
+            padding: '20px 24px',
+            background: 'linear-gradient(180deg, #fafbfd 0%, #f5f8fc 100%)',
+            minHeight: 440,
+          },
+          footer: {
+            padding: '12px 24px 16px',
+            borderTop: `1px solid ${uiPalette.border}`,
+          },
+        }}
+      >
+        <Steps
+          current={currentStep}
+          size="small"
+          style={{ marginBottom: 24 }}
+          items={wizardSteps.map((s) => ({
+            title: s.title,
+            icon: s.icon,
+          }))}
+        />
+
+        <Form form={form} layout="vertical" initialValues={defaultForm}>
+          {/* Step 1: Basic Info */}
+          <div style={{ display: currentStep === 0 ? 'block' : 'none' }}>
+            <div style={cardSectionStyle}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16, color: uiPalette.text }}>
+                基本信息
+              </div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="project_id"
+                    label="所属项目"
+                    rules={[{ required: true, message: '请选择项目' }]}
+                  >
+                    <Select
+                      placeholder="先选择项目，再选择 UI 用例"
+                      options={projects.map((item) => ({ label: item.name, value: item.id }))}
+                      onChange={() => form.setFieldValue('case_ref_ids', [])}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="name" label="计划名称" rules={[{ required: true, message: '请输入计划名称' }]}>
+                    <Input placeholder="例如：登录冒烟回归" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="env_name" label="环境">
+                    <Input placeholder="例如：test / staging" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item name="description" label="描述">
+                <Input.TextArea rows={3} placeholder="说明计划目标、覆盖范围或执行窗口" />
+              </Form.Item>
+              <Form.Item name="base_url" label="基础地址">
+                <Input placeholder="https://example.com" />
+              </Form.Item>
+            </div>
+          </div>
+
+          {/* Step 2: Case Selection */}
+          <div style={{ display: currentStep === 1 ? 'block' : 'none' }}>
+            <div style={cardSectionStyle}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16, color: uiPalette.text }}>
+                选择 UI 用例
+              </div>
+              {editingPlan && invalidCases.length > 0 && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  icon={<WarningOutlined />}
+                  style={{ marginBottom: 16, borderRadius: 12 }}
+                  message={`该计划有 ${invalidCases.length} 个节点已经失效`}
+                  description={
+                    <div style={{ marginTop: 8 }}>
+                      {invalidCases.map((item, idx) => (
+                        <Tag key={idx} color="error" style={{ borderRadius: 999, border: 'none', marginBottom: 4 }}>
+                          {item.node_path || item.node_title}
+                        </Tag>
+                      ))}
+                    </div>
+                  }
+                />
+              )}
+              <Form.Item
+                name="case_ref_ids"
+                label={`可选用例 (${totalCandidates})`}
+                rules={[{ required: true, message: '请至少选择一个用例' }]}
+              >
+                <Select
+                  mode="multiple"
+                  loading={candidateLoading}
+                  options={candidateOptions}
+                  placeholder={selectedPlanProjectId ? '按功能用例文件分组选择节点' : '请先在上一步选择项目'}
+                  style={{ width: '100%' }}
+                  maxTagCount="responsive"
+                  optionFilterProp="label"
+                  disabled={!selectedPlanProjectId}
+                  showSearch
+                />
+              </Form.Item>
+              {editingPlan && detail?.cases?.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ color: uiPalette.subtle, fontSize: 13, marginBottom: 8 }}>当前引用节点</div>
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    pagination={false}
+                    dataSource={detail.cases}
+                    columns={[
+                      {
+                        title: '节点路径',
+                        dataIndex: 'node_path',
+                        key: 'node_path',
+                        render: (value, record) => value || record.node_title,
+                      },
+                      {
+                        title: '状态',
+                        dataIndex: 'status',
+                        key: 'status',
+                        width: 120,
+                        render: (value) => uiStatusTag(value),
+                      },
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Step 3: Execution Config */}
+          <div style={{ display: currentStep === 2 ? 'block' : 'none' }}>
+            <div style={cardSectionStyle}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16, color: uiPalette.text }}>
+                浏览器与执行
+              </div>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="browser" label="浏览器">
+                    <Select
+                      options={[
+                        { label: 'Chromium', value: 'chromium' },
+                        { label: 'Firefox', value: 'firefox' },
+                        { label: 'Webkit', value: 'webkit' },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="headless" label="无头模式" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="ordered" label="顺序执行" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="cron" label="Cron 调度">
+                    <Input placeholder="留空 = 仅手动" />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="retry_times" label="重试次数">
+                    <InputNumber min={0} max={10} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="status" label="计划状态">
+                    <Select
+                      options={[
+                        { label: '启用', value: 'enabled' },
+                        { label: '停用', value: 'disabled' },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </div>
+
+            <div style={cardSectionStyle}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16, color: uiPalette.text }}>
+                产物采集
+              </div>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="record_video" label="录屏" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="record_trace" label="Playwright Trace" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="capture_screenshot" label="每步截图" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </div>
+
+            <div style={cardSectionStyle}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16, color: uiPalette.text }}>
+                AI 模型配置
+              </div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="midscene_provider" label="Midscene 模型提供方">
+                    <Input placeholder="例如：openai / azure / kimi" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="analysis_provider" label="失败分析提供方">
+                    <Input placeholder="用于失败分析摘要" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </div>
+          </div>
+        </Form>
+      </Modal>
+    </UiTestPage>
+  );
+};
+
+export default PlanList;
