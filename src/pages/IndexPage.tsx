@@ -90,7 +90,7 @@ const IndexPage: React.FC = () => {
 
       const projectNames = Array.from(projectNameSet).join('、');
       const total = targetRows.length;
-      const content = `项目${projectNames}下，共有${total}条接口用例的关联资产有新版本上线，请进入 场景测试>接口用例 下及时审查用例`;
+      const content = `项目${projectNames}下，共有${total}条接口用例的关联资产有新版本上线，请进入 接口测试>接口用例 下及时审查用例`;
       const bizKey = `pending-review-${currentUser.id}-${Array.from(projectNameSet).sort().join(',')}-${total}`;
 
       const inserted = pushLocalSystemNotice({

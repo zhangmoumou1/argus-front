@@ -26,7 +26,6 @@ import {
 import { PageContainer } from '@ant-design/pro-components';
 import { history, useLocation } from '@umijs/max';
 import {
-  PerformanceDataTableCard,
   performanceInsetPanelStyle,
 } from '@/pages/Performance/ModuleShell';
 
@@ -148,7 +147,7 @@ const statusConfig = {
   queued:           { color: '#94a3b8',          icon: <ClockCircleFilled />,      label: '排队中' },
   claimed:          { color: uiPalette.info,     icon: <SyncOutlined spin />,      label: '已领取' },
   running:          { color: uiPalette.info,     icon: <SyncOutlined spin />,      label: '运行中' },
-  uploading:        { color: uiPalette.warning,  icon: <SyncOutlined spin />,      label: '产物处理中' },
+  uploading:        { color: uiPalette.warning,  icon: <SyncOutlined spin />,      label: '整理中' },
   success:          { color: uiPalette.success,  icon: <CheckCircleFilled />,      label: '成功' },
   failed:           { color: uiPalette.error,    icon: <CloseCircleFilled />,      label: '失败' },
   cancelled:        { color: '#64748b',          icon: <MinusCircleFilled />,      label: '已停止' },
@@ -217,7 +216,7 @@ export const stepTypeTag = (type) => {
 
 const moduleNavItems = [
   {
-    label: '用例库',
+    label: 'UI用例',
     value: '/ui-test/cases',
     icon: <FileTextFilled />,
     match: (pathname) => pathname.startsWith('/ui-test/cases'),
@@ -229,7 +228,7 @@ const moduleNavItems = [
     match: (pathname) => pathname.startsWith('/ui-test/plans'),
   },
   {
-    label: '执行报告',
+    label: '测试报告',
     value: '/ui-test/runs',
     icon: <RocketFilled />,
     match: (pathname) => pathname.startsWith('/ui-test/runs'),
@@ -310,15 +309,23 @@ export const SectionCard = ({ title, description, extra, children, style: extraS
       border: panelBorder,
       borderRadius: radius,
       boxShadow: softShadow,
-      overflow: 'hidden',
       marginBottom: 20,
       background: '#fff',
       ...extraStyle,
     }}
   >
-    <PerformanceDataTableCard title={title} description={description} extra={extra}>
-      {children}
-    </PerformanceDataTableCard>
+    {(title || description || extra) ? (
+      <div style={{ padding: '22px 24px 12px', borderBottom: '1px solid rgba(226, 232, 240, 0.8)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Space direction="vertical" size={4}>
+            {title ? <span style={{ fontSize: 18, fontWeight: 700, color: uiPalette.text }}>{title}</span> : null}
+            {description ? <span style={{ color: uiPalette.subtle, fontSize: 13 }}>{description}</span> : null}
+          </Space>
+          {extra}
+        </div>
+      </div>
+    ) : null}
+    <div style={{ padding: '0 12px 12px' }}>{children}</div>
   </div>
 );
 
@@ -356,8 +363,8 @@ export const InsetCard = ({ title, actions, children, compact = false, icon }) =
 
 /* ────────────────────────────── small widgets ────────────────────────────── */
 
-export const RefreshButton = ({ onClick, loading, text = '刷新' }) => (
-  <Button icon={<ReloadOutlined />} onClick={onClick} loading={loading} style={{ borderRadius: radius }}>
+export const RefreshButton = ({ onClick, loading, text = '刷新', size }) => (
+  <Button icon={<ReloadOutlined />} onClick={onClick} loading={loading} size={size} style={{ borderRadius: radius }}>
     {text}
   </Button>
 );

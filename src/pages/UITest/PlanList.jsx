@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import parser from 'cron-parser';
+import moment from 'moment';
 import {
   Alert,
   Col,
@@ -8,7 +10,6 @@ import {
   Modal,
   Popconfirm,
   Row,
-  Segmented,
   Select,
   Space,
   Steps,
@@ -31,6 +32,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import { listProject } from '@/services/project';
+import { getAiModelConfig, listEnvironment, listGateway } from '@/services/configure';
 import auth from '@/utils/auth';
 import {
   deleteUiTestPlan,
@@ -43,7 +45,6 @@ import {
 } from '@/services/uiTest';
 import {
   PillButton,
-  RefreshButton,
   SectionCard,
   UiEmpty,
   UiTestPage,
@@ -62,6 +63,8 @@ const defaultForm = {
   name: '',
   description: '',
   env_name: '',
+  env_id: undefined,
+  address_id: undefined,
   base_url: '',
   browser: 'chromium',
   headless: true,
@@ -70,8 +73,7 @@ const defaultForm = {
   retry_times: 0,
   status: 'enabled',
   case_ref_ids: [],
-  midscene_provider: '',
-  analysis_provider: '',
+  ai_model_id: '',
   record_video: true,
   record_trace: true,
   capture_screenshot: true,
@@ -84,7 +86,6 @@ const wizardSteps = [
 ];
 
 const planStatusFilters = [
-  { label: '全部', value: '' },
   { label: '启用', value: 'enabled' },
   { label: '停用', value: 'disabled' },
 ];
@@ -97,6 +98,16 @@ const cardSectionStyle = {
   marginBottom: 16,
 };
 
+const resolveUiAddressPreview = (item) => {
+  if (!item) return '';
+  const pageUrl = String(item.page_url || '').trim();
+  const gateway = String(item.gateway || '').trim().replace(/\/$/, '');
+  if (!pageUrl) return gateway;
+  if (/^https?:\/\//i.test(pageUrl)) return pageUrl.replace(/\/$/, '');
+  if (!gateway) return pageUrl;
+  return `${gateway}${pageUrl.startsWith('/') ? pageUrl : `/${pageUrl}`}`;
+};
+
 const PlanList = () => {
   const [projectId, setProjectId] = useUiTestProject();
   const [projects, setProjects] = useState([]);
@@ -104,8 +115,12 @@ const PlanList = () => {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [candidateGroups, setCandidateGroups] = useState([]);
+  const [aiModelOptions, setAiModelOptions] = useState([]);
+  const [envOptions, setEnvOptions] = useState([]);
+  const [addressOptions, setAddressOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [candidateLoading, setCandidateLoading] = useState(false);
+  const [aiModelLoading, setAiModelLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -116,6 +131,20 @@ const PlanList = () => {
   const [form] = Form.useForm();
   const selectedPlanProjectId = Form.useWatch('project_id', form);
   const selectedCaseIds = Form.useWatch('case_ref_ids', form) || [];
+  const watchedCron = Form.useWatch('cron', form);
+  const selectedEnvId = Form.useWatch('env_id', form);
+  const selectedAddressId = Form.useWatch('address_id', form);
+
+  const cronPreview = useMemo(() => {
+    const cronValue = String(watchedCron || '').trim();
+    if (!cronValue) return '* 留空仅手动执行，cron表达式只支持5位';
+    try {
+      const nextDate = parser.parseExpression(cronValue).next().toDate();
+      return `下次执行时间：${moment(nextDate).format('YYYY-MM-DD HH:mm:ss')}`;
+    } catch {
+      return '* cron表达式只支持5位';
+    }
+  }, [watchedCron]);
 
   const fetchProjects = async () => {
     const res = await listProject({ page: 1, size: 1000 });
@@ -127,6 +156,59 @@ const PlanList = () => {
         setProjectId(nextProjectId);
       }
     }
+  };
+
+  const fetchAiModels = async () => {
+    setAiModelLoading(true);
+    const res = await getAiModelConfig();
+    setAiModelLoading(false);
+    if (!auth.response(res, false)) {
+      setAiModelOptions([]);
+      return;
+    }
+    const data = res.data || res || {};
+    const providers = Array.isArray(data.providers) ? data.providers : [];
+    const enabledModels = providers
+      .filter((item) => item?.enabled)
+      .map((item) => {
+        const providerName = String(item.provider_name || item.name || item.provider_type || 'AI模型').trim();
+        const modelName = String(item.model || '').trim();
+        const id = String(item.id || '').trim();
+        return {
+          label: modelName ? `${providerName} / ${modelName}` : providerName,
+          value: id,
+          provider_type: String(item.provider_type || item.provider || '').trim(),
+        };
+      })
+      .filter((item) => item.value);
+    setAiModelOptions(enabledModels);
+    const currentValue = form.getFieldValue('ai_model_id');
+    if (!currentValue && enabledModels[0]?.value) {
+      form.setFieldValue('ai_model_id', enabledModels[0].value);
+    }
+  };
+
+  const fetchEnvironments = async () => {
+    const res = await listEnvironment({ page: 1, size: 1000, exactly: true });
+    if (!auth.response(res, false)) {
+      setEnvOptions([]);
+      return;
+    }
+    setEnvOptions(Array.isArray(res.data) ? res.data : []);
+  };
+
+  const fetchAddresses = async (envId) => {
+    const targetEnvId = Number(envId || 0);
+    if (!targetEnvId) {
+      setAddressOptions([]);
+      return;
+    }
+    const res = await listGateway({ env: targetEnvId });
+    if (!auth.response(res, false)) {
+      setAddressOptions([]);
+      return;
+    }
+    setAddressOptions(Array.isArray(res.data) ? res.data : []);
   };
 
   const fetchPlans = async (
@@ -195,6 +277,9 @@ const PlanList = () => {
         ...defaultForm,
         ...data,
         ...runnerConfig,
+        env_id: runnerConfig.env_id || undefined,
+        address_id: runnerConfig.address_id || undefined,
+        ai_model_id: runnerConfig.ai_model_id || '',
         project_id: data.project_id,
         case_ref_ids: (data.cases || []).map((item) => item.case_ref_id),
       });
@@ -237,8 +322,7 @@ const PlanList = () => {
     setRunLoading((prev) => ({ ...prev, [id]: true }));
     const res = await runUiTestPlan({ id });
     setRunLoading((prev) => ({ ...prev, [id]: false }));
-    if (auth.response(res, true)) {
-      message.success('计划已加入执行队列');
+    if (auth.response(res, false)) {
       fetchPlans(projectId, pagination.current, pagination.pageSize);
     }
   };
@@ -274,6 +358,8 @@ const PlanList = () => {
 
   useEffect(() => {
     fetchProjects();
+    fetchAiModels();
+    fetchEnvironments();
   }, []);
 
   useEffect(() => {
@@ -293,9 +379,12 @@ const PlanList = () => {
     fetchCandidateCases(selectedPlanProjectId);
   }, [modalOpen, selectedPlanProjectId]);
 
-  const filteredPlans = useMemo(() => {
-    return plans;
-  }, [plans]);
+  useEffect(() => {
+    if (!modalOpen) return;
+    fetchAddresses(selectedEnvId);
+  }, [modalOpen, selectedEnvId]);
+
+  const filteredPlans = useMemo(() => plans, [plans]);
 
   const candidateOptions = useMemo(
     () =>
@@ -315,6 +404,13 @@ const PlanList = () => {
   );
 
   const invalidCases = (detail?.cases || []).filter((item) => item.status !== 'valid');
+  const selectedAddress = useMemo(
+    () => addressOptions.find((item) => Number(item.id) === Number(selectedAddressId || 0)) || null,
+    [addressOptions, selectedAddressId],
+  );
+  const addressPreview = useMemo(() => {
+    return resolveUiAddressPreview(selectedAddress);
+  }, [selectedAddress]);
 
   const columns = [
     {
@@ -330,6 +426,19 @@ const PlanList = () => {
             </div>
           )}
         </div>
+      ),
+    },
+    {
+      title: '执行环境',
+      dataIndex: 'env_name',
+      key: 'env_name',
+      width: 140,
+      render: (value) => (
+        value ? (
+          <Tag style={{ borderRadius: 999, border: 'none', background: '#eef2ff', color: '#4338ca' }}>
+            {value}
+          </Tag>
+        ) : <span style={{ color: '#cbd5e1' }}>-</span>
       ),
     },
     {
@@ -452,11 +561,13 @@ const PlanList = () => {
             />
           </Col>
           <Col xs={24} md={6}>
-            <Segmented
-              value={statusFilter}
-              onChange={setStatusFilter}
+            <Select
+              value={statusFilter || undefined}
+              onChange={(value) => setStatusFilter(value || '')}
               options={planStatusFilters}
-              block
+              placeholder="选择状态"
+              allowClear
+              style={{ width: '100%' }}
             />
           </Col>
           <Col xs={24} md={6}>
@@ -474,7 +585,6 @@ const PlanList = () => {
               <PillButton type="primary" icon={<PlusOutlined />} onClick={openCreate}>
                 新建计划
               </PillButton>
-              <RefreshButton onClick={() => fetchPlans(projectId, pagination.current, pagination.pageSize)} loading={loading} />
             </Space>
           </Col>
         </Row>
@@ -576,17 +686,37 @@ const PlanList = () => {
               </Row>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item name="env_name" label="环境">
-                    <Input placeholder="例如：test / staging" />
+                  <Form.Item
+                    name="env_id"
+                    label="环境"
+                    rules={[{ required: true, message: '请选择执行环境' }]}
+                  >
+                    <Select
+                      placeholder="选择执行环境"
+                      options={envOptions.map((item) => ({ label: item.name, value: item.id }))}
+                      onChange={() => form.setFieldValue('address_id', undefined)}
+                    />
                   </Form.Item>
                 </Col>
               </Row>
               <Form.Item name="description" label="描述">
                 <Input.TextArea rows={3} placeholder="说明计划目标、覆盖范围或执行窗口" />
               </Form.Item>
-              <Form.Item name="base_url" label="基础地址">
-                <Input placeholder="https://example.com" />
+              <Form.Item name="address_id" label="地址前缀">
+                <Select
+                  placeholder={selectedEnvId ? '选择地址前缀' : '请先选择环境'}
+                  disabled={!selectedEnvId}
+                  options={addressOptions.map((item) => ({
+                    label: `${item.name} (${resolveUiAddressPreview(item) || item.gateway || '-'})`,
+                    value: item.id,
+                  }))}
+                />
               </Form.Item>
+              {addressPreview && (
+                <div style={{ marginTop: -8, marginBottom: 8, color: uiPalette.subtle, fontSize: 12 }}>
+                  当前页面前缀：{addressPreview}
+                </div>
+              )}
             </div>
           </div>
 
@@ -691,8 +821,28 @@ const PlanList = () => {
               </Row>
               <Row gutter={16}>
                 <Col span={8}>
-                  <Form.Item name="cron" label="Cron 调度">
-                    <Input placeholder="留空 = 仅手动" />
+                  <Form.Item
+                    name="cron"
+                    label="cron表达式"
+                    extra={<div>{cronPreview}</div>}
+                    rules={[
+                      () => ({
+                        validator(_, value) {
+                          const cronValue = String(value || '').trim();
+                          if (!cronValue) {
+                            return Promise.resolve();
+                          }
+                          try {
+                            parser.parseExpression(cronValue);
+                            return Promise.resolve();
+                          } catch {
+                            return Promise.reject(new Error('请输入正确的cron表达式'));
+                          }
+                        },
+                      }),
+                    ]}
+                  >
+                    <Input placeholder="请输入执行cron表达式" />
                   </Form.Item>
                 </Col>
                 <Col span={8}>
@@ -742,13 +892,18 @@ const PlanList = () => {
               </div>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item name="midscene_provider" label="Midscene 模型提供方">
-                    <Input placeholder="例如：openai / azure / kimi" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="analysis_provider" label="失败分析提供方">
-                    <Input placeholder="用于失败分析摘要" />
+                  <Form.Item
+                    name="ai_model_id"
+                    label="AI 模型"
+                    rules={[{ required: true, message: '请选择一个已启用模型' }]}
+                  >
+                    <Select
+                      loading={aiModelLoading}
+                      placeholder="选择平台中已启用的模型"
+                      options={aiModelOptions}
+                      optionFilterProp="label"
+                      showSearch
+                    />
                   </Form.Item>
                 </Col>
               </Row>

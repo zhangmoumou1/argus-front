@@ -4,18 +4,16 @@ import {
   Input,
   Popconfirm,
   Row,
-  Segmented,
   Select,
   Space,
   Switch,
   Table,
   Tag,
+  Tabs,
   message,
 } from 'antd';
 import {
-  ClockCircleFilled,
   EyeOutlined,
-  PlayCircleOutlined,
   RedoOutlined,
   RocketFilled,
   SearchOutlined,
@@ -32,7 +30,6 @@ import {
 } from '@/services/uiTest';
 import {
   PillButton,
-  RefreshButton,
   SectionCard,
   UiEmpty,
   UiTestPage,
@@ -50,13 +47,17 @@ const statusFilters = [
   { label: '全部', value: '' },
   { label: '排队中', value: 'queued' },
   { label: '运行中', value: 'running' },
-  { label: '产物中', value: 'uploading' },
+  { label: '整理中', value: 'uploading' },
   { label: '成功', value: 'success' },
   { label: '失败', value: 'failed' },
   { label: '已停止', value: 'cancelled' },
 ];
 
 const activeRunStatuses = ['queued', 'claimed', 'running', 'uploading'];
+const runSourceTabs = [
+  { key: 'formal', label: '正式运行' },
+  { key: 'trial', label: '试运行' },
+];
 
 const RunList = () => {
   const [projectId, setProjectId] = useUiTestProject();
@@ -66,6 +67,7 @@ const RunList = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [keyword, setKeyword] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [activeTab, setActiveTab] = useState('formal');
   const [retryLoading, setRetryLoading] = useState({});
   const [stopLoading, setStopLoading] = useState({});
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
@@ -94,6 +96,7 @@ const RunList = () => {
       scope: 'report',
       status: statusFilter,
       keyword,
+      source: activeTab,
       page,
       size,
       paged: true,
@@ -138,29 +141,49 @@ const RunList = () => {
   }, []);
 
   useEffect(() => {
-    if (projectId) fetchRuns(projectId, 1, pagination.pageSize);
+    if (projectId) {
+      fetchRuns(projectId, 1, pagination.pageSize);
+    }
   }, [projectId]);
 
   useEffect(() => {
-    if (projectId) fetchRuns(projectId, 1, pagination.pageSize);
-  }, [statusFilter]);
+    if (projectId) {
+      fetchRuns(projectId, 1, pagination.pageSize);
+    }
+  }, [statusFilter, activeTab]);
 
   useEffect(() => {
     if (!autoRefresh || !projectId) return undefined;
-    const timer = window.setInterval(() => fetchRuns(projectId, pagination.current, pagination.pageSize), 30000);
+    const timer = window.setInterval(() => {
+      fetchRuns(projectId, pagination.current, pagination.pageSize);
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [autoRefresh, projectId, pagination.current, pagination.pageSize, statusFilter, keyword]);
 
-  const filteredRuns = useMemo(() => {
-    return runs;
-  }, [runs]);
+  const filteredRuns = useMemo(() => runs, [runs]);
+
+  const renderSourceTitle = (record) => {
+    const title = [record.file_title, record.node_title].filter(Boolean).join(' / ') || record.node_path || '-';
+    if (activeTab === 'trial') {
+      return (
+        <Space size={6} wrap>
+          <span>{`用例：${title}`}</span>
+          <Tag style={{ borderRadius: 999, border: 'none', background: '#ede9fe', color: '#7c3aed' }}>
+            试运行
+          </Tag>
+        </Space>
+      );
+    }
+    if (record.plan_id) return `计划：${record.plan_name || `#${record.plan_id}`}`;
+    return `计划：${title}`;
+  };
 
   const columns = [
     {
       title: 'Run',
       dataIndex: 'id',
       key: 'id',
-      width: 180,
+      width: 220,
       render: (value, record) => (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -168,8 +191,13 @@ const RunList = () => {
             <a onClick={() => openDetail(value)} style={{ fontWeight: 600 }}>
               Run #{value}
             </a>
+            {activeTab === 'formal' && record.trigger_mode === 'retry' && (
+              <Tag style={{ borderRadius: 999, border: 'none', background: '#fef3c7', color: '#92400e' }}>
+                Retry
+              </Tag>
+            )}
           </div>
-          {record.run_name && (
+          {!!record.run_name && activeTab === 'formal' && !record.plan_id && (
             <div style={{ color: uiPalette.subtle, fontSize: 12, paddingLeft: 22, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {record.run_name}
             </div>
@@ -182,30 +210,28 @@ const RunList = () => {
       key: 'source',
       render: (_, record) => (
         <div>
-          <Space wrap size={[6, 4]} style={{ marginBottom: 4 }}>
-            {record.plan_id && (
-              <Tag style={{ borderRadius: 999, border: 'none', background: '#ede9fe', color: '#7c3aed' }}>
-                计划 #{record.plan_id}
-              </Tag>
-            )}
-            {record.case_ref_id && (
-              <Tag style={{ borderRadius: 999, border: 'none', background: '#dbeafe', color: '#1d4ed8' }}>
-                用例 #{record.case_ref_id}
-              </Tag>
-            )}
-            {record.trigger_mode && (
-              <Tag
-                icon={record.trigger_mode === 'manual' ? <PlayCircleOutlined /> : <ClockCircleFilled />}
-                style={{ borderRadius: 999, border: 'none', background: '#f1f5f9', color: '#475569' }}
-              >
-                {record.trigger_mode}
-              </Tag>
-            )}
-          </Space>
-          <div style={{ color: uiPalette.subtle, fontSize: 12 }}>
-            {[record.file_title, record.node_title].filter(Boolean).join(' / ') || record.node_path || '-'}
+          <div style={{ fontWeight: 500, color: '#334155', marginBottom: 4 }}>
+            {renderSourceTitle(record)}
           </div>
+          {activeTab === 'formal' && (
+            <div style={{ color: uiPalette.subtle, fontSize: 12 }}>
+              {[record.file_title, record.node_title].filter(Boolean).join(' / ') || record.node_path || ''}
+            </div>
+          )}
         </div>
+      ),
+    },
+    {
+      title: '执行环境',
+      dataIndex: 'env_name',
+      key: 'env_name',
+      width: 140,
+      render: (value) => (
+        value ? (
+          <Tag style={{ borderRadius: 999, border: 'none', background: '#eef2ff', color: '#4338ca' }}>
+            {value}
+          </Tag>
+        ) : <span style={{ color: '#cbd5e1' }}>-</span>
       ),
     },
     {
@@ -216,9 +242,9 @@ const RunList = () => {
       render: (value) => uiStatusTag(value),
     },
     {
-      title: '环境',
+      title: '浏览器',
       key: 'browser',
-      width: 140,
+      width: 190,
       render: (_, record) => (
         <Space wrap size={[4, 4]}>
           <Tag style={{ borderRadius: 999, border: 'none', background: '#f1f5f9', color: '#475569' }}>
@@ -283,7 +309,7 @@ const RunList = () => {
     <UiTestPage
       toolbar={
         <Row gutter={[12, 12]} align="middle">
-          <Col xs={24} md={6}>
+          <Col xs={24} md={5}>
             <Select
               value={getUiTestProjectSelectValue(projects, projectId)}
               style={{ width: '100%' }}
@@ -293,12 +319,14 @@ const RunList = () => {
               options={projects.map((item) => ({ label: item.name, value: item.id }))}
             />
           </Col>
-          <Col xs={24} md={8}>
-            <Segmented
-              value={statusFilter}
-              onChange={setStatusFilter}
+          <Col xs={24} md={3}>
+            <Select
+              value={statusFilter || undefined}
+              onChange={(value) => setStatusFilter(value || '')}
               options={statusFilters}
-              block
+              placeholder="选择状态"
+              allowClear
+              style={{ width: '100%', maxWidth: 180 }}
             />
           </Col>
           <Col xs={24} md={6}>
@@ -311,15 +339,17 @@ const RunList = () => {
               allowClear
             />
           </Col>
-          <Col xs={24} md={4}>
+          <Col xs={24} md={5}>
             <Space>
+              <PillButton type="primary" onClick={() => fetchRuns(projectId, 1, pagination.pageSize)} loading={loading}>
+                查询
+              </PillButton>
               <Switch
                 checked={autoRefresh}
                 onChange={setAutoRefresh}
                 checkedChildren="30s"
                 unCheckedChildren="手动"
               />
-              <RefreshButton onClick={() => fetchRuns(projectId, pagination.current, pagination.pageSize)} loading={loading} />
             </Space>
           </Col>
         </Row>
@@ -327,13 +357,23 @@ const RunList = () => {
     >
       <SectionCard
         title="执行记录"
-        description="Run 状态、来源、环境和执行窗口"
+        description="按正式运行与试运行分别查看执行记录"
         extra={
           <div style={{ color: uiPalette.subtle, fontSize: 13 }}>
             共 {pagination.total || filteredRuns.length} 条记录
           </div>
         }
       >
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          style={{ padding: '0 12px' }}
+          tabBarStyle={{ marginBottom: 12 }}
+          items={runSourceTabs.map((item) => ({
+            key: item.key,
+            label: item.label,
+          }))}
+        />
         <Table
           rowKey="id"
           loading={loading}

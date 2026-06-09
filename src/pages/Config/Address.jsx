@@ -64,6 +64,13 @@ const Address = ({loading, gconfig, dispatch}) => {
       ellipsis: true
     },
     {
+      title: <TooltipTextIcon title="页面地址支持两种写法：1. 相对路径，例如 /portal，会拼接在服务地址后；2. 完整地址，例如 https://demo.xxx.com，会直接作为页面前缀使用" text="页面地址"/>,
+      key: 'page_url',
+      dataIndex: 'page_url',
+      render: text => text || '-',
+      ellipsis: true
+    },
+    {
       title: '操作',
       key: 'operation',
       render: (_, record) =>
@@ -107,7 +114,13 @@ const Address = ({loading, gconfig, dispatch}) => {
       message: '请输入服务地址',
       type: 'input',
       placeholder: '请输入服务地址',
-    }
+    },
+    {
+      name: 'page_url',
+      label: '页面地址',
+      type: 'input',
+      placeholder: '例如 /portal 或 https://demo.xxx.com',
+    },
   ];
 
   // 删除地址
@@ -155,7 +168,7 @@ const Address = ({loading, gconfig, dispatch}) => {
                       onFinish={onSubmit} onCancel={() => setModal(false)}/>
         <Form form={form} {...CONFIG.LAYOUT} onValuesChange={fetchAddress}>
           <Row gutter={12}>
-            <Col span={3}>
+            <Col span={4}>
               <Form.Item>
                 <Button type="primary" onClick={() => {
                   setModal(true)
@@ -163,21 +176,26 @@ const Address = ({loading, gconfig, dispatch}) => {
                 }}><PlusOutlined/>添加地址</Button>
               </Form.Item>
             </Col>
-            <Col span={7}>
+            <Col span={5}>
               <Form.Item label="环境" name="env">
                 <Select allowClear showSearch placeholder="选择对应的环境">
                   {envList.map(item => <Option value={item.id} key={item.id}>{item.name}</Option>)}
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={7}>
+            <Col span={5}>
               <Form.Item label="名称" name="name">
                 <Input placeholder="输入对应的地址名称"/>
               </Form.Item>
             </Col>
-            <Col span={7}>
+            <Col span={5}>
               <Form.Item label="地址" name="gateway">
                 <Input placeholder="输入对应的地址"/>
+              </Form.Item>
+            </Col>
+            <Col span={5}>
+              <Form.Item label="页面地址" name="page_url">
+                <Input placeholder="例如 /portal 或 https://demo.xxx.com"/>
               </Form.Item>
             </Col>
           </Row>

@@ -113,8 +113,25 @@ export default [
     ],
   },
   {
+    path: '/scene-design',
+    name: '场景设计',
+    icon: 'read',
+    routes: [
+      {
+        path: '/scene-design/functionalCase',
+        name: '功能用例',
+        component: './ApiTest/FunctionalCase',
+      },
+      {
+        path: '/scene-design/functionalSkill',
+        name: '用例技能',
+        component: './ApiTest/FunctionalSkill',
+      },
+    ],
+  },
+  {
     path: '/scenario',
-    name: '场景测试',
+    name: '接口测试',
     icon: 'macCommand',
     routes: [
       {
@@ -142,34 +159,17 @@ export default [
         ],
       },
       {
-        path: '/scenario/functionalCase',
-        name: '功能用例',
-        component: './ApiTest/FunctionalCase',
-      },
-      {
-        path: '/scenario/functionalSkill',
-        name: '用例技能',
-        component: './ApiTest/FunctionalSkill',
-      },
-    ],
-  },
-  {
-    path: '/run',
-    icon: 'history',
-    name: '测试运行',
-    routes: [
-      {
-        path: '/run/testplan',
+        path: '/scenario/testplan',
         name: '测试计划',
         component: './ApiTest/TestPlan',
       },
       {
-        path: '/run/api-report',
-        name: '接口报告',
+        path: '/scenario/report',
+        name: '测试报告',
         component: './BuildHistory/ApiReportList',
       },
       {
-        path: '/run/api-report/:id',
+        path: '/scenario/report/:id',
         hideInMenu: true,
         name: '接口报告详情',
         component: './BuildHistory/ReportDetail',
@@ -182,41 +182,13 @@ export default [
     component: './BuildHistory/ReportDetail',
   },
   {
-    path: '/performance',
-    icon: 'areaChart',
-    name: '性能测试',
-    routes: [
-      {
-        path: '/performance/plan',
-        name: '测试计划',
-        component: './Performance/PlanList',
-      },
-        {
-          path: '/performance/run',
-          name: '执行记录',
-          component: './Performance/ActivityHub',
-        },
-        {
-          path: '/performance/report',
-          name: '性能报告',
-          component: './Performance/ActivityHub',
-        },
-      {
-        path: '/performance/report/:id',
-        hideInMenu: true,
-        name: '性能报告详情',
-        component: './Performance/ReportDetail',
-      },
-    ],
-  },
-  {
     path: '/ui-test',
     icon: 'deploymentUnit',
     name: 'UI测试',
     routes: [
       {
         path: '/ui-test/cases',
-        name: '用例库',
+        name: 'UI用例',
         component: './UITest/CaseLibrary',
       },
       {
@@ -227,13 +199,41 @@ export default [
       {
         path: '/ui-test/runs/:id',
         hideInMenu: true,
-        name: '执行报告详情',
+        name: 'UI报告详情',
         component: './UITest/RunDetail',
       },
       {
         path: '/ui-test/runs',
-        name: '执行报告',
+        name: '测试报告',
         component: './UITest/RunList',
+      },
+    ],
+  },
+  {
+    path: '/performance',
+    icon: 'areaChart',
+    name: '性能测试',
+    routes: [
+      {
+        path: '/performance/plan',
+        name: '测试计划',
+        component: './Performance/PlanList',
+      },
+      {
+        path: '/performance/run',
+        name: '执行记录',
+        component: './Performance/ActivityHub',
+      },
+      {
+        path: '/performance/report',
+        name: '测试报告',
+        component: './Performance/ActivityHub',
+      },
+      {
+        path: '/performance/report/:id',
+        hideInMenu: true,
+        name: '性能报告详情',
+        component: './Performance/ReportDetail',
       },
     ],
   },
@@ -280,37 +280,62 @@ export default [
   {
     path: '/apiTest/functionalCase',
     hideInMenu: true,
-    redirect: '/scenario/functionalCase',
+    redirect: '/scene-design/functionalCase',
   },
   {
     path: '/apiTest/functionalSkill',
     hideInMenu: true,
-    redirect: '/scenario/functionalSkill',
+    redirect: '/scene-design/functionalSkill',
   },
   {
     path: '/apiTest/testplan',
     hideInMenu: true,
-    redirect: '/run/testplan',
+    redirect: '/scenario/testplan',
   },
   {
     path: '/record/list',
     hideInMenu: true,
-    redirect: '/run/api-report',
+    redirect: '/scenario/report',
   },
   {
     path: '/record/report/:id',
     hideInMenu: true,
-    redirect: '/run/api-report/:id',
+    redirect: '/scenario/report/:id',
   },
   {
     path: '/run/report',
     hideInMenu: true,
-    redirect: '/run/api-report',
+    redirect: '/scenario/report',
   },
   {
     path: '/run/report/:id',
     hideInMenu: true,
-    redirect: '/run/api-report/:id',
+    redirect: '/scenario/report/:id',
+  },
+  {
+    path: '/run/testplan',
+    hideInMenu: true,
+    redirect: '/scenario/testplan',
+  },
+  {
+    path: '/run/api-report',
+    hideInMenu: true,
+    redirect: '/scenario/report',
+  },
+  {
+    path: '/run/api-report/:id',
+    hideInMenu: true,
+    redirect: '/scenario/report/:id',
+  },
+  {
+    path: '/scenario/functionalCase',
+    hideInMenu: true,
+    redirect: '/scene-design/functionalCase',
+  },
+  {
+    path: '/scenario/functionalSkill',
+    hideInMenu: true,
+    redirect: '/scene-design/functionalSkill',
   },
   {
     path: '/notification',

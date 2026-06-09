@@ -4,7 +4,9 @@ import {
   Badge,
   Col,
   Drawer,
+  Image,
   Input,
+  Modal,
   Popconfirm,
   Progress,
   Row,
@@ -31,6 +33,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import { listProject } from '@/services/project';
+import { listEnvironment, listGateway } from '@/services/configure';
 import auth from '@/utils/auth';
 import {
   getUiTestRunDetail,
@@ -93,6 +96,20 @@ const CaseLibrary = () => {
   const [debugDetail, setDebugDetail] = useState(null);
   const [debugDetailLoading, setDebugDetailLoading] = useState(false);
   const [stopLoading, setStopLoading] = useState({});
+  const [imagePreview, setImagePreview] = useState({ open: false, title: '', src: '' });
+  const [envOptions, setEnvOptions] = useState([]);
+  const [trialAddressOptions, setTrialAddressOptions] = useState([]);
+  const [trialModal, setTrialModal] = useState({ open: false, node: null, envId: undefined, addressId: undefined });
+
+  const resolveUiAddressPreview = (item) => {
+    if (!item) return '';
+    const pageUrl = String(item.page_url || '').trim();
+    const gateway = String(item.gateway || '').trim().replace(/\/$/, '');
+    if (!pageUrl) return gateway;
+    if (/^https?:\/\//i.test(pageUrl)) return pageUrl.replace(/\/$/, '');
+    if (!gateway) return pageUrl;
+    return `${gateway}${pageUrl.startsWith('/') ? pageUrl : `/${pageUrl}`}`;
+  };
 
   const fetchProjects = async () => {
     const res = await listProject({ page: 1, size: 1000 });
@@ -104,6 +121,31 @@ const CaseLibrary = () => {
         setProjectId(nextProjectId);
       }
     }
+  };
+
+  const fetchEnvironments = async () => {
+    const res = await listEnvironment({ page: 1, size: 1000, exactly: true });
+    if (auth.response(res, false)) {
+      setEnvOptions(Array.isArray(res.data) ? res.data : []);
+    } else {
+      setEnvOptions([]);
+    }
+  };
+
+  const fetchTrialAddresses = async (envId) => {
+    const targetEnvId = Number(envId || 0);
+    if (!targetEnvId) {
+      setTrialAddressOptions([]);
+      return [];
+    }
+    const res = await listGateway({ env: targetEnvId });
+    if (auth.response(res, false)) {
+      const options = Array.isArray(res.data) ? res.data : [];
+      setTrialAddressOptions(options);
+      return options;
+    }
+    setTrialAddressOptions([]);
+    return [];
   };
 
   const fetchCases = async (
@@ -203,7 +245,7 @@ const CaseLibrary = () => {
       case_ref_id: caseRefId,
       scope: 'debug',
       page: 1,
-      size: 20,
+      size: 5,
       paged: true,
     });
     setDebugLoading(false);
@@ -226,20 +268,38 @@ const CaseLibrary = () => {
     fetchDebugRuns(node?.id);
   };
 
-  const handleTrialRun = async (id, node) => {
+  const submitTrialRun = async ({ id, node, envId, addressId }) => {
     if (node) {
       setActiveDebugCase(node);
       setSelectedNode(node);
       setActiveTab('debug');
     }
     setTrialLoading((prev) => ({ ...prev, [id]: true }));
-    const res = await trialRunUiTestCase({ id });
+    const res = await trialRunUiTestCase({ id, env_id: envId, address_id: addressId });
     setTrialLoading((prev) => ({ ...prev, [id]: false }));
     if (auth.response(res, true)) {
       const runId = res.data?.run_id || res.run_id;
-      message.success(`已创建调试任务 #${runId}`);
       fetchDebugRuns(id, runId);
     }
+  };
+
+  const openTrialModal = async (id, node) => {
+    if (!envOptions.length) {
+      message.warning('请先在测试配置中维护执行环境');
+      return;
+    }
+    const defaultEnvId = envOptions[0]?.id;
+    const addresses = await fetchTrialAddresses(defaultEnvId);
+    setTrialModal({
+      open: true,
+      node: node || { id },
+      envId: defaultEnvId,
+      addressId: addresses.length === 1 ? addresses[0].id : undefined,
+    });
+  };
+
+  const handleTrialRun = async (id, node) => {
+    openTrialModal(id, node);
   };
 
   const handleStopRun = async (runId) => {
@@ -248,13 +308,13 @@ const CaseLibrary = () => {
     const res = await stopUiTestRun({ id: runId });
     setStopLoading((prev) => ({ ...prev, [runId]: false }));
     if (auth.response(res, true)) {
-      message.success('已发送停止指令');
       fetchDebugRuns(activeDebugCase?.id, runId);
     }
   };
 
   useEffect(() => {
     fetchProjects();
+    fetchEnvironments();
   }, []);
 
   useEffect(() => {
@@ -278,6 +338,11 @@ const CaseLibrary = () => {
   const filteredData = useMemo(() => {
     return data;
   }, [data]);
+
+  const currentRunningDebugRun = useMemo(
+    () => debugRuns.find((item) => activeRunStatuses.includes(item.status)) || null,
+    [debugRuns],
+  );
 
   const debugArtifacts = useMemo(
     () =>
@@ -332,9 +397,6 @@ const CaseLibrary = () => {
             <a onClick={() => openFileNodes(record)} style={{ fontWeight: 600 }}>
               {value}
             </a>
-          </div>
-          <div style={{ color: uiPalette.subtle, fontSize: 12, paddingLeft: 24 }}>
-            file_id: {record.file_id}
           </div>
         </div>
       ),
@@ -394,7 +456,7 @@ const CaseLibrary = () => {
       width: 160,
       render: (_, record) => (
         <Space split={actionSplit}>
-          <a onClick={() => openFileNodes(record)}>查看节点</a>
+          <a onClick={() => openFileNodes(record)}>查看用例</a>
           <a onClick={() => handleScan()} style={{ color: uiPalette.primary }}>扫描</a>
         </Space>
       ),
@@ -467,7 +529,7 @@ const CaseLibrary = () => {
         <a onClick={() => fetchDebugDetail(value)} style={{ fontWeight: debugDetail?.id === value ? 700 : 500 }}>
           #{value}
           {record.status === 'running' && <span style={{ color: uiPalette.info, marginLeft: 4 }}>运行中</span>}
-          {record.status === 'uploading' && <span style={{ color: uiPalette.warning, marginLeft: 4 }}>产物中</span>}
+          {record.status === 'uploading' && <span style={{ color: uiPalette.warning, marginLeft: 4 }}>整理中</span>}
         </a>
       ),
     },
@@ -479,9 +541,9 @@ const CaseLibrary = () => {
       render: (value) => uiStatusTag(value),
     },
     {
-      title: '环境',
-      key: 'env',
-      width: 120,
+      title: '浏览器',
+      key: 'browser',
+      width: 140,
       render: (_, record) => (
         <Space size={4}>
           <Tag style={{ borderRadius: 6, border: 'none', background: '#f1f5f9' }}>{record.browser || 'chromium'}</Tag>
@@ -492,34 +554,11 @@ const CaseLibrary = () => {
       ),
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
+      title: '执行时间',
+      dataIndex: 'started_at',
+      key: 'started_at',
       width: 160,
-      render: (value) => <span style={{ color: uiPalette.subtle }}>{value || '-'}</span>,
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 90,
-      render: (_, record) =>
-        activeRunStatuses.includes(record.status) ? (
-          <Popconfirm
-            title="确认停止该调试任务？"
-            onConfirm={() => handleStopRun(record.id)}
-            okText="停止"
-            cancelText="取消"
-          >
-            <a style={{ color: uiPalette.error }}>
-              <Space size={4}>
-                {stopLoading[record.id] ? <SyncOutlined spin /> : <StopOutlined />}
-                停止
-              </Space>
-            </a>
-          </Popconfirm>
-        ) : (
-          <span style={{ color: uiPalette.subtle }}>-</span>
-        ),
+      render: (_, record) => <span style={{ color: uiPalette.subtle }}>{record.started_at || record.created_at || '-'}</span>,
     },
   ];
 
@@ -560,9 +599,11 @@ const CaseLibrary = () => {
             <PillButton
               size="small"
               icon={<EyeOutlined />}
-              href={artifact.view_url}
-              target="_blank"
-              rel="noreferrer"
+              onClick={() => setImagePreview({
+                open: true,
+                title: `步骤 #${record.step_index || '-'} 截图`,
+                src: artifact.view_url,
+              })}
             >
               查看
             </PillButton>
@@ -641,7 +682,6 @@ const CaseLibrary = () => {
               <PillButton icon={<ScanOutlined />} loading={scanLoading} onClick={handleScan}>
                 重新扫描
               </PillButton>
-              <RefreshButton onClick={() => fetchCases(projectId, casePagination.current, casePagination.pageSize)} loading={loading} />
             </Space>
           </Col>
         </Row>
@@ -673,12 +713,12 @@ const CaseLibrary = () => {
       </SectionCard>
 
       <Drawer
-        width={1200}
+        width={1480}
         title={
           <Space>
             <FileTextOutlined style={{ color: uiPalette.primary }} />
             <span>{activeFile?.file_title || 'UI 用例节点'}</span>
-            <Badge count={nodes.length} style={{ backgroundColor: uiPalette.primary }} />
+            <Badge count={nodes.length} style={{ backgroundColor: uiPalette.primary, transform: 'scale(0.85)', transformOrigin: 'left center' }} />
           </Space>
         }
         open={drawerOpen}
@@ -692,14 +732,14 @@ const CaseLibrary = () => {
           activeKey={activeTab}
           onChange={setActiveTab}
           style={{ padding: '0 20px' }}
+          tabBarStyle={{ marginBottom: 0 }}
           items={[
             {
               key: 'nodes',
               label: (
-                <Space>
+                <Space size={6}>
                   <FileTextOutlined />
                   <span>节点列表</span>
-                  <Badge count={filteredNodes.length} size="small" style={{ backgroundColor: uiPalette.primary }} />
                 </Space>
               ),
               children: (
@@ -777,12 +817,9 @@ const CaseLibrary = () => {
             {
               key: 'debug',
               label: (
-                <Space>
+                <Space size={6}>
                   <HistoryOutlined />
                   <span>调试台</span>
-                  {activeDebugCase?.id && (
-                    <Badge count={debugRuns.length} size="small" style={{ backgroundColor: uiPalette.warning }} />
-                  )}
                 </Space>
               ),
               children: (
@@ -796,14 +833,35 @@ const CaseLibrary = () => {
                           icon={<HistoryOutlined />}
                           actions={
                             <Space>
-                              <PillButton
-                                icon={<PlayCircleOutlined />}
-                                loading={trialLoading[activeDebugCase.id]}
-                                onClick={() => handleTrialRun(activeDebugCase.id, activeDebugCase)}
-                              >
-                                运行
-                              </PillButton>
+                              {currentRunningDebugRun ? (
+                                <Popconfirm
+                                  title="确认停止该调试任务？"
+                                  onConfirm={() => handleStopRun(currentRunningDebugRun.id)}
+                                  okText="停止"
+                                  cancelText="取消"
+                                >
+                                  <PillButton
+                                    size="small"
+                                    danger
+                                    icon={stopLoading[currentRunningDebugRun.id] ? <SyncOutlined spin /> : <StopOutlined />}
+                                    loading={stopLoading[currentRunningDebugRun.id]}
+                                  >
+                                    停止
+                                  </PillButton>
+                                </Popconfirm>
+                              ) : (
+                                <PillButton
+                                  size="small"
+                                  icon={<PlayCircleOutlined />}
+                                  loading={trialLoading[activeDebugCase.id]}
+                                  onClick={() => handleTrialRun(activeDebugCase.id, activeDebugCase)}
+                                >
+                                  运行
+                                </PillButton>
+                              )}
                               <RefreshButton
+                                size="small"
+                                text="刷新"
                                 onClick={() => fetchDebugRuns(activeDebugCase.id)}
                                 loading={debugLoading}
                               />
@@ -818,7 +876,7 @@ const CaseLibrary = () => {
                             loading={debugLoading}
                             columns={debugRunColumns}
                             dataSource={debugRuns}
-                            pagination={{ pageSize: 6, showSizeChanger: false }}
+                            pagination={{ pageSize: 5, showSizeChanger: false }}
                             locale={{ emptyText: <UiEmpty description="当前用例还没有你的调试记录" /> }}
                             style={{ marginTop: 12 }}
                           />
@@ -832,22 +890,6 @@ const CaseLibrary = () => {
                           actions={debugDetail ? (
                             <Space>
                               {uiStatusTag(debugDetail.status)}
-                              {activeRunStatuses.includes(debugDetail.status) && (
-                                <Popconfirm
-                                  title="确认停止该调试任务？"
-                                  onConfirm={() => handleStopRun(debugDetail.id)}
-                                  okText="停止"
-                                  cancelText="取消"
-                                >
-                                  <PillButton
-                                    size="small"
-                                    danger
-                                    icon={stopLoading[debugDetail.id] ? <SyncOutlined spin /> : <StopOutlined />}
-                                  >
-                                    停止
-                                  </PillButton>
-                                </Popconfirm>
-                              )}
                             </Space>
                           ) : null}
                         >
@@ -957,6 +999,97 @@ const CaseLibrary = () => {
           ]}
         />
       </Drawer>
+
+      <Modal
+        open={trialModal.open}
+        title="选择试运行环境"
+        onCancel={() => {
+          setTrialModal({ open: false, node: null, envId: undefined, addressId: undefined });
+          setTrialAddressOptions([]);
+        }}
+        onOk={() => {
+          if (!trialModal.node?.id || !trialModal.envId) {
+            message.warning('请选择执行环境');
+            return;
+          }
+          if (trialAddressOptions.length > 1 && !trialModal.addressId) {
+            message.warning('当前环境存在多个地址前缀，请选择一个再试运行');
+            return;
+          }
+          submitTrialRun({
+            id: trialModal.node.id,
+            node: trialModal.node,
+            envId: trialModal.envId,
+            addressId: trialModal.addressId,
+          });
+          setTrialModal({ open: false, node: null, envId: undefined, addressId: undefined });
+          setTrialAddressOptions([]);
+        }}
+        okText="开始试运行"
+        cancelText="取消"
+        confirmLoading={trialLoading[trialModal.node?.id]}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 600, color: uiPalette.text }}>执行环境</div>
+            <Select
+              value={trialModal.envId}
+              style={{ width: '100%' }}
+              placeholder="选择执行环境"
+              options={envOptions.map((item) => ({ label: item.name, value: item.id }))}
+              onChange={async (value) => {
+                const addresses = await fetchTrialAddresses(value);
+                setTrialModal((prev) => ({
+                  ...prev,
+                  envId: value,
+                  addressId: addresses.length === 1 ? addresses[0].id : undefined,
+                }));
+              }}
+            />
+          </div>
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 600, color: uiPalette.text }}>地址前缀</div>
+            <Select
+              value={trialModal.addressId}
+              style={{ width: '100%' }}
+              placeholder={trialModal.envId ? '选择地址前缀（可选）' : '请先选择执行环境'}
+              disabled={!trialModal.envId}
+              allowClear
+              options={trialAddressOptions.map((item) => ({
+                label: `${item.name} (${resolveUiAddressPreview(item) || item.gateway || '-'})`,
+                value: item.id,
+              }))}
+              onChange={(value) => setTrialModal((prev) => ({ ...prev, addressId: value }))}
+            />
+            <div style={{ marginTop: 8, color: uiPalette.subtle, fontSize: 12 }}>
+              如果该环境下只有一个页面地址，可以不手动选择，系统会自动带上。
+            </div>
+          </div>
+        </Space>
+      </Modal>
+
+      <Modal
+        open={imagePreview.open}
+        title={imagePreview.title || '步骤截图'}
+        footer={null}
+        width={980}
+        onCancel={() => setImagePreview({ open: false, title: '', src: '' })}
+        styles={{
+          content: { borderRadius: 16, overflow: 'hidden' },
+          body: { padding: '16px 20px', background: '#fafbfd' },
+        }}
+      >
+        {imagePreview.src ? (
+          <div style={{ textAlign: 'center' }}>
+            <Image
+              src={imagePreview.src}
+              alt={imagePreview.title || '步骤截图'}
+              style={{ maxWidth: '100%', maxHeight: 640, borderRadius: 8, border: `1px solid ${uiPalette.border}` }}
+            />
+          </div>
+        ) : null}
+      </Modal>
     </UiTestPage>
   );
 };

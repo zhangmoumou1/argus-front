@@ -9,10 +9,8 @@ import {
   Segmented,
   Space,
   Table,
-  Tabs,
   Tag,
   Typography,
-  message,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -22,23 +20,22 @@ import {
   EyeOutlined,
   FileImageOutlined,
   FileTextOutlined,
-  RedoOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
   RocketFilled,
   StopOutlined,
-  TableOutlined,
-  UnorderedListOutlined,
   VideoCameraOutlined,
-  WarningOutlined,
 } from '@ant-design/icons';
 import { history, useParams } from '@umijs/max';
 import auth from '@/utils/auth';
-import { getUiTestRunDetail, getUiTestRunStepDetail, retryUiTestRun, stopUiTestRun } from '@/services/uiTest';
+import { getUiTestRunDetail, getUiTestRunStepDetail, stopUiTestRun } from '@/services/uiTest';
 import {
   DslCodeBlock,
   InsetCard,
   Kv,
   MetricStrip,
   PillButton,
+  RefreshButton,
   SectionCard,
   StepTimeline,
   TipButton,
@@ -99,6 +96,19 @@ const collectRunErrors = (payload) => {
     append(`步骤 #${item.step_index}`, item.error_message);
   });
   return errors;
+};
+
+const normalizeStepCaseMeta = (step = {}) => {
+  const requestPayload = step?.request_payload && typeof step.request_payload === 'object' ? step.request_payload : {};
+  const resultPayload = step?.result_payload && typeof step.result_payload === 'object' ? step.result_payload : {};
+  return {
+    ...step,
+    case_index: step.case_index || requestPayload.case_index || resultPayload.case_index || 0,
+    case_ref_id: step.case_ref_id || requestPayload.case_ref_id || resultPayload.case_ref_id || 0,
+    case_title: step.case_title || requestPayload.case_title || resultPayload.case_title || '',
+    case_path: step.case_path || requestPayload.case_path || resultPayload.case_path || '',
+    case_step_index: step.case_step_index || requestPayload.case_step_index || resultPayload.case_step_index || 0,
+  };
 };
 
 const ArtifactPreview = ({ artifact }) => {
@@ -167,15 +177,14 @@ const ArtifactPreview = ({ artifact }) => {
 const RunDetail = () => {
   const { id } = useParams();
   const [loading, setLoading] = useState(false);
-  const [retryLoading, setRetryLoading] = useState(false);
   const [stopLoading, setStopLoading] = useState(false);
   const [payload, setPayload] = useState(null);
-  const [activeArtifactKey, setActiveArtifactKey] = useState('');
   const [payloadPreview, setPayloadPreview] = useState({ open: false, title: '', content: '' });
-  const [activeViewTab, setActiveViewTab] = useState('timeline');
+  const [artifactPreview, setArtifactPreview] = useState({ open: false, artifact: null });
   const [stepStatusFilter, setStepStatusFilter] = useState('all');
   const [selectedStep, setSelectedStep] = useState(null);
   const [stepDetailLoading, setStepDetailLoading] = useState(false);
+  const [expandedCaseKeys, setExpandedCaseKeys] = useState([]);
 
   const fetchDetail = async () => {
     if (!id) return;
@@ -188,12 +197,11 @@ const RunDetail = () => {
     if (auth.response(res)) {
       const next = res.data || res;
       setPayload(next);
-      const visibleArtifacts = (next.artifacts || []).filter(
-        (item) => item?.label !== '结果JSON' && item?.name !== 'result.json',
-      );
-      const firstPreviewable = visibleArtifacts.find((item) => item?.view_url && canInlinePreview(item));
-      const firstAny = visibleArtifacts.find((item) => item?.view_url);
-      setActiveArtifactKey((firstPreviewable || firstAny || {}).object_key || '');
+      setSelectedStep((prev) => {
+        if (!prev?.id) return prev;
+        const latestStep = (next.steps || []).find((item) => String(item.id) === String(prev.id));
+        return latestStep ? { ...prev, ...latestStep } : prev;
+      });
     }
   };
 
@@ -215,50 +223,44 @@ const RunDetail = () => {
     fetchDetail();
   }, [id]);
 
-  const handleRetry = async () => {
-    if (!payload?.id) return;
-    setRetryLoading(true);
-    const res = await retryUiTestRun({ id: payload.id });
-    setRetryLoading(false);
-    if (auth.response(res, true)) {
-      message.success(`已创建重试任务 Run #${res?.data?.run_id || ''}`);
-      history.push('/ui-test/runs');
-    }
-  };
-
   const handleStop = async () => {
     if (!payload?.id) return;
     setStopLoading(true);
     const res = await stopUiTestRun({ id: payload.id });
     setStopLoading(false);
     if (auth.response(res, true)) {
-      message.success('已发送停止指令');
       fetchDetail();
     }
   };
 
-  const artifacts = useMemo(
-    () =>
-      Array.isArray(payload?.artifacts)
-        ? payload.artifacts.filter((item) => item?.label !== '结果JSON' && item?.name !== 'result.json')
-        : [],
-    [payload],
-  );
+  const artifacts = useMemo(() => (
+    Array.isArray(payload?.artifacts)
+      ? payload.artifacts.filter((item) => {
+        const label = String(item?.label || '');
+        const name = String(item?.name || '');
+        const objectKey = String(item?.object_key || '');
+        if (label === '结果JSON' || name === 'result.json') return false;
+        if (label === '执行报告' || name === 'report.html') return false;
+        return !objectKey.endsWith('/reports/report.html');
+      })
+      : []
+  ), [payload]);
 
-  const activeArtifact = artifacts.find((item) => item.object_key === activeArtifactKey) || artifacts[0] || null;
-  const runErrors = useMemo(() => collectRunErrors(payload), [payload]);
   const artifactWarnings = useMemo(
     () => (Array.isArray(payload?.result_payload?.artifact_warnings) ? payload.result_payload.artifact_warnings : []),
     [payload],
   );
 
-  const steps = payload?.steps || [];
+  const steps = useMemo(
+    () => (Array.isArray(payload?.steps) ? payload.steps.map((item) => normalizeStepCaseMeta(item)) : []),
+    [payload],
+  );
   const successCount = steps.filter((item) => item.status === 'success').length;
   const failedCount = steps.filter((item) => item.status === 'failed').length;
   const runningCount = steps.filter((item) => ['queued', 'claimed', 'running'].includes(item.status)).length;
   const totalDuration = payload?.duration_ms || payload?.total_duration_ms
     || steps.reduce((sum, item) => sum + Number(item.duration_ms || 0), 0);
-
+  const successRate = steps.length ? Math.round((successCount / steps.length) * 100) : 0;
   const plannedCases = useMemo(() => {
     const cases = payload?.runner_payload?.cases;
     if (Array.isArray(cases)) {
@@ -305,6 +307,7 @@ const RunDetail = () => {
       return {
         ...item,
         ...result,
+        key: `${item.case_ref_id || 0}-${item.case_index || result.case_index || index + 1}`,
         case_index: item.case_index || result.case_index || index + 1,
         case_title: item.case_title || result.case_title || `用例${index + 1}`,
         node_path: item.node_path || result.node_path || '',
@@ -322,10 +325,88 @@ const RunDetail = () => {
     return steps.filter((item) => item.status === stepStatusFilter);
   }, [steps, stepStatusFilter]);
 
+  const groupedCases = useMemo(() => {
+    const groups = caseOverview.map((item) => ({
+      ...item,
+      steps: [],
+      success_step_count: 0,
+      failed_step_count: 0,
+      skipped_step_count: 0,
+      duration_ms: 0,
+      latest_error: item.error_message || '',
+    }));
+    const byRef = new Map();
+    const byIndex = new Map();
+    groups.forEach((item) => {
+      if (item.case_ref_id) byRef.set(String(item.case_ref_id), item);
+      if (item.case_index) byIndex.set(String(item.case_index), item);
+    });
+
+    const attachFallback = (step, index) => {
+      const caseIndex = step.case_index || groups.length + 1;
+      const caseRefId = step.case_ref_id || 0;
+      const fallbackKey = caseRefId ? `fallback-ref-${caseRefId}` : `fallback-index-${caseIndex}`;
+      const existing = groups.find((item) => item.key === fallbackKey);
+      if (existing) {
+        return existing;
+      }
+      const fallbackGroup = {
+        key: fallbackKey,
+        case_index: caseIndex,
+        case_ref_id: caseRefId,
+        case_title: step.case_title || `用例${caseIndex || index + 1}`,
+        node_path: step.case_path || '',
+        step_count: 0,
+        status: 'queued',
+        steps: [],
+        success_step_count: 0,
+        failed_step_count: 0,
+        skipped_step_count: 0,
+        duration_ms: 0,
+        latest_error: '',
+      };
+      groups.push(fallbackGroup);
+      if (caseRefId) byRef.set(String(caseRefId), fallbackGroup);
+      if (caseIndex) byIndex.set(String(caseIndex), fallbackGroup);
+      return fallbackGroup;
+    };
+
+    filteredSteps.forEach((step, index) => {
+      const group = byRef.get(String(step.case_ref_id || ''))
+        || byIndex.get(String(step.case_index || ''))
+        || attachFallback(step, index);
+      group.steps.push(step);
+      group.duration_ms += Number(step.duration_ms || 0);
+      if (step.status === 'success') group.success_step_count += 1;
+      if (step.status === 'failed') {
+        group.failed_step_count += 1;
+        if (!group.latest_error && step.error_message) {
+          group.latest_error = step.error_message;
+        }
+      }
+      if (step.status === 'skipped') group.skipped_step_count += 1;
+      if (!group.case_title) group.case_title = step.case_title || `用例${index + 1}`;
+      if (!group.node_path) group.node_path = step.case_path || '';
+      if (!group.status || group.status === 'queued') group.status = step.status || 'queued';
+    });
+
+    return groups;
+  }, [caseOverview, filteredSteps]);
+
+  useEffect(() => {
+    setExpandedCaseKeys((prev) => {
+      if (!groupedCases.length) return [];
+      const validKeys = new Set(groupedCases.map((item) => item.key));
+      const kept = prev.filter((key) => validKeys.has(key));
+      if (kept.length) return kept;
+      return groupedCases[0]?.steps?.length ? [groupedCases[0].key] : [];
+    });
+  }, [groupedCases]);
+
   const detailMetrics = [
     { label: '用例', value: plannedCases.length || caseResults.length || 0, hint: `${caseResults.length} 个已回传结果`, accent: uiPalette.accent },
     { label: '步骤', value: steps.length, hint: `${filteredSteps.length} 个当前可见`, accent: uiPalette.primary },
-    { label: '成功', value: successCount, hint: `${steps.length ? Math.round((successCount / steps.length) * 100) : 0}%`, accent: uiPalette.success },
+    { label: '成功', value: successCount, hint: `${successRate}%`, accent: uiPalette.success },
     { label: '失败', value: failedCount, hint: payload?.analysis_summary?.reason_type || '等待归因', accent: uiPalette.error },
     { label: '耗时', value: formatDuration(totalDuration), hint: `${runningCount} 个运行态步骤`, accent: uiPalette.warning },
   ];
@@ -336,17 +417,13 @@ const RunDetail = () => {
       dataIndex: 'step_index',
       key: 'step_index',
       width: 64,
-      fixed: 'left',
-      render: (value) => (
-        <span style={{ fontWeight: 600, color: uiPalette.text }}>#{value}</span>
-      ),
+      render: (value) => <span style={{ fontWeight: 600, color: uiPalette.text }}>#{value}</span>,
     },
     {
       title: '步骤',
       dataIndex: 'step_name',
       key: 'step_name',
       width: 320,
-      fixed: 'left',
       render: (value, record) => (
         <div>
           <div style={{ fontWeight: 500, marginBottom: 4 }}>{value}</div>
@@ -358,7 +435,7 @@ const RunDetail = () => {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
+      width: 110,
       render: (value) => uiStatusTag(value),
     },
     {
@@ -376,61 +453,25 @@ const RunDetail = () => {
     {
       title: '载荷',
       key: 'request_payload',
-      width: 100,
-      render: (_, record) =>
+      width: 88,
+      render: (_, record) => (
         record.request_payload ? (
           <TipButton
             tip="查看请求载荷"
             icon={<CodeOutlined />}
-            onClick={() =>
-              setPayloadPreview({
-                open: true,
-                title: `步骤 #${record.step_index} 请求载荷`,
-                content: stringifyPreview(record.request_payload),
-              })
-            }
+            onClick={() => setPayloadPreview({
+              open: true,
+              title: `步骤 #${record.step_index} 请求载荷`,
+              content: stringifyPreview(record.request_payload),
+            })}
           />
-        ) : (
-          <span style={{ color: '#cbd5e1' }}>-</span>
-        ),
-    },
-    {
-      title: '截图',
-      key: 'screenshot',
-      width: 180,
-      render: (_, record) => {
-        const filename = getArtifactDisplayName(record.screenshot_artifact, record.screenshot_path);
-        return <Text type="secondary">{filename || '-'}</Text>;
-      },
-    },
-    {
-      title: '错误摘要',
-      key: 'error',
-      width: 240,
-      render: (_, record) =>
-        record.error_message ? (
-          <div
-            style={{
-              padding: '6px 10px',
-              borderRadius: 8,
-              background: 'rgba(239,68,68,0.06)',
-              color: '#b91c1c',
-              fontSize: 12,
-              lineHeight: 1.6,
-              maxWidth: 240,
-            }}
-          >
-            {String(record.error_message).slice(0, 150)}
-          </div>
-        ) : (
-          <span style={{ color: '#cbd5e1' }}>-</span>
-        ),
+        ) : <span style={{ color: '#cbd5e1' }}>-</span>
+      ),
     },
     {
       title: '详情',
       key: 'detail',
-      width: 80,
-      fixed: 'right',
+      width: 88,
       render: (_, record) => (
         <TipButton
           tip="查看步骤详情"
@@ -441,16 +482,74 @@ const RunDetail = () => {
     },
   ];
 
+  const caseColumns = [
+    {
+      title: '#',
+      dataIndex: 'case_index',
+      key: 'case_index',
+      width: 70,
+      render: (value) => <span style={{ fontWeight: 600 }}>#{value}</span>,
+    },
+    {
+      title: '用例步骤',
+      key: 'case',
+      render: (_, record) => (
+        <div>
+          <div style={{ fontWeight: 700, color: uiPalette.text, marginBottom: 4 }}>{record.case_title}</div>
+          <div style={{ color: uiPalette.subtle, fontSize: 12 }}>
+            {[record.file_title, record.node_path].filter(Boolean).join(' / ') || '-'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 120,
+      render: (value) => uiStatusTag(value),
+    },
+    {
+      title: '步骤统计',
+      key: 'steps',
+      width: 300,
+      render: (_, record) => (
+        <Space size={[6, 6]} wrap>
+          <Tag style={{ borderRadius: 6, border: 'none', background: '#f1f5f9' }}>共 {record.step_count || 0}</Tag>
+          <Tag color="success" style={{ borderRadius: 6, border: 'none' }}>成功 {record.success_step_count || 0}</Tag>
+          <Tag color={record.failed_step_count ? 'error' : 'default'} style={{ borderRadius: 6, border: 'none' }}>失败 {record.failed_step_count || 0}</Tag>
+          <Tag color={record.skipped_step_count ? 'warning' : 'default'} style={{ borderRadius: 6, border: 'none' }}>跳过 {record.skipped_step_count || 0}</Tag>
+        </Space>
+      ),
+    },
+    {
+      title: '耗时',
+      key: 'duration_ms',
+      width: 120,
+      render: (_, record) => formatDuration(record.duration_ms),
+    },
+    {
+      title: '错误',
+      key: 'error',
+      width: 260,
+      render: (_, record) => (
+        record.latest_error ? (
+          <div style={{ color: uiPalette.error, fontSize: 12, lineHeight: 1.6 }}>
+            {String(record.latest_error).slice(0, 180)}
+          </div>
+        ) : <span style={{ color: '#cbd5e1' }}>-</span>
+      ),
+    },
+  ];
+
   return (
     <UiTestPage
-      extra={
+      extra={(
         <Space>
           <PillButton icon={<ArrowLeftOutlined />} onClick={() => history.push('/ui-test/runs')}>
             返回列表
           </PillButton>
-          <PillButton icon={<RedoOutlined />} loading={retryLoading} onClick={handleRetry}>
-            重试
-          </PillButton>
+          <RefreshButton onClick={fetchDetail} loading={loading} text="刷新" />
           {activeRunStatuses.includes(payload?.status) && (
             <Popconfirm
               title="确认停止该执行？"
@@ -465,52 +564,8 @@ const RunDetail = () => {
             </Popconfirm>
           )}
         </Space>
-      }
-    >
-      {/* Analysis Summary */}
-      {payload && payload?.analysis_summary?.status !== 'success' && (
-        <Alert
-          type="warning"
-          showIcon
-          icon={<WarningOutlined />}
-          style={{ marginBottom: 20, borderRadius: 14 }}
-          message={payload?.analysis_summary?.summary || '执行存在失败步骤'}
-          description={
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              {payload?.analysis_summary?.suggestion && (
-                <div>{payload.analysis_summary.suggestion}</div>
-              )}
-              {payload?.analysis_summary?.reason_type && (
-                <Tag color="orange" style={{ borderRadius: 999, border: 'none' }}>
-                  归因: {payload.analysis_summary.reason_type}
-                </Tag>
-              )}
-              {runErrors.length > 0 && (
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {runErrors.map((item, index) => (
-                    <div
-                      key={`${item.label}-${index}`}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 8,
-                        background: 'rgba(239,68,68,0.06)',
-                        color: '#991b1b',
-                        fontSize: 12,
-                        lineHeight: 1.6,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      <strong>{item.label}：</strong>{item.text}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Space>
-          }
-        />
       )}
-
+    >
       {artifactWarnings.length > 0 && (
         <Alert
           type="warning"
@@ -518,7 +573,7 @@ const RunDetail = () => {
           icon={<CloudDownloadOutlined />}
           style={{ marginBottom: 20, borderRadius: 14 }}
           message={`产物上传存在 ${artifactWarnings.length} 个告警`}
-          description={
+          description={(
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               {artifactWarnings.slice(0, 6).map((item, index) => (
                 <div
@@ -541,198 +596,117 @@ const RunDetail = () => {
                 </div>
               ))}
             </Space>
-          }
+          )}
         />
       )}
 
       <MetricStrip items={detailMetrics} />
 
-      {/* Metadata + Artifacts */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={6}>
+      <Row gutter={[16, 16]} style={{ marginTop: 20, marginBottom: 20 }}>
+        <Col xs={24} xl={16}>
           <InsetCard
-            title="执行信息"
+            title="执行概况"
             icon={<RocketFilled />}
-            compact
-            actions={
+            actions={(
               payload?.result_payload && Object.keys(payload.result_payload || {}).length ? (
                 <TipButton
                   tip="查看Runner结果"
                   icon={<CodeOutlined />}
-                  onClick={() =>
-                    setPayloadPreview({
-                      open: true,
-                      title: 'Runner 结果',
-                      content: stringifyPreview(payload.result_payload),
-                    })
-                  }
+                  onClick={() => setPayloadPreview({
+                    open: true,
+                    title: 'Runner 结果',
+                    content: stringifyPreview(payload.result_payload),
+                  })}
                 />
               ) : null
-            }
-          >
-            <Kv label="状态" value={uiStatusTag(payload?.status)} />
-            <Kv label="计划" value={payload?.plan_name || `#${payload?.plan_id}`} />
-            <Kv label="触发方式" value={payload?.trigger_mode} />
-            <Kv label="浏览器" value={`${payload?.browser || 'chromium'} / ${payload?.headless ? '无头' : '有头'}`} />
-            <Kv label="开始时间" value={payload?.started_at} />
-            <Kv label="结束时间" value={payload?.finished_at} />
-            {payload?.analysis_summary?.reason_type && (
-              <Kv label="归因类型" value={payload.analysis_summary.reason_type} />
             )}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 14,
+              }}
+            >
+              <Kv label="状态" value={uiStatusTag(payload?.status)} />
+              <Kv label="计划" value={payload?.plan_name || `#${payload?.plan_id}`} />
+              <Kv label="执行环境" value={payload?.env_name || '-'} />
+              <Kv label="触发方式" value={payload?.trigger_mode} />
+              <Kv label="浏览器" value={`${payload?.browser || 'chromium'} / ${payload?.headless ? '无头' : '有头'}`} />
+              <Kv label="开始时间" value={payload?.started_at} />
+              <Kv label="结束时间" value={payload?.finished_at} />
+              <Kv label="总耗时" value={formatDuration(totalDuration)} />
+              {payload?.analysis_summary?.reason_type && (
+                <Kv label="归因类型" value={payload.analysis_summary.reason_type} />
+              )}
+            </div>
           </InsetCard>
         </Col>
-        <Col xs={24} xl={18}>
-          <InsetCard
-            title="执行产物"
-            icon={<FileImageOutlined />}
-            actions={
-              activeArtifact?.view_url ? (
-                <Space>
-                  <PillButton
-                    size="small"
-                    icon={<EyeOutlined />}
-                    href={activeArtifact.view_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    新开查看
-                  </PillButton>
-                </Space>
-              ) : null
-            }
-          >
+        <Col xs={24} xl={8}>
+          <InsetCard title="执行产物" icon={<PlayCircleOutlined />}>
             {artifacts.length ? (
-              <Tabs
-                activeKey={activeArtifactKey || artifacts[0]?.object_key}
-                onChange={setActiveArtifactKey}
-                items={artifacts.map((item) => {
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                  gap: 12,
+                }}
+              >
+                {artifacts.map((item) => {
                   const meta = buildArtifactMeta(item);
-                  return {
-                    key: item.object_key,
-                    label: (
-                      <Space size={4}>
-                        <span style={{ color: meta.color }}>{meta.icon}</span>
-                        <span>{item.label}</span>
-                      </Space>
-                    ),
-                    children: (
-                      <div>
-                        <Space wrap style={{ marginBottom: 12 }}>
-                          <Tag
-                            icon={meta.icon}
-                            style={{ borderRadius: 999, border: 'none', background: `${meta.color}14`, color: meta.color }}
-                          >
-                            {meta.label}
-                          </Tag>
-                          {item.file_size && (
-                            <Tag style={{ borderRadius: 999, border: 'none', background: '#f1f5f9' }}>
-                              {item.file_size}
-                            </Tag>
-                          )}
-                          <Tag
-                            icon={item.available ? <EyeOutlined /> : <ClockCircleOutlined />}
-                            color={item.available ? 'success' : 'default'}
-                            style={{ borderRadius: 999, border: 'none' }}
-                          >
-                            {item.available ? '可预览' : '未就绪'}
-                          </Tag>
-                        </Space>
-                        <ArtifactPreview artifact={item} />
+                  return (
+                    <div
+                      key={item.object_key}
+                      style={{
+                        padding: '14px 12px',
+                        borderRadius: 12,
+                        border: `1px solid ${uiPalette.border}`,
+                        background: '#fff',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div style={{ color: meta.color, fontSize: 24, marginBottom: 8 }}>{meta.icon}</div>
+                      <div style={{ fontWeight: 600, color: uiPalette.text, fontSize: 13, marginBottom: 4 }}>
+                        {item.label || meta.label}
                       </div>
-                    ),
-                  };
+                      <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 10 }}>
+                        {item.file_size || meta.label}
+                      </div>
+                      <Space size={6} wrap style={{ justifyContent: 'center' }}>
+                        <TipButton
+                          tip={canInlinePreview(item) ? '查看详情' : '打开产物'}
+                          icon={<EyeOutlined />}
+                          onClick={() => {
+                            if (canInlinePreview(item)) {
+                              setArtifactPreview({ open: true, artifact: item });
+                            } else if (item.view_url) {
+                              window.open(item.view_url, '_blank', 'noopener,noreferrer');
+                            }
+                          }}
+                        />
+                        {item.view_url && (
+                          <TipButton
+                            tip="新开查看"
+                            icon={<CloudDownloadOutlined />}
+                            onClick={() => window.open(item.view_url, '_blank', 'noopener,noreferrer')}
+                          />
+                        )}
+                      </Space>
+                    </div>
+                  );
                 })}
-              />
+              </div>
             ) : (
-              <UiEmpty description="当前还没有执行产物" />
+              <UiEmpty description="当前还没有可展示的执行产物" />
             )}
           </InsetCard>
         </Col>
       </Row>
 
       <SectionCard
-        title="计划用例"
-        description="Runner 接收到的用例与回传结果"
-        style={{ marginTop: 20 }}
-        extra={<span style={{ color: uiPalette.subtle, fontSize: 13 }}>下发 {plannedCases.length} 条 / 回传 {caseResults.length} 条</span>}
-      >
-        <Table
-          rowKey={(record) => `${record.case_ref_id || 0}-${record.case_index || 0}`}
-          dataSource={caseOverview}
-          pagination={false}
-          size="middle"
-          locale={{ emptyText: <UiEmpty description="当前报告没有用例下发信息" /> }}
-          columns={[
-            {
-              title: '#',
-              dataIndex: 'case_index',
-              key: 'case_index',
-              width: 70,
-              render: (value) => <span style={{ fontWeight: 600 }}>#{value}</span>,
-            },
-            {
-              title: '用例',
-              key: 'case',
-              render: (_, record) => (
-                <div>
-                  <div style={{ fontWeight: 600, color: uiPalette.text }}>{record.case_title}</div>
-                  <div style={{ color: uiPalette.subtle, fontSize: 12, marginTop: 4 }}>
-                    {[record.file_title, record.node_path].filter(Boolean).join(' / ') || '-'}
-                  </div>
-                </div>
-              ),
-            },
-            {
-              title: '状态',
-              dataIndex: 'status',
-              key: 'status',
-              width: 120,
-              render: (value) => uiStatusTag(value),
-            },
-            {
-              title: '步骤',
-              key: 'steps',
-              width: 220,
-              render: (_, record) => (
-                <Space size={8}>
-                  <Tag style={{ borderRadius: 6, border: 'none', background: '#f1f5f9' }}>
-                    共 {record.step_count || 0}
-                  </Tag>
-                  <Tag color="success" style={{ borderRadius: 6, border: 'none' }}>
-                    成功 {record.success_step_count || 0}
-                  </Tag>
-                  <Tag color={record.failed_step_count ? 'error' : 'default'} style={{ borderRadius: 6, border: 'none' }}>
-                    失败 {record.failed_step_count || 0}
-                  </Tag>
-                  <Tag color={record.skipped_step_count ? 'warning' : 'default'} style={{ borderRadius: 6, border: 'none' }}>
-                    跳过 {record.skipped_step_count || 0}
-                  </Tag>
-                </Space>
-              ),
-            },
-            {
-              title: '错误',
-              dataIndex: 'error_message',
-              key: 'error_message',
-              width: 260,
-              render: (value) => value ? (
-                <div style={{ color: uiPalette.error, fontSize: 12, lineHeight: 1.6 }}>
-                  {String(value).slice(0, 180)}
-                </div>
-              ) : (
-                <span style={{ color: '#cbd5e1' }}>-</span>
-              ),
-            },
-          ]}
-        />
-      </SectionCard>
-
-      {/* Steps */}
-      <SectionCard
-        title="步骤时间线"
-        description="步骤状态、耗时、截图和错误摘要"
-        style={{ marginTop: 20 }}
-        extra={
+        title="用例步骤"
+        description="外层按用例聚合，展开后查看具体步骤"
+        extra={(
           <Space wrap>
             <Segmented
               size="small"
@@ -745,61 +719,38 @@ const RunDetail = () => {
                 { label: '运行中', value: 'running' },
               ]}
             />
-            <Segmented
-              size="small"
-              value={activeViewTab}
-              onChange={setActiveViewTab}
-              options={[
-                {
-                  value: 'timeline',
-                  label: (
-                    <Space size={4}>
-                      <UnorderedListOutlined />
-                      <span>时间线</span>
-                    </Space>
-                  ),
-                },
-                {
-                  value: 'table',
-                  label: (
-                    <Space size={4}>
-                      <TableOutlined />
-                      <span>表格</span>
-                    </Space>
-                  ),
-                },
-              ]}
-            />
           </Space>
-        }
-      >
-        {activeViewTab === 'timeline' ? (
-          <div style={{ padding: '20px 16px' }}>
-            <StepTimeline steps={filteredSteps} onStepClick={openStepDetail} />
-          </div>
-        ) : (
-          <Table
-            rowKey="step_index"
-            loading={loading}
-            dataSource={filteredSteps}
-            pagination={false}
-            size="middle"
-            scroll={{ x: 1280 }}
-            locale={{ emptyText: <UiEmpty description="还没有步骤结果" /> }}
-            columns={stepColumns}
-          />
         )}
+      >
+        <Table
+          rowKey="key"
+          loading={loading}
+          dataSource={groupedCases}
+          columns={caseColumns}
+          pagination={false}
+          locale={{ emptyText: <UiEmpty description="当前报告没有用例和步骤数据" /> }}
+          style={{ background: 'transparent' }}
+          expandable={{
+            expandedRowKeys: expandedCaseKeys,
+            onExpandedRowsChange: (keys) => setExpandedCaseKeys(keys),
+            rowExpandable: (record) => Array.isArray(record.steps) && record.steps.length > 0,
+            expandedRowRender: (record) => (
+              <div style={{ padding: '8px 0 4px 0' }}>
+                <StepTimeline steps={record.steps} onStepClick={openStepDetail} />
+              </div>
+            ),
+          }}
+        />
       </SectionCard>
 
-      {/* Step Detail Modal */}
       <Modal
         open={!!selectedStep}
-        title={
+        title={(
           <Space>
             <CodeOutlined style={{ color: uiPalette.primary }} />
             <span>步骤 #{selectedStep?.step_index || '-'}</span>
           </Space>
-        }
+        )}
         footer={null}
         width={980}
         onCancel={() => setSelectedStep(null)}
@@ -855,15 +806,14 @@ const RunDetail = () => {
         </Row>
       </Modal>
 
-      {/* Payload Preview Modal */}
       <Modal
         open={payloadPreview.open}
-        title={
+        title={(
           <Space>
             <CodeOutlined style={{ color: uiPalette.primary }} />
             <span>{payloadPreview.title || '请求载荷'}</span>
           </Space>
-        }
+        )}
         footer={null}
         width={880}
         onCancel={() => setPayloadPreview({ open: false, title: '', content: '' })}
@@ -873,6 +823,25 @@ const RunDetail = () => {
         }}
       >
         <DslCodeBlock data={payloadPreview.content} />
+      </Modal>
+
+      <Modal
+        open={artifactPreview.open}
+        title={(
+          <Space>
+            <FileImageOutlined style={{ color: uiPalette.primary }} />
+            <span>{artifactPreview.artifact?.label || '执行产物'}</span>
+          </Space>
+        )}
+        footer={null}
+        width={980}
+        onCancel={() => setArtifactPreview({ open: false, artifact: null })}
+        styles={{
+          content: { borderRadius: 16, overflow: 'hidden' },
+          body: { padding: '16px 20px', background: '#fafbfd' },
+        }}
+      >
+        {artifactPreview.artifact ? <ArtifactPreview artifact={artifactPreview.artifact} /> : null}
       </Modal>
     </UiTestPage>
   );
