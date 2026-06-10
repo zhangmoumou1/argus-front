@@ -130,6 +130,13 @@ export async function getUiTestRunDetail(params) {
   });
 }
 
+export async function querySharedUiTestRunDetail(params) {
+  return request(`${CONFIG.URL}/ui-test/run/share-detail`, {
+    method: 'GET',
+    params,
+  });
+}
+
 export async function getUiTestRunStepDetail(params) {
   return request(`${CONFIG.URL}/ui-test/run/step-detail`, {
     method: 'GET',

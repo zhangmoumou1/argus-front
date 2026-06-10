@@ -35,7 +35,6 @@ import {
 } from '@ant-design/icons';
 import { listProject } from '@/services/project';
 import { getAiModelConfig, listEnvironment, listGateway } from '@/services/configure';
-import { listUsers } from '@/services/user';
 import auth from '@/utils/auth';
 import {
   deleteUiTestPlan,
@@ -46,7 +45,7 @@ import {
   saveUiTestPlan,
   switchUiTestPlan,
 } from '@/services/uiTest';
-import UserSelect from '@/components/User/UserSelect';
+import { listAllNotificationConfigs } from '@/services/notificationConfig';
 import {
   PillButton,
   SectionCard,
@@ -75,15 +74,13 @@ const defaultForm = {
   ordered: true,
   cron: '',
   retry_times: 0,
-  pass_rate: 80,
-  msg_type: [],
-  receiver: [],
   status: 'enabled',
   case_ref_ids: [],
   ai_model_id: '',
   record_video: true,
   record_trace: true,
   capture_screenshot: true,
+  notification_config_id: undefined,
 };
 
 const wizardSteps = [
@@ -127,7 +124,7 @@ const PlanList = () => {
   const [addressOptions, setAddressOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [candidateLoading, setCandidateLoading] = useState(false);
-  const [userList, setUserList] = useState([]);
+  const [notificationConfigs, setNotificationConfigs] = useState([]);
   const [aiModelLoading, setAiModelLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
@@ -219,10 +216,10 @@ const PlanList = () => {
     setAddressOptions(Array.isArray(res.data) ? res.data : []);
   };
 
-  const fetchUsers = async () => {
-    const res = await listUsers({ page: 1, size: 1000 });
-    if (Array.isArray(res)) {
-      setUserList(res);
+  const fetchNotificationConfigs = async () => {
+    const res = await listAllNotificationConfigs();
+    if (res?.data) {
+      setNotificationConfigs(Array.isArray(res.data) ? res.data : []);
     }
   };
 
@@ -297,8 +294,6 @@ const PlanList = () => {
         ai_model_id: runnerConfig.ai_model_id || '',
         project_id: data.project_id,
         case_ref_ids: (data.cases || []).map((item) => item.case_ref_id),
-        receiver: typeof data.receiver === 'string' && data.receiver ? data.receiver.split(',').map(v => Number(v)).filter(v => v > 0) : (data.receiver || []),
-        msg_type: typeof data.msg_type === 'string' && data.msg_type ? data.msg_type.split(',').map(v => v.trim()).filter(v => v) : (data.msg_type || []),
       });
       setCurrentStep(0);
       setModalOpen(true);
@@ -377,7 +372,7 @@ const PlanList = () => {
     fetchProjects();
     fetchAiModels();
     fetchEnvironments();
-    fetchUsers();
+    fetchNotificationConfigs();
   }, []);
 
   useEffect(() => {
@@ -606,6 +601,7 @@ const PlanList = () => {
 
   return (
     <UiTestPage
+      showModuleNav={false}
       toolbar={
         <Row gutter={[12, 12]} align="middle">
           <Col xs={24} md={6}>
@@ -972,24 +968,13 @@ const PlanList = () => {
                 通知设置
               </div>
               <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="pass_rate" label="合格率(%)">
-                    <InputNumber min={1} max={100} style={{ width: '100%' }} />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="msg_type" label="推送方式">
-                    <Select allowClear showSearch placeholder="请选择推送方式" mode="multiple">
-                      <Select.Option key="0" value="0">邮件</Select.Option>
-                      <Select.Option key="1" value="1">钉钉</Select.Option>
-                      <Select.Option key="2" value="2">企业微信</Select.Option>
-                      <Select.Option key="3" value="3">飞书</Select.Option>
+                <Col span={24}>
+                  <Form.Item name="notification_config_id" label="通知配置">
+                    <Select allowClear showSearch placeholder="选择通知配置" style={{ width: '100%' }}>
+                      {notificationConfigs.map(item => (
+                        <Select.Option key={item.id} value={item.id}>{item.name}</Select.Option>
+                      ))}
                     </Select>
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="receiver" label="推送用户">
-                    <UserSelect users={userList} mode="multiple" />
                   </Form.Item>
                 </Col>
               </Row>

@@ -182,6 +182,11 @@ export default [
     component: './BuildHistory/ReportDetail',
   },
   {
+    path: '/share/ui-report/:id',
+    layout: false,
+    component: './UITest/RunDetail',
+  },
+  {
     path: '/ui-test',
     icon: 'deploymentUnit',
     name: 'UI测试',
@@ -409,6 +414,11 @@ export default [
         path: '/system/operation-log',
         name: '操作日志',
         component: './Manager/OperationLog',
+      },
+      {
+        path: '/system/notification-config',
+        name: '通知配置',
+        component: './Config/NotificationConfig',
       },
     ],
   },

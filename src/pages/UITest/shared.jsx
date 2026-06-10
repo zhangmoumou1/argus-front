@@ -235,9 +235,13 @@ const moduleNavItems = [
   },
 ];
 
-export const UiTestPage = ({ toolbar, children, extra }) => {
+export const UiTestPage = ({ toolbar, children, extra, showModuleNav = true }) => {
   const location = useLocation();
   const activeNav = moduleNavItems.find((item) => item.match(location.pathname))?.value || '/ui-test/cases';
+  const isRunDetailPage = location.pathname.startsWith('/ui-test/runs/');
+  const isSharedRunDetailPage = location.pathname.startsWith('/share/ui-report/');
+  const shouldShowModuleNav = showModuleNav && !isRunDetailPage && !isSharedRunDetailPage;
+  const shouldShowExtra = !isSharedRunDetailPage;
 
   return (
     <PageContainer
@@ -266,21 +270,23 @@ export const UiTestPage = ({ toolbar, children, extra }) => {
       >
         <Space wrap size={[10, 10]} style={{ flex: '1 1 420px' }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: uiPalette.text }}>UI 自动化</span>
-          <Segmented
-            value={activeNav}
-            onChange={(value) => history.push(value)}
-            options={moduleNavItems.map((item) => ({
-              value: item.value,
-              label: (
-                <Space size={6}>
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Space>
-              ),
-            }))}
-          />
+          {shouldShowModuleNav ? (
+            <Segmented
+              value={activeNav}
+              onChange={(value) => history.push(value)}
+              options={moduleNavItems.map((item) => ({
+                value: item.value,
+                label: (
+                  <Space size={6}>
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Space>
+                ),
+              }))}
+            />
+          ) : null}
         </Space>
-        {extra ? <Space wrap>{extra}</Space> : null}
+        {shouldShowExtra && extra ? <Space wrap>{extra}</Space> : null}
       </div>
       {toolbar ? (
         <div

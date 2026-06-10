@@ -8,7 +8,7 @@ import SortedTable from "@/components/Table/SortedTable";
 // import '@/components/Table/SortedTable.less';
 import parser from 'cron-parser';
 import moment from "moment";
-import UserSelect from "@/components/User/UserSelect";
+import {listAllNotificationConfigs} from "@/services/notificationConfig";
 
 const {Step} = Steps;
 const {Option} = Select;
@@ -90,9 +90,17 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
   const {visible, currentStep, title, treeData, selectedCaseData, caseMap, planRecord, pendingMap} = testplan;
   const {projects} = project;
   const {envList} = gconfig;
-  const {userList} = user;
   const [form] = Form.useForm();
   const [cronDate, setCronDate] = useState(null);
+  const [notificationConfigs, setNotificationConfigs] = useState([]);
+
+  useEffect(() => {
+    listAllNotificationConfigs().then(res => {
+      if (res?.data) {
+        setNotificationConfigs(Array.isArray(res.data) ? res.data : []);
+      }
+    });
+  }, []);
 
   const onSave = data => {
     dispatch({
@@ -108,7 +116,7 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
 
   const onSubmit = async () => {
 
-    const values = form.getFieldsValue(["name", "env", "priority", "cron", "ordered", "enabled", "case_list", "project_id", "pass_rate", "retry_minutes", "msg_type", "receiver"])
+    const values = form.getFieldsValue(["name", "env", "priority", "cron", "ordered", "enabled", "case_list", "project_id", "retry_minutes", "notification_config_id"])
     let res;
     if (planRecord.id) {
       res = await dispatch({
@@ -230,11 +238,13 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
 
     if (currentStep === 2) {
       return <>
-        <Col span={12}>
-          <Form.Item label="合格率(%)" rules={
-            [{required: true, message: '请输入测试计划的最低通过率'}]
-          } name="pass_rate">
-            <InputNumber placeholder="请输入测试计划的最低通过率" style={{width: '100%'}} max={100} min={1}/>
+        <Col span={24}>
+          <Form.Item label="通知配置" name="notification_config_id" {...CONFIG.SQL_LAYOUT}>
+            <Select allowClear showSearch placeholder="选择通知配置" style={{width: '100%'}}>
+              {notificationConfigs.map(item => (
+                <Option key={item.id} value={item.id}>{item.name}</Option>
+              ))}
+            </Select>
           </Form.Item>
         </Col>
         <Col span={12}>
@@ -242,25 +252,6 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
             [{required: false}]
           } name="retry_minutes">
             <InputNumber placeholder="重试等待时间, 不填则不重试" style={{width: '100%'}} min={0}/>
-          </Form.Item>
-        </Col>
-        <Col span={24}>
-          <Form.Item label="推送方式" rules={
-            [{required: false, message: '请选择推送方式'}]
-          } name="msg_type" {...CONFIG.SQL_LAYOUT}>
-            <Select allowClear showSearch placeholder="请选择推送方式" mode="multiple">
-              {
-                Object.keys(CONFIG.MSG_TYPE).map(key => <Option key={key} value={key}><IconFont
-                  type={CONFIG.MSG_ICON[key]} style={{fontSize: 18}}/> {CONFIG.MSG_TYPE[key]}</Option>)
-              }
-            </Select>
-          </Form.Item>
-        </Col>
-        <Col span={24}>
-          <Form.Item label="推送用户" rules={
-            [{required: false, message: '请选择推送人员'}]
-          } name="receiver" {...CONFIG.SQL_LAYOUT}>
-            <UserSelect users={userList} mode="multiple"/>
           </Form.Item>
         </Col>
       </>

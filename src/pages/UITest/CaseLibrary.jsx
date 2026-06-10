@@ -636,6 +636,7 @@ const CaseLibrary = () => {
 
   return (
     <UiTestPage
+      showModuleNav={false}
       toolbar={
         <Row gutter={[12, 12]} align="middle">
           <Col xs={24} md={7}>

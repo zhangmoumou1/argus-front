@@ -257,6 +257,17 @@ const RunList = () => {
       ),
     },
     {
+      title: '执行人',
+      dataIndex: 'executor_name',
+      key: 'executor_name',
+      width: 120,
+      render: (value) => (
+        value ? (
+          <span style={{ color: '#475569' }}>{value}</span>
+        ) : <span style={{ color: '#cbd5e1' }}>-</span>
+      ),
+    },
+    {
       title: '时间',
       key: 'time',
       width: 200,
@@ -307,6 +318,7 @@ const RunList = () => {
 
   return (
     <UiTestPage
+      showModuleNav={false}
       toolbar={
         <Row gutter={[12, 12]} align="middle">
           <Col xs={24} md={5}>
