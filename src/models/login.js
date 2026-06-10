@@ -68,8 +68,8 @@ const Model = {
     logout() {
       const {redirect} = getPageQuery(); // Note: There may be security issues, please note
       if (window.location.pathname !== '/#/user/login' && !redirect) {
-        localStorage.removeItem("pityToken");
-        localStorage.removeItem("pityUser");
+        localStorage.removeItem("argusToken");
+        localStorage.removeItem("argusUser");
         history.replace({
           pathname: '/user/login',
           search: stringify({
@@ -84,7 +84,7 @@ const Model = {
       if (auth.response(res)) {
         notification.success({
           message: `正在发送重置密码邮件`,
-          description: `我们正在为${payload}发送重置密码邮件, 如果您已注册过pity，请注意查收邮件。`
+          description: `我们正在为${payload}发送重置密码邮件, 如果您已注册过Argus，请注意查收邮件。`
         })
       }
     },

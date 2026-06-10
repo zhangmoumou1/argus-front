@@ -210,7 +210,7 @@ npm run start
 在 `argus-end` 目录下执行：
 
 ```bash
-python ./pity.py
+python ./main.py
 ```
 
 后端入口实际通过 Uvicorn 启动 FastAPI 应用。

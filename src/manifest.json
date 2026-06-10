@@ -1,6 +1,6 @@
 {
-  "name": "pity",
-  "short_name": "pity",
+  "name": "argus",
+  "short_name": "argus",
   "display": "standalone",
   "start_url": "./?utm_source=homescreen",
   "theme_color": "#002140",

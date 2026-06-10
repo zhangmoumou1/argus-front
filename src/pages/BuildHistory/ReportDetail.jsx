@@ -394,7 +394,7 @@ const ReportDetail = ({dispatch, loading, user, gconfig}) => {
                     <Tag icon={<IconFont type="icon-huanjing"/>}>{envMap[reportDetail.env] || envName || reportDetail.env}</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="执行人">
-                    {reportDetail.executor === 0 ? 'pity机器人' : (userMap[reportDetail.executor] ? <UserLink user={userMap[reportDetail.executor]} size={16}/> : (executorName || `执行人#${reportDetail.executor}`))}
+                    {reportDetail.executor === 0 ? 'argus机器人' : (userMap[reportDetail.executor] ? <UserLink user={userMap[reportDetail.executor]} size={16}/> : (executorName || `执行人#${reportDetail.executor}`))}
                   </Descriptions.Item>
                   <Descriptions.Item label="执行方式">
                     {reportConfig.EXECUTE_METHOD[reportDetail.mode]}

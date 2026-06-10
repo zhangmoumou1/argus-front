@@ -24,7 +24,7 @@ export default defineConfig({
     require('autoprefixer'),
   ],
 
-  title: 'pity',
+  title: 'argus',
 
   history: {
     type: 'hash',

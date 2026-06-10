@@ -57,7 +57,7 @@ const UserModel = {
   },
   effects: {
     // * fetch(_, {call, put}) {
-    //   const token = localStorage.getItem("pityToken")
+    //   const token = localStorage.getItem("argusToken")
     //   const response = yield call(queryCurrent, {token});
     //   yield put({
     //     type: 'save',
@@ -153,10 +153,10 @@ const UserModel = {
     * avatar({payload}, {call, put}) {
       const res = yield call(updateAvatar, payload)
       if (auth.response(res, true)) {
-        const pityUser = localStorage.getItem("pityUser")
-        const info = JSON.parse(pityUser)
+        const argusUser = localStorage.getItem("argusUser")
+        const info = JSON.parse(argusUser)
         info.avatar = res.data;
-        localStorage.setItem("pityUser", JSON.stringify(info))
+        localStorage.setItem("argusUser", JSON.stringify(info))
         yield put({
           type: 'saveCurrentUser',
           payload: info,
@@ -212,13 +212,13 @@ const UserModel = {
 
 
     * fetchCurrent(_, {call, put}) {
-      const token = localStorage.getItem("pityToken")
-      const userInfo = localStorage.getItem("pityUser")
-      const pityExpire = localStorage.getItem("pityExpire")
-      if (!token || !userInfo || (new Date().getTime() / 1000) > pityExpire) {
+      const token = localStorage.getItem("argusToken")
+      const userInfo = localStorage.getItem("argusUser")
+      const argusExpire = localStorage.getItem("argusExpire")
+      if (!token || !userInfo || (new Date().getTime() / 1000) > argusExpire) {
         message.info("登录信息已失效");
-        localStorage.removeItem("pityToken")
-        localStorage.removeItem("pityUser")
+        localStorage.removeItem("argusToken")
+        localStorage.removeItem("argusUser")
         history.replace({
           pathname: '/user/login',
           search: stringify({
@@ -252,7 +252,7 @@ const UserModel = {
     },
 
     saveCurrentUser(state, action) {
-      localStorage.setItem("pityUser", JSON.stringify(action.payload || {}))
+      localStorage.setItem("argusUser", JSON.stringify(action.payload || {}))
       return {...state, currentUser: action.payload || {}};
     },
 
@@ -274,6 +274,6 @@ const UserModel = {
   },
 };
 export default UserModel;
-
-
-
+
+
+
