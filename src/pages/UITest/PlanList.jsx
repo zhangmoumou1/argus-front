@@ -3,6 +3,7 @@ import parser from 'cron-parser';
 import moment from 'moment';
 import {
   Alert,
+  Badge,
   Col,
   Form,
   Input,
@@ -16,6 +17,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   message,
 } from 'antd';
 import {
@@ -33,6 +35,7 @@ import {
 } from '@ant-design/icons';
 import { listProject } from '@/services/project';
 import { getAiModelConfig, listEnvironment, listGateway } from '@/services/configure';
+import { listUsers } from '@/services/user';
 import auth from '@/utils/auth';
 import {
   deleteUiTestPlan,
@@ -43,6 +46,7 @@ import {
   saveUiTestPlan,
   switchUiTestPlan,
 } from '@/services/uiTest';
+import UserSelect from '@/components/User/UserSelect';
 import {
   PillButton,
   SectionCard,
@@ -71,6 +75,9 @@ const defaultForm = {
   ordered: true,
   cron: '',
   retry_times: 0,
+  pass_rate: 80,
+  msg_type: [],
+  receiver: [],
   status: 'enabled',
   case_ref_ids: [],
   ai_model_id: '',
@@ -120,6 +127,7 @@ const PlanList = () => {
   const [addressOptions, setAddressOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [candidateLoading, setCandidateLoading] = useState(false);
+  const [userList, setUserList] = useState([]);
   const [aiModelLoading, setAiModelLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
@@ -211,6 +219,13 @@ const PlanList = () => {
     setAddressOptions(Array.isArray(res.data) ? res.data : []);
   };
 
+  const fetchUsers = async () => {
+    const res = await listUsers({ page: 1, size: 1000 });
+    if (Array.isArray(res)) {
+      setUserList(res);
+    }
+  };
+
   const fetchPlans = async (
     pid = projectId,
     page = pagination.current,
@@ -282,6 +297,8 @@ const PlanList = () => {
         ai_model_id: runnerConfig.ai_model_id || '',
         project_id: data.project_id,
         case_ref_ids: (data.cases || []).map((item) => item.case_ref_id),
+        receiver: typeof data.receiver === 'string' && data.receiver ? data.receiver.split(',').map(v => Number(v)).filter(v => v > 0) : (data.receiver || []),
+        msg_type: typeof data.msg_type === 'string' && data.msg_type ? data.msg_type.split(',').map(v => v.trim()).filter(v => v) : (data.msg_type || []),
       });
       setCurrentStep(0);
       setModalOpen(true);
@@ -360,6 +377,7 @@ const PlanList = () => {
     fetchProjects();
     fetchAiModels();
     fetchEnvironments();
+    fetchUsers();
   }, []);
 
   useEffect(() => {
@@ -484,14 +502,54 @@ const PlanList = () => {
       title: '调度',
       dataIndex: 'cron',
       key: 'cron',
-      width: 160,
-      render: (value) => value ? (
-        <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
-          {value}
-        </Tag>
-      ) : (
-        <span style={{ color: '#cbd5e1' }}>手动执行</span>
-      ),
+      width: 240,
+      render: (value, record) => {
+        if (!value) {
+          return <span style={{ color: '#cbd5e1' }}>手动执行</span>;
+        }
+        const state = record.state;
+        if (state === 2) {
+          return (
+            <Tooltip title="定时任务可能添加失败，请尝试重新添加">
+              <Space size={4}>
+                <Badge status="error" />
+                <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+                  {value}
+                </Tag>
+              </Space>
+            </Tooltip>
+          );
+        }
+        if (state === 3) {
+          return (
+            <Tooltip title="任务已暂停">
+              <Space size={4}>
+                <Badge status="warning" />
+                <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+                  {value}
+                </Tag>
+              </Space>
+            </Tooltip>
+          );
+        }
+        if (state === 1 && record.next_run) {
+          return (
+            <Tooltip title={`下次运行时间: ${record.next_run}`}>
+              <Space size={4}>
+                <Badge status="success" />
+                <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+                  {value}
+                </Tag>
+              </Space>
+            </Tooltip>
+          );
+        }
+        return (
+          <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+            {value}
+          </Tag>
+        );
+      },
     },
     {
       title: '操作',
@@ -904,6 +962,34 @@ const PlanList = () => {
                       optionFilterProp="label"
                       showSearch
                     />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </div>
+
+            <div style={cardSectionStyle}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16, color: uiPalette.text }}>
+                通知设置
+              </div>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="pass_rate" label="合格率(%)">
+                    <InputNumber min={1} max={100} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="msg_type" label="推送方式">
+                    <Select allowClear showSearch placeholder="请选择推送方式" mode="multiple">
+                      <Select.Option key="0" value="0">邮件</Select.Option>
+                      <Select.Option key="1" value="1">钉钉</Select.Option>
+                      <Select.Option key="2" value="2">企业微信</Select.Option>
+                      <Select.Option key="3" value="3">飞书</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="receiver" label="推送用户">
+                    <UserSelect users={userList} mode="multiple" />
                   </Form.Item>
                 </Col>
               </Row>
