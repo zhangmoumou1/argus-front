@@ -1,6 +1,6 @@
 import {connect} from '@umijs/max';
-import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Steps, Switch, Tag, TreeSelect} from "antd";
-import {ApiOutlined, NotificationOutlined, SaveOutlined, TeamOutlined} from "@ant-design/icons";
+import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Steps, Switch, Tag, Tooltip, TreeSelect} from "antd";
+import {ApiOutlined, NotificationOutlined, QuestionCircleOutlined, SaveOutlined, TeamOutlined} from "@ant-design/icons";
 import React, {useEffect, useState} from 'react';
 import CONFIG from "@/consts/config";
 import {IconFont} from "@/components/Icon/IconFont";
@@ -116,7 +116,7 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
 
   const onSubmit = async () => {
 
-    const values = form.getFieldsValue(["name", "env", "priority", "cron", "ordered", "enabled", "case_list", "project_id", "retry_minutes", "notification_config_id"])
+    const values = form.getFieldsValue(["name", "env", "priority", "cron", "ordered", "enabled", "case_list", "project_id", "retry_minutes", "notification_config_id", "pass_rate"])
     let res;
     if (planRecord.id) {
       res = await dispatch({
@@ -247,11 +247,21 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
             </Select>
           </Form.Item>
         </Col>
-        <Col span={12}>
+        <Col span={24}>
+          <Form.Item
+            label={<span>成功率阈值 <Tooltip title="未配置阈值时，每次执行完成都会通知；配置后，只有本次成功率低于该阈值才会发起通知。"><QuestionCircleOutlined /></Tooltip></span>}
+            name="pass_rate"
+            extra="不填则每次执行后都通知；填写后仅当成功率低于阈值才通知"
+            {...CONFIG.SQL_LAYOUT}
+          >
+            <InputNumber placeholder="请输入1-100" style={{width: '50%'}} min={1} max={100} addonAfter="%" />
+          </Form.Item>
+        </Col>
+        <Col span={24}>
           <Form.Item label="重试等待(min)" rules={
             [{required: false}]
-          } name="retry_minutes">
-            <InputNumber placeholder="重试等待时间, 不填则不重试" style={{width: '100%'}} min={0}/>
+          } name="retry_minutes" {...CONFIG.SQL_LAYOUT}>
+            <InputNumber placeholder="重试等待时间, 不填则不重试" style={{width: '50%'}} min={0}/>
           </Form.Item>
         </Col>
       </>

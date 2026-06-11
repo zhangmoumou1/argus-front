@@ -15,7 +15,7 @@ import {
   Table,
   Tag,
 } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { CheckCircleTwoTone, CloseCircleTwoTone, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import {
   listPerformanceReport,
   queryPerformanceMonitorConfig,
@@ -23,6 +23,7 @@ import {
 } from '@/services/performance';
 import auth from '@/utils/auth';
 import UserLink from '@/components/Button/UserLink';
+import { IconFont } from '@/components/Icon/IconFont';
 import {
   performancePanelStyle,
 } from './ModuleShell';
@@ -142,12 +143,21 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     title: '报告ID',
     dataIndex: 'id',
     key: 'id',
-    width: 160,
-    render: (value) => <a href={`/#/performance/report/${value}`} style={{ fontWeight: 600 }}>Run #{value}</a>,
+    width: 136,
+    render: (value, record) => {
+      const success = Number(record.failed_count || 0) <= 0 && Number(record.error_rate || 0) <= 0;
+      return (
+        <Space size={8}>
+          {success ? <CheckCircleTwoTone twoToneColor="#52c41a" style={{ fontSize: 14 }} /> : <CloseCircleTwoTone twoToneColor="#eb2f96" style={{ fontSize: 14 }} />}
+          <a href={`/#/performance/report/${value}`} style={{ fontWeight: 600 }}>{value}</a>
+        </Space>
+      );
+    },
   },
   {
-    title: '计划 / 来源',
+    title: '来源',
     key: 'plan',
+    width: 420,
     render: (_, record) => {
       const summary = parseSummary(record.summary_json);
       return (
@@ -165,7 +175,12 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     title: '执行人',
     dataIndex: 'executor',
     key: 'executor',
-    render: (value) => <UserLink user={userMap[value]} />,
+    width: 160,
+    render: (value) => value === 0 ? (
+      <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 13, lineHeight: '24px' }}>
+        <IconFont style={{ fontSize: 20, marginRight: 6 }} type="icon-a-jiqirenrengongzhineng" /> 机器人
+      </span>
+    ) : <UserLink user={userMap[value]} />,
   },
   {
     title: '核心指标',
@@ -180,7 +195,7 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     ),
   },
   {
-    title: '报告结果',
+    title: '测试结果',
     key: 'threshold',
     render: (_, record) => {
       const summary = parseSummary(record.summary_json);
@@ -207,7 +222,7 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
         if (item.operator === '>=') return actual >= expected;
         return false;
       });
-      return passed ? <Tag color="success">通过</Tag> : <Tag color="error">未通过</Tag>;
+      return passed ? <Tag color="success" style={{ borderRadius: 999, border: 'none' }}>测试成功</Tag> : <Tag color="error" style={{ borderRadius: 999, border: 'none' }}>测试失败</Tag>;
     },
   },
   {
@@ -222,7 +237,7 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     dataIndex: 'status',
     key: 'status',
     width: 120,
-    render: (value) => value === 0 ? uiStatusTag('queued') : value === 1 ? uiStatusTag('running') : value === 2 ? uiStatusTag('cancelled') : value === 3 ? uiStatusTag('success') : (statusMap[value] || <Tag>{value}</Tag>),
+    render: (value) => value === 0 ? uiStatusTag('queued') : value === 1 ? uiStatusTag('running') : value === 2 ? uiStatusTag('cancelled') : value === 3 ? uiStatusTag('ui_test_success') : (statusMap[value] || <Tag>{value}</Tag>),
   },
   {
     title: '操作',
@@ -314,78 +329,83 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
   return (
     <PageContainer title={false} breadcrumb={null}>
       <div style={{ padding: '8px 0 24px', background: uiPalette.page, minHeight: 'calc(100vh - 120px)' }}>
-        <SectionCard
-          extra={(
-            <Space size={10}>
-              <PillButton type="primary" onClick={() => fetchList(1)}>
-                <SearchOutlined /> 查询
-              </PillButton>
-              <PillButton
-                onClick={() => {
-                  form.resetFields();
-                  form.setFieldsValue({ date: defaultReportDateRange });
-                  fetchList(1);
-                }}
-              >
-                <ReloadOutlined /> 重置
-              </PillButton>
-            </Space>
-          )}
-        >
-          <Form form={form}>
-            <Row gutter={[14, 12]}>
-              <Col xs={24} sm={12} lg={6}>
-                <Form.Item label="执行人" name="executor" style={{ marginBottom: 0 }}>
-                  <Select placeholder="选择执行人" allowClear>
-                    {Object.keys(userMap).map((v) => (
-                      <Option key={v} value={Number(v)}>
-                        <UserLink user={userMap[v]} />
+        <SectionCard>
+          <div style={{ paddingTop: 12 }}>
+            <Form form={form}>
+              <Row gutter={[12, 12]} align="bottom">
+                <Col xs={24} sm={12} lg={3}>
+                  <Form.Item label="执行人" name="executor" style={{ marginBottom: 0 }}>
+                    <Select placeholder="选择执行人" allowClear>
+                      <Option value={0}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 13, lineHeight: '24px' }}>
+                          <IconFont style={{ fontSize: 20, marginRight: 6 }} type="icon-a-jiqirenrengongzhineng" /> 机器人
+                        </span>
                       </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-              {!isReportView ? (
-                <Col xs={24} sm={12} lg={5}>
-                  <Form.Item label="状态" name="status" style={{ marginBottom: 0 }}>
-                    <Select placeholder="选择状态" allowClear>
-                      <Option value={0}>准备中</Option>
-                      <Option value={1}>运行中</Option>
-                      <Option value={2}>已停止</Option>
-                      <Option value={3}>已完成</Option>
+                      {Object.keys(userMap).map((v) => (
+                        <Option key={v} value={Number(v)}>
+                          <UserLink user={userMap[v]} />
+                        </Option>
+                      ))}
                     </Select>
                   </Form.Item>
                 </Col>
-              ) : null}
-              <Col xs={24} lg={!isReportView ? 13 : 10} xl={!isReportView ? 11 : 8}>
-                <Form.Item
-                  label="执行时间"
-                  name="date"
-                  style={{ marginBottom: 0 }}
-                  rules={[{ required: true, message: '请选择开始/结束时间' }]}
-                  initialValue={defaultReportDateRange}
-                >
-                  <RangePicker
-                    style={{ width: '100%', maxWidth: 420 }}
-                    ranges={{
-                      今天: [dayjs().startOf('day'), dayjs().endOf('day')],
-                      本周: [dayjs().startOf('week'), dayjs().endOf('week')],
-                      本月: [dayjs().startOf('month'), dayjs().endOf('month')],
-                    }}
-                    showTime={{ format: 'HH:mm:ss', defaultValue: defaultRangeTime }}
-                    format="YYYY-MM-DD HH:mm:ss"
-                    placeholder={['开始时间', '结束时间']}
-                    inputReadOnly
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
+                {!isReportView ? (
+                  <Col xs={24} sm={12} lg={3}>
+                    <Form.Item label="状态" name="status" style={{ marginBottom: 0 }}>
+                      <Select placeholder="选择状态" allowClear>
+                        <Option value={0}>准备中</Option>
+                        <Option value={1}>运行中</Option>
+                        <Option value={2}>已停止</Option>
+                        <Option value={3}>已完成</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                ) : null}
+                <Col xs={24} lg={5}>
+                  <Form.Item
+                    label="执行时间"
+                    name="date"
+                    style={{ marginBottom: 0 }}
+                    rules={[{ required: true, message: '请选择开始/结束时间' }]}
+                    initialValue={defaultReportDateRange}
+                  >
+                    <RangePicker
+                      style={{ width: '100%', maxWidth: 420 }}
+                      ranges={{
+                        今天: [dayjs().startOf('day'), dayjs().endOf('day')],
+                        本周: [dayjs().startOf('week'), dayjs().endOf('week')],
+                        本月: [dayjs().startOf('month'), dayjs().endOf('month')],
+                      }}
+                      showTime={{ format: 'HH:mm:ss', defaultValue: defaultRangeTime }}
+                      format="YYYY-MM-DD HH:mm:ss"
+                      placeholder={['开始时间', '结束时间']}
+                      inputReadOnly
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} lg={3} style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <Space>
+                    <PillButton type="primary" onClick={() => fetchList(1)}>
+                      <SearchOutlined /> 查询
+                    </PillButton>
+                    <PillButton
+                      onClick={() => {
+                        form.resetFields();
+                        form.setFieldsValue({ date: defaultReportDateRange });
+                        fetchList(1);
+                      }}
+                    >
+                      <ReloadOutlined /> 重置
+                    </PillButton>
+                  </Space>
+                </Col>
+              </Row>
+            </Form>
+          </div>
         </SectionCard>
 
         <SectionCard
-          title={isReportView ? '性能报告列表' : '执行记录列表'}
-          description={isReportView ? '性能测试报告结果与核心指标' : '性能测试执行过程与运行状态'}
+          title={isReportView ? '测试报告' : '执行记录列表'}
           extra={<span style={{ color: uiPalette.subtle, fontSize: 13 }}>共 {pagination.total || dataSource.length} 条记录</span>}
         >
           <Table

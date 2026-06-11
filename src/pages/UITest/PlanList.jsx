@@ -26,6 +26,7 @@ import {
   ExperimentOutlined,
   PlayCircleOutlined,
   PlusOutlined,
+  QuestionCircleOutlined,
   SearchOutlined,
   SettingOutlined,
   SyncOutlined,
@@ -81,6 +82,7 @@ const defaultForm = {
   record_trace: true,
   capture_screenshot: true,
   notification_config_id: undefined,
+  pass_rate: undefined,
 };
 
 const wizardSteps = [
@@ -968,13 +970,22 @@ const PlanList = () => {
                 通知设置
               </div>
               <Row gutter={16}>
-                <Col span={24}>
+                <Col span={12}>
                   <Form.Item name="notification_config_id" label="通知配置">
                     <Select allowClear showSearch placeholder="选择通知配置" style={{ width: '100%' }}>
                       {notificationConfigs.map(item => (
                         <Select.Option key={item.id} value={item.id}>{item.name}</Select.Option>
                       ))}
                     </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="pass_rate"
+                    label={<span>成功率阈值 <Tooltip title="未配置阈值时，每次执行完成都会通知；配置后，只有本次成功率低于该阈值才会发起通知。"><QuestionCircleOutlined /></Tooltip></span>}
+                    extra="不填则每次执行后都通知；填写后仅当成功率低于阈值才通知"
+                  >
+                    <InputNumber min={1} max={100} style={{ width: '100%' }} addonAfter="%" placeholder="请输入1-100" />
                   </Form.Item>
                 </Col>
               </Row>

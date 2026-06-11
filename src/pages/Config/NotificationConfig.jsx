@@ -1,6 +1,6 @@
 import {PageContainer} from "@ant-design/pro-components";
-import {Button, Card, Col, Form, Input, InputNumber, message, Modal, Row, Select, Switch, Table, Tabs, Tag, Tooltip} from "antd";
-import {PlusOutlined, DeleteOutlined, EditOutlined, QuestionCircleOutlined} from "@ant-design/icons";
+import {Button, Card, Col, Form, Input, message, Modal, Row, Select, Switch, Table, Tabs, Tag} from "antd";
+import {PlusOutlined, DeleteOutlined, EditOutlined} from "@ant-design/icons";
 import React, {useEffect, useState} from "react";
 import {
   listNotificationChannels, insertNotificationChannel, updateNotificationChannel,
@@ -393,7 +393,6 @@ const ConfigTab = ({refreshKey}) => {
           template_id: d.template?.id || null,
           receiver: d.receiver ? d.receiver.split(',').map(v => Number(v)).filter(v => v > 0) : [],
           group_ids: d.group_ids ? d.group_ids.split(',').map(v => Number(v)).filter(v => v > 0) : [],
-          pass_rate: d.pass_rate != null ? d.pass_rate : 80,
         });
       }
     } else {
@@ -408,7 +407,6 @@ const ConfigTab = ({refreshKey}) => {
     {title: '渠道数', dataIndex: 'channel_count', key: 'channel_count', width: 80, align: 'center'},
     {title: '接收人数', dataIndex: 'receiver_count', key: 'receiver_count', width: 80, align: 'center'},
     {title: '用户组数', dataIndex: 'group_count', key: 'group_count', width: 80, align: 'center'},
-    {title: '合格率阈值', dataIndex: 'pass_rate', key: 'pass_rate', width: 100, align: 'center', render: v => `${v}%`},
     {title: '更新时间', dataIndex: 'updated_at', key: 'updated_at', width: 160},
     {title: '操作', key: 'action', width: 120,
      render: (_, record) => <>
@@ -428,7 +426,7 @@ const ConfigTab = ({refreshKey}) => {
 
       <Modal title={editRecord ? '编辑通知配置' : '新增通知配置'} open={modalVisible} onOk={handleSave}
              onCancel={() => setModalVisible(false)} width={700}>
-        <Form form={form} layout="vertical" initialValues={{pass_rate: 80, channel_ids: [], receiver: [], group_ids: []}}>
+        <Form form={form} layout="vertical" initialValues={{channel_ids: [], receiver: [], group_ids: []}}>
           <Form.Item name="name" label="配置名称" rules={[{required: true}]}>
             <Input placeholder="例如：项目组通知" />
           </Form.Item>
@@ -464,9 +462,6 @@ const ConfigTab = ({refreshKey}) => {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="pass_rate" label={<span>合格率阈值 <Tooltip title="低于此阈值时标记为失败"><QuestionCircleOutlined /></Tooltip></span>}>
-            <InputNumber min={1} max={100} style={{width: 120}} addonAfter="%" />
-          </Form.Item>
         </Form>
       </Modal>
     </div>
