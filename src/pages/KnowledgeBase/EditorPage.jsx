@@ -1,10 +1,9 @@
-import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Button, Input, Select, Space, Spin, message } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { history, useLocation, useModel, useParams } from '@umijs/max';
 import { insertKnowledge, listKnowledge, listKnowledgeCategory, updateKnowledge } from '@/services/configure';
-import { ensureHtml, getPlainText, highlightKnowledgeHtml } from './store';
-import { renderMermaidInElement } from './mermaidRender';
+import { ensureHtml, getPlainText } from './store';
 import './index.less';
 
 const RichEditor = lazy(() => import('./RichEditor'));
@@ -22,7 +21,6 @@ const EditorPage = () => {
   const [draft, setDraft] = useState({ title: '', summary: '', content: '', category: '' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const previewRef = useRef(null);
 
   const currentDoc = useMemo(() => docs.find((item) => String(item.id) === String(docId)), [docId, docs]);
 
@@ -85,10 +83,6 @@ const EditorPage = () => {
 
     fetchDoc();
   }, [docId, isEdit, location.search]);
-
-  useEffect(() => {
-    renderMermaidInElement(previewRef.current);
-  }, [draft.content]);
 
   const handleSave = async () => {
     if (!draft.title.trim()) {
@@ -172,16 +166,6 @@ const EditorPage = () => {
                   onChange={(content) => setDraft((prev) => ({ ...prev, content }))}
                 />
               </Suspense>
-              <div className="knowledge-editor-preview">
-                <div className="knowledge-editor-preview__title">实时预览</div>
-                <article className="knowledge-viewer knowledge-hub__article-body">
-                  <div
-                    ref={previewRef}
-                    className="knowledge-viewer-content w-e-text"
-                    dangerouslySetInnerHTML={{ __html: highlightKnowledgeHtml(draft.content || '') }}
-                  />
-                </article>
-              </div>
             </Space>
           </Spin>
         </div>
