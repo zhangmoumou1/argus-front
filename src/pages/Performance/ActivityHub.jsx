@@ -1,10 +1,9 @@
-import moment from 'moment';
+import dayjs from 'dayjs';
 import React, { useEffect, useMemo, useState } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
 import { connect, useLocation } from '@umijs/max';
 import {
   Badge,
-  Button,
   Card,
   Col,
   DatePicker,
@@ -25,14 +24,14 @@ import {
 import auth from '@/utils/auth';
 import UserLink from '@/components/Button/UserLink';
 import {
-  PerformanceDataTableCard,
-  PerformanceToolbar,
-  performancePalette,
   performancePanelStyle,
 } from './ModuleShell';
+import { PillButton, SectionCard, UiEmpty, actionSplit, uiPalette, uiStatusTag } from '@/pages/UITest/shared';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
+const defaultReportDateRange = [dayjs().startOf('week'), dayjs().endOf('week')];
+const defaultRangeTime = [dayjs('00:00:00', 'HH:mm:ss'), dayjs('23:59:59', 'HH:mm:ss')];
 
 const statusMap = {
   0: <Badge status="default" text="准备中" />,
@@ -71,11 +70,14 @@ const runColumnsFactory = ({ userMap, onOpenLogs }) => [
     title: '执行记录',
     dataIndex: 'id',
     key: 'id',
+    width: 220,
     render: (value, record) => (
-      <Space direction="vertical" size={0}>
-        <a href={`/#/performance/report/${value}`}>Run #{value}</a>
-        <span style={{ color: '#6b7280', fontSize: 12 }}>{record.plan_name}</span>
-      </Space>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <a href={`/#/performance/report/${value}`} style={{ fontWeight: 600 }}>Run #{value}</a>
+        </div>
+        <div style={{ color: '#6b7280', fontSize: 12 }}>{record.plan_name}</div>
+      </div>
     ),
   },
   {
@@ -89,18 +91,12 @@ const runColumnsFactory = ({ userMap, onOpenLogs }) => [
     key: 'source',
     render: (_, record) => {
       const summary = parseSummary(record.summary_json);
-      return getSourceTag(summary.source_type);
-    },
-  },
-  {
-    title: '负载模型',
-    key: 'load_mode',
-    render: (_, record) => {
-      const summary = parseSummary(record.summary_json);
-      if (!summary.load_mode) {
-        return <Tag>待生成</Tag>;
-      }
-      return <Tag color="purple">{summary.load_mode === 'qps' ? 'QPS 模式' : '并发模式'}</Tag>;
+      return (
+        <Space wrap size={[6, 4]}>
+          {getSourceTag(summary.source_type)}
+          {summary.load_mode ? <Tag color="purple">{summary.load_mode === 'qps' ? 'QPS 模式' : '并发模式'}</Tag> : null}
+        </Space>
+      );
     },
   },
   {
@@ -120,18 +116,20 @@ const runColumnsFactory = ({ userMap, onOpenLogs }) => [
     title: '开始时间',
     dataIndex: 'created_at',
     key: 'created_at',
+    width: 180,
   },
   {
     title: '状态',
     dataIndex: 'status',
     key: 'status',
-    render: (value) => statusMap[value] || <Tag>{value}</Tag>,
+    width: 120,
+    render: (value) => value === 0 ? uiStatusTag('queued') : value === 1 ? uiStatusTag('running') : value === 2 ? uiStatusTag('cancelled') : value === 3 ? uiStatusTag('success') : (statusMap[value] || <Tag>{value}</Tag>),
   },
   {
     title: '操作',
     key: 'operation',
-    render: (_, record) => (
-      <Space split={<span style={{ color: '#d1d5db' }}>|</span>}>
+      render: (_, record) => (
+      <Space split={actionSplit}>
         <a href={`/#/performance/report/${record.id}`}>查看详情</a>
         <a onClick={() => onOpenLogs(record.id)}>执行日志</a>
       </Space>
@@ -144,7 +142,8 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     title: '报告ID',
     dataIndex: 'id',
     key: 'id',
-    render: (value) => <a href={`/#/performance/report/${value}`}>#{value}</a>,
+    width: 160,
+    render: (value) => <a href={`/#/performance/report/${value}`} style={{ fontWeight: 600 }}>Run #{value}</a>,
   },
   {
     title: '计划 / 来源',
@@ -152,14 +151,14 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     render: (_, record) => {
       const summary = parseSummary(record.summary_json);
       return (
-        <Space direction="vertical" size={0}>
-            <span style={{ fontWeight: 600 }}>{record.plan_name}</span>
-            <Space size={6}>
-              {getSourceTag(summary.source_type)}
-              <Tag color="purple">{summary.load_mode === 'qps' ? 'QPS 模式' : (summary.load_mode ? '并发模式' : '待生成')}</Tag>
-            </Space>
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{record.plan_name}</div>
+          <Space size={6} wrap>
+            {getSourceTag(summary.source_type)}
+            <Tag color="purple">{summary.load_mode === 'qps' ? 'QPS 模式' : (summary.load_mode ? '并发模式' : '待生成')}</Tag>
           </Space>
-        );
+        </div>
+      );
     },
   },
   {
@@ -215,19 +214,21 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     title: '完成时间',
     dataIndex: 'finished_at',
     key: 'finished_at',
+    width: 180,
     render: (value, record) => value || record.created_at,
   },
   {
     title: '状态',
     dataIndex: 'status',
     key: 'status',
-    render: (value) => statusMap[value] || <Tag>{value}</Tag>,
+    width: 120,
+    render: (value) => value === 0 ? uiStatusTag('queued') : value === 1 ? uiStatusTag('running') : value === 2 ? uiStatusTag('cancelled') : value === 3 ? uiStatusTag('success') : (statusMap[value] || <Tag>{value}</Tag>),
   },
   {
     title: '操作',
     key: 'operation',
     render: (_, record) => (
-      <Space split={<span style={{ color: '#d1d5db' }}>|</span>}>
+      <Space split={actionSplit}>
         <a href={`/#/performance/report/${record.id}`}>查看报告</a>
         {monitorUrl ? (
           <a onClick={() => window.open(monitorUrl, '_blank', 'noopener,noreferrer')}>监控</a>
@@ -298,7 +299,7 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
 
   useEffect(() => {
     dispatch({ type: 'user/fetchUserList' });
-    form.setFieldsValue({ date: [moment().startOf('week'), moment().endOf('week')] });
+    form.setFieldsValue({ date: defaultReportDateRange });
     fetchList(1, resolvedDefaultTab);
     fetchMonitorConfig();
   }, [resolvedDefaultTab, planId]);
@@ -312,29 +313,28 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
 
   return (
     <PageContainer title={false} breadcrumb={null}>
-      <div style={{ padding: '8px 0 24px', background: performancePalette.page, minHeight: 'calc(100vh - 120px)' }}>
-        <PerformanceToolbar
+      <div style={{ padding: '8px 0 24px', background: uiPalette.page, minHeight: 'calc(100vh - 120px)' }}>
+        <SectionCard
           extra={(
             <Space size={10}>
-              <Button type="primary" onClick={() => fetchList(1)} style={{ borderRadius: 999 }}>
+              <PillButton type="primary" onClick={() => fetchList(1)}>
                 <SearchOutlined /> 查询
-              </Button>
-              <Button
-                style={{ borderRadius: 999 }}
+              </PillButton>
+              <PillButton
                 onClick={() => {
                   form.resetFields();
-                  form.setFieldsValue({ date: [moment().startOf('week'), moment().endOf('week')] });
+                  form.setFieldsValue({ date: defaultReportDateRange });
                   fetchList(1);
                 }}
               >
                 <ReloadOutlined /> 重置
-              </Button>
+              </PillButton>
             </Space>
           )}
         >
           <Form form={form}>
             <Row gutter={[14, 12]}>
-              <Col span={6}>
+              <Col xs={24} sm={12} lg={6}>
                 <Form.Item label="执行人" name="executor" style={{ marginBottom: 0 }}>
                   <Select placeholder="选择执行人" allowClear>
                     {Object.keys(userMap).map((v) => (
@@ -346,7 +346,7 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
                 </Form.Item>
               </Col>
               {!isReportView ? (
-                <Col span={5}>
+                <Col xs={24} sm={12} lg={5}>
                   <Form.Item label="状态" name="status" style={{ marginBottom: 0 }}>
                     <Select placeholder="选择状态" allowClear>
                       <Option value={0}>准备中</Option>
@@ -357,32 +357,36 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
                   </Form.Item>
                 </Col>
               ) : null}
-              <Col span={!isReportView ? 13 : 18}>
+              <Col xs={24} lg={!isReportView ? 13 : 10} xl={!isReportView ? 11 : 8}>
                 <Form.Item
                   label="执行时间"
                   name="date"
                   style={{ marginBottom: 0 }}
                   rules={[{ required: true, message: '请选择开始/结束时间' }]}
-                  initialValue={[moment().startOf('week'), moment().endOf('week')]}
+                  initialValue={defaultReportDateRange}
                 >
                   <RangePicker
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', maxWidth: 420 }}
                     ranges={{
-                      今天: [moment(), moment()],
-                      本周: [moment().startOf('week'), moment().endOf('week')],
-                      本月: [moment().startOf('month'), moment().endOf('month')],
+                      今天: [dayjs().startOf('day'), dayjs().endOf('day')],
+                      本周: [dayjs().startOf('week'), dayjs().endOf('week')],
+                      本月: [dayjs().startOf('month'), dayjs().endOf('month')],
                     }}
-                    showTime
+                    showTime={{ format: 'HH:mm:ss', defaultValue: defaultRangeTime }}
                     format="YYYY-MM-DD HH:mm:ss"
+                    placeholder={['开始时间', '结束时间']}
+                    inputReadOnly
                   />
                 </Form.Item>
               </Col>
             </Row>
           </Form>
-        </PerformanceToolbar>
+        </SectionCard>
 
-        <PerformanceDataTableCard
+        <SectionCard
           title={isReportView ? '性能报告列表' : '执行记录列表'}
+          description={isReportView ? '性能测试报告结果与核心指标' : '性能测试执行过程与运行状态'}
+          extra={<span style={{ color: uiPalette.subtle, fontSize: 13 }}>共 {pagination.total || dataSource.length} 条记录</span>}
         >
           <Table
             rowKey="id"
@@ -390,9 +394,10 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
             dataSource={dataSource}
             loading={loading}
             pagination={pagination}
+            locale={{ emptyText: <UiEmpty description={isReportView ? '当前还没有性能测试报告记录' : '当前还没有性能测试执行记录'} /> }}
             onChange={(pg) => fetchList(pg.current, resolvedDefaultTab)}
           />
-        </PerformanceDataTableCard>
+        </SectionCard>
       </div>
 
       <Drawer

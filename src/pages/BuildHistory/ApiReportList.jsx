@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { PageContainer } from '@ant-design/pro-components';
-import { Button, Card, Col, DatePicker, Form, Row, Select, Table, Tag } from 'antd';
+import { Col, DatePicker, Form, Row, Select, Space, Table, Tag } from 'antd';
 import { CheckCircleTwoTone, CloseCircleTwoTone, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { connect } from '@umijs/max';
 import { useEffect } from 'react';
@@ -8,6 +8,7 @@ import reportConfig from '@/consts/reportConfig';
 import UserLink from '@/components/Button/UserLink';
 import { IconFont } from '@/components/Icon/IconFont';
 import { REPORT_MODE } from '@/components/Common/global';
+import { PillButton, SectionCard, UiEmpty, actionSplit, uiPalette, uiStatusTag } from '@/pages/UITest/shared';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -27,16 +28,13 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
       title: '报告ID',
       dataIndex: 'id',
       key: 'id',
-      fixed: 'left',
       render: (text, record) => {
         const ok = record.failed_count === 0 && record.error_count === 0 && record.success_count > 0;
         return (
-          <span>
-            {ok ? <CheckCircleTwoTone twoToneColor="#52c41a" style={{ fontSize: 13 }} /> : <CloseCircleTwoTone twoToneColor="#eb2f96" style={{ fontSize: 13 }} />}
-            {' '}
-            #
-            <a href={`/#/run/api-report/${record.id}`}>{text}</a>
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {ok ? <CheckCircleTwoTone twoToneColor="#52c41a" style={{ fontSize: 14 }} /> : <CloseCircleTwoTone twoToneColor="#eb2f96" style={{ fontSize: 14 }} />}
+            <a href={`/#/run/api-report/${record.id}`} style={{ fontWeight: 600 }}>Run #{text}</a>
+          </div>
         );
       },
     },
@@ -62,31 +60,31 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
     {
       title: '总数',
       key: 'total',
-      render: (_, record) => <Tag>{record.success_count + record.failed_count + record.skipped_count + record.error_count}</Tag>,
+      render: (_, record) => <Tag style={{ borderRadius: 999, border: 'none', background: '#eff6ff', color: '#1d4ed8' }}>{record.success_count + record.failed_count + record.skipped_count + record.error_count}</Tag>,
     },
     {
       title: '成功',
       dataIndex: 'success_count',
       key: 'success_count',
-      render: (value) => <Tag color="success">{value}</Tag>,
+      render: (value) => <Tag color="success" style={{ borderRadius: 999, border: 'none' }}>{value}</Tag>,
     },
     {
       title: '失败',
       dataIndex: 'failed_count',
       key: 'failed_count',
-      render: (value) => <Tag color="error">{value}</Tag>,
+      render: (value) => <Tag color="error" style={{ borderRadius: 999, border: 'none' }}>{value}</Tag>,
     },
     {
       title: '出错',
       dataIndex: 'error_count',
       key: 'error_count',
-      render: (value) => <Tag color="warning">{value}</Tag>,
+      render: (value) => <Tag color="warning" style={{ borderRadius: 999, border: 'none' }}>{value}</Tag>,
     },
     {
       title: '跳过',
       dataIndex: 'skipped_count',
       key: 'skipped_count',
-      render: (value) => <Tag color="blue">{value}</Tag>,
+      render: (value) => <Tag color="blue" style={{ borderRadius: 999, border: 'none' }}>{value}</Tag>,
     },
     {
       title: '开始时间',
@@ -97,12 +95,16 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
       title: '任务状态',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => reportConfig.STATUS[status],
+      render: (status) => status === 0 ? uiStatusTag('queued') : status === 1 ? uiStatusTag('running') : status === 2 ? uiStatusTag('cancelled') : status === 3 ? uiStatusTag('success') : reportConfig.STATUS[status],
     },
     {
       title: '操作',
       key: 'operation',
-      render: (_, record) => <a href={`/#/run/api-report/${record.id}`}>查看</a>,
+      render: (_, record) => (
+        <Space split={actionSplit}>
+          <a href={`/#/run/api-report/${record.id}`}>查看</a>
+        </Space>
+      ),
     },
   ];
 
@@ -134,13 +136,14 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
   };
 
   return (
-    <PageContainer title="接口报告" breadcrumb={null}>
-      <Card>
-        <Form form={form}>
-          <Row gutter={[8, 8]}>
-            <Col span={8}>
+    <PageContainer title={false} breadcrumb={null}>
+      <div style={{ padding: '8px 0 24px', background: uiPalette.page, minHeight: 'calc(100vh - 120px)' }}>
+        <SectionCard>
+          <Form form={form}>
+            <Row gutter={[12, 12]} align="middle">
+              <Col xs={24} md={6}>
               <Form.Item label="执行人" name="executor">
-                <Select placeholder="选择执行人" style={{ width: '90%' }} allowClear>
+                <Select placeholder="选择执行人" style={{ width: '100%' }} allowClear>
                   <Option value="argus机器人" key="CPU">
                     <IconFont style={{ fontSize: 20 }} type="icon-a-jiqirenrengongzhineng" /> argus机器人
                   </Option>
@@ -152,7 +155,7 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={10}>
+            <Col xs={24} md={8}>
               <Form.Item
                 label="执行时间"
                 name="date"
@@ -160,6 +163,7 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
                 initialValue={[dayjs().startOf('week'), dayjs().endOf('week')]}
               >
                 <RangePicker
+                  style={{ width: '100%', maxWidth: 420 }}
                   ranges={{
                     今天: [dayjs(), dayjs()],
                     本周: [dayjs().startOf('week'), dayjs().endOf('week')],
@@ -170,20 +174,27 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
                 />
               </Form.Item>
             </Col>
-            <Col span={6}>
-              <div style={{ float: 'right' }}>
-                <Button type="primary" onClick={fetchReport}><SearchOutlined /> 查询</Button>
-                <Button style={{ marginLeft: 8 }} onClick={onReset}><ReloadOutlined /> 重置</Button>
-              </div>
+            <Col xs={24} md={6}>
+              <Space>
+                <PillButton type="primary" onClick={fetchReport}><SearchOutlined /> 查询</PillButton>
+                <PillButton onClick={onReset}><ReloadOutlined /> 重置</PillButton>
+              </Space>
             </Col>
           </Row>
         </Form>
-        <Table
+        </SectionCard>
+        <SectionCard
+          title="测试报告列表"
+          description="接口测试构建结果与执行状态"
+          extra={<span style={{ color: uiPalette.subtle, fontSize: 13 }}>共 {pagination.total || reportData.length} 条记录</span>}
+        >
+          <Table
           rowKey="id"
           columns={columns}
           dataSource={reportData}
           pagination={pagination}
           loading={loading.effects['report/fetchReportList']}
+          locale={{ emptyText: <UiEmpty description="当前还没有接口测试报告记录" /> }}
           onChange={(pg) => {
             dispatch({
               type: 'report/save',
@@ -191,7 +202,8 @@ const ApiReportList = ({ user, report, loading, dispatch }) => {
             });
           }}
         />
-      </Card>
+        </SectionCard>
+      </div>
     </PageContainer>
   );
 };

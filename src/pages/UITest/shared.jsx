@@ -150,6 +150,8 @@ const statusConfig = {
   uploading:        { color: uiPalette.warning,  icon: <SyncOutlined spin />,      label: '整理中' },
   success:          { color: uiPalette.success,  icon: <CheckCircleFilled />,      label: '成功' },
   failed:           { color: uiPalette.error,    icon: <CloseCircleFilled />,      label: '失败' },
+  ui_test_success:  { color: uiPalette.success,  icon: <CheckCircleFilled />,      label: '测试成功' },
+  ui_test_failed:   { color: uiPalette.error,    icon: <CloseCircleFilled />,      label: '测试失败' },
   cancelled:        { color: '#64748b',          icon: <MinusCircleFilled />,      label: '已停止' },
   skipped:          { color: uiPalette.warning,  icon: <ExclamationCircleFilled />, label: '跳过' },
   enabled:          { color: uiPalette.success,  icon: <CheckCircleFilled />,      label: '启用' },
@@ -242,6 +244,7 @@ export const UiTestPage = ({ toolbar, children, extra, showModuleNav = true }) =
   const isSharedRunDetailPage = location.pathname.startsWith('/share/ui-report/');
   const shouldShowModuleNav = showModuleNav && !isRunDetailPage && !isSharedRunDetailPage;
   const shouldShowExtra = !isSharedRunDetailPage;
+  const shouldShowHeader = shouldShowModuleNav || (shouldShowExtra && !!extra);
 
   return (
     <PageContainer
@@ -253,41 +256,42 @@ export const UiTestPage = ({ toolbar, children, extra, showModuleNav = true }) =
         paddingBottom: 24,
       }}
     >
-      <div
-        style={{
-          marginBottom: 16,
-          padding: 16,
-          borderRadius: radius,
-          border: panelBorder,
-          boxShadow: softShadow,
-          background: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Space wrap size={[10, 10]} style={{ flex: '1 1 420px' }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: uiPalette.text }}>UI 自动化</span>
-          {shouldShowModuleNav ? (
-            <Segmented
-              value={activeNav}
-              onChange={(value) => history.push(value)}
-              options={moduleNavItems.map((item) => ({
-                value: item.value,
-                label: (
-                  <Space size={6}>
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </Space>
-                ),
-              }))}
-            />
-          ) : null}
-        </Space>
-        {shouldShowExtra && extra ? <Space wrap>{extra}</Space> : null}
-      </div>
+      {shouldShowHeader ? (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 16,
+            borderRadius: radius,
+            border: panelBorder,
+            boxShadow: softShadow,
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Space wrap size={[10, 10]} style={{ flex: '1 1 420px' }}>
+            {shouldShowModuleNav ? (
+              <Segmented
+                value={activeNav}
+                onChange={(value) => history.push(value)}
+                options={moduleNavItems.map((item) => ({
+                  value: item.value,
+                  label: (
+                    <Space size={6}>
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </Space>
+                  ),
+                }))}
+              />
+            ) : null}
+          </Space>
+          {shouldShowExtra && extra ? <Space wrap>{extra}</Space> : null}
+        </div>
+      ) : null}
       {toolbar ? (
         <div
           style={{
