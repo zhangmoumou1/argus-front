@@ -51,13 +51,37 @@ declare global {
   }
 }
 
-const FUNCTIONAL_CASE_ROUTE_PATH = '/scenario/functionalCase';
+const FUNCTIONAL_CASE_ROUTE_PATH = '/scene-design/functionalCase';
 const FUNCTIONAL_CASE_RESULT_STORAGE_PREFIX = 'functional_case_skill_result_';
 const FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY = 'functional_case_skill_active_tasks';
 
 const isFunctionalCaseRoutePath = (pathname = '') => {
   const cleanPath = String(pathname || '').trim().toLowerCase();
-  return cleanPath === '/scenario/functionalcase' || cleanPath === '/apitest/functionalcase';
+  return cleanPath === '/scene-design/functionalcase'
+    || cleanPath === '/scenario/functionalcase'
+    || cleanPath === '/apitest/functionalcase';
+};
+
+const countGeneratedFunctionalCases = (data: any): number => {
+  if (!data || typeof data !== 'object') return 0;
+  const root = data.root && typeof data.root === 'object' ? data.root : data;
+  let count = 0;
+  const walk = (node: any) => {
+    if (!node || typeof node !== 'object') return;
+    const text = String(node?.data?.text || '').trim();
+    if (/(^|[\s_（(-])P[0-2]([\s_）)-]|$)/i.test(text)) {
+      count += 1;
+    }
+    (Array.isArray(node.children) ? node.children : []).forEach(walk);
+  };
+  walk(root);
+  return count;
+};
+
+const resolveGeneratedFunctionalCaseCount = (payload: any): number => {
+  const explicitCount = Number(payload?.case_count || payload?.case_num || 0);
+  if (explicitCount > 0) return explicitCount;
+  return countGeneratedFunctionalCases(payload?.data);
 };
 
 const buildFunctionalCaseResultToken = (taskId?: string | number | null, caseId?: string | number | null) => {
@@ -233,8 +257,9 @@ const FunctionalCaseTaskWatcher = () => {
           const generatedPayload = statusData?.result && typeof statusData.result === 'object' ? statusData.result : statusData;
 
           if (generatedPayload?.data && typeof generatedPayload.data === 'object') {
-            const resultToken = String(task.resultToken || buildFunctionalCaseResultToken(task.taskId, task.targetCaseId));
-            const caseCount = Number(generatedPayload.case_count || generatedPayload.case_num || 0);
+            const targetCaseId = Number(task.targetCaseId || statusData.case_file_id || generatedPayload.case_file_id || 0);
+            const resultToken = String(task.resultToken || buildFunctionalCaseResultToken(task.taskId, targetCaseId));
+            const caseCount = resolveGeneratedFunctionalCaseCount(generatedPayload);
             const elapsedText = resolveFunctionalCaseElapsedText({
               taskLogs: statusData.task_logs,
               startedAt: generatedPayload.started_at || statusData.started_at,
@@ -245,6 +270,8 @@ const FunctionalCaseTaskWatcher = () => {
             persistFunctionalCaseResult(resultToken, {
               ...task,
               resultToken,
+              projectId: task.projectId || statusData.project_id || generatedPayload.project_id,
+              targetCaseId,
               title: generatedPayload.title || task.targetCaseTitle || '功能用例',
               targetCaseTitle: task.targetCaseTitle || generatedPayload.title || '功能用例',
               data: generatedPayload.data,
@@ -274,8 +301,8 @@ const FunctionalCaseTaskWatcher = () => {
                     onClick={() => {
                       notification.destroy(notificationKey);
                       history.push(buildFunctionalCaseResultUrl({
-                        projectId: task.projectId,
-                        caseId: task.targetCaseId,
+                        projectId: task.projectId || statusData.project_id || generatedPayload.project_id,
+                        caseId: targetCaseId,
                         resultToken,
                       }));
                     }}

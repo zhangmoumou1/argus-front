@@ -435,8 +435,9 @@ const EXPORT_OPTIONS = [
 
 const AI_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.webp,.bmp';
 const DESIGN_LINK_PLACEHOLDER = '支持 Figma / 蓝湖 / 墨刀 / 原型地址';
-const DEFAULT_SKILL_AI_INSTRUCTION = '根据上传的需求文档、需求图片、需求原型地址，并参考技能和规范文档生成xmind测试用例，补齐正常、异常、边界场景';
-const FUNCTIONAL_CASE_ROUTE_PATH = '/scenario/functionalCase';
+const DEFAULT_SKILL_AI_GENERATE_INSTRUCTION = '例如：按前置条件/操作步骤/预期结果组织，补齐正常、异常、边界场景，并尽量贴近已选模板和规范。';
+const DEFAULT_SKILL_AI_REVIEW_INSTRUCTION = '例如：生成前先自检命名规范、优先级标记、层级结构和覆盖完整性，不符合时按审查标准修正后再输出。';
+const FUNCTIONAL_CASE_ROUTE_PATH = '/scene-design/functionalCase';
 const FUNCTIONAL_CASE_RESULT_STORAGE_PREFIX = 'functional_case_skill_result_';
 const FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY = 'functional_case_skill_active_tasks';
 
@@ -500,7 +501,9 @@ const appendElapsedToSkillText = (text, elapsedText) => {
 
 const isFunctionalCaseRoutePath = (pathname = '') => {
   const lowerPath = String(pathname || '').trim().toLowerCase();
-  return lowerPath === '/scenario/functionalcase' || lowerPath === '/apitest/functionalcase';
+  return lowerPath === '/scene-design/functionalcase'
+    || lowerPath === '/scenario/functionalcase'
+    || lowerPath === '/apitest/functionalcase';
 };
 
 const buildFunctionalCaseResultToken = (taskId, caseId) => {
@@ -1283,6 +1286,17 @@ const countMindData = (data) => {
   };
 };
 
+const countGeneratedCaseNodes = (data) => {
+  const outline = collectOutline(getMindRootData(data));
+  return outline.filter((item) => /(^|[\s_（(-])P[0-2]([\s_）)-]|$)/i.test(String(item.text || '').trim())).length;
+};
+
+const resolveGeneratedCaseCount = (payload, fallbackData) => {
+  const explicitCount = Number(payload?.case_count || payload?.case_num || 0);
+  if (explicitCount > 0) return explicitCount;
+  return countGeneratedCaseNodes(fallbackData);
+};
+
 const buildHugeCasePreview = (data, collapseLevel = 2) => {
   const cloneNode = (node, level) => {
     if (!node || typeof node !== 'object') return node;
@@ -1323,6 +1337,7 @@ const FunctionalCase = ({ project, dispatch }) => {
   const suppressDirtyCheckRef = useRef(false);
   const savedCaseSnapshotRef = useRef('');
   const pendingModelGenerateResultRef = useRef(null);
+  const pendingRouteGeneratedResultRef = useRef(null);
   const routeConfirmingRef = useRef(false);
   const tabActionBypassRef = useRef(false);
   const currentDirectoryRef = useRef(null);
@@ -1371,8 +1386,11 @@ const FunctionalCase = ({ project, dispatch }) => {
     requestStartedAt: 0,
     hasPendingResult: false,
     requirementItems: [createSkillRequirementItem()],
-    instructionText: DEFAULT_SKILL_AI_INSTRUCTION,
-    selectedDocIds: [],
+    ruleDocIds: [],
+    generateDocIds: [],
+    generateInstructionText: DEFAULT_SKILL_AI_GENERATE_INSTRUCTION,
+    reviewDocIds: [],
+    reviewInstructionText: DEFAULT_SKILL_AI_REVIEW_INSTRUCTION,
   });
   const [skillDocOptions, setSkillDocOptions] = useState([]);
   const [loadingSkillDocs, setLoadingSkillDocs] = useState(false);
@@ -1538,15 +1556,17 @@ const FunctionalCase = ({ project, dispatch }) => {
           reviewProvider: data.review_provider || '',
           reviewRounds: Number(data.review_rounds || 0),
           errorMessage: data.error_message || '',
-          resultCaseCount: Number(data.case_count || data.case_num || 0),
+          resultCaseCount: resolveGeneratedCaseCount(data, data?.data),
         }));
         const generatedPayload = data?.result && typeof data.result === 'object' ? data.result : data;
         if (generatedPayload?.data && typeof generatedPayload.data === 'object') {
-          const targetCaseId = skillAiModal.targetCaseId;
+          const targetCaseId = Number(
+            skillAiModal.targetCaseId || data.case_file_id || generatedPayload.case_file_id || 0,
+          );
           const targetCaseTitle = skillAiModal.targetCaseTitle || currentCase?.title || '功能用例';
           const generatedTitle = generatedPayload.title || targetCaseTitle || '功能用例';
           const generatedData = sanitizeMindData(generatedPayload.data || defaultCaseData(generatedTitle), generatedTitle);
-          const caseCount = Number(generatedPayload.case_count || generatedPayload.case_num || 0);
+          const caseCount = resolveGeneratedCaseCount(generatedPayload, generatedData);
           const reviewProvider = generatedPayload.review_provider || data.review_provider || '';
           const reviewRounds = Number(generatedPayload.review_rounds || data.review_rounds || 0);
           const elapsedText = resolveSkillTaskElapsedText({
@@ -1599,7 +1619,8 @@ const FunctionalCase = ({ project, dispatch }) => {
           }
           const matchesCurrentCase = currentCase && Number(currentCase.id) === Number(targetCaseId);
           if (matchesCurrentCase) {
-            applyPendingModelGenerateResult();
+            applyImportedData(generatedData, generatedTitle);
+            pendingModelGenerateResultRef.current = null;
             setSkillAiModal((prev) => ({
               ...prev,
               open: true,
@@ -1611,6 +1632,7 @@ const FunctionalCase = ({ project, dispatch }) => {
               elapsedText: elapsedText || prev.elapsedText || '',
             }));
             unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+            message.success(appendElapsedToSkillText(`模型生成完成，识别到 ${caseCount} 条候选用例，当前画布已更新`, elapsedText));
             return;
           }
           setSkillAiModal((prev) => ({
@@ -1665,11 +1687,9 @@ const FunctionalCase = ({ project, dispatch }) => {
       if (timer) clearTimeout(timer);
     };
   }, [
-    applyPendingModelGenerateResult,
     currentCase,
     isFunctionalCaseRouteActive,
     projectId,
-    queueGeneratedCaseResult,
     skillAiModal.polling,
     skillAiModal.requestStartedAt,
     skillAiModal.taskId,
@@ -1739,6 +1759,41 @@ const FunctionalCase = ({ project, dispatch }) => {
     const nextSearch = searchParams.toString();
     history.replace(nextSearch ? `${location.pathname}?${nextSearch}` : location.pathname);
   }, [location?.pathname, location?.search]);
+
+  useEffect(() => {
+    const pending = pendingRouteGeneratedResultRef.current;
+    if (!pending || !currentCase || Number(currentCase.id) !== Number(pending.targetCaseId)) {
+      return;
+    }
+    applyImportedData(pending.data, pending.title || currentCase.title);
+    setSkillAiModal((prev) => ({
+      ...prev,
+      open: false,
+      loading: false,
+      polling: false,
+      taskId: null,
+      targetProjectId: Number(pending.projectId || prev.targetProjectId || 0),
+      targetCaseId: Number(pending.targetCaseId || currentCase.id),
+      targetCaseTitle: pending.targetCaseTitle || pending.title || currentCase.title || '功能用例',
+      progress: 100,
+      stage: 'done',
+      stageText: appendElapsedToSkillText(
+        `模型已生成 ${Number(pending.caseCount || 0)} 条候选用例，当前画布已同步最新结果`,
+        pending.elapsedText || '',
+      ),
+      errorMessage: '',
+      reviewProvider: pending.reviewProvider || '',
+      reviewRounds: Number(pending.reviewRounds || 0),
+      resultCaseCount: Number(pending.caseCount || 0),
+      elapsedText: pending.elapsedText || '',
+      hasPendingResult: false,
+    }));
+    if (pending.resultToken) {
+      clearFunctionalCaseResult(pending.resultToken);
+    }
+    clearGeneratedCaseRouteQuery();
+    pendingRouteGeneratedResultRef.current = null;
+  }, [applyImportedData, clearGeneratedCaseRouteQuery, currentCase]);
 
   const openGeneratedCaseNotification = useCallback((payload) => {
     const resultToken = String(payload?.resultToken || '').trim();
@@ -2561,35 +2616,25 @@ const FunctionalCase = ({ project, dispatch }) => {
 
     const openGeneratedCase = async () => {
       setCurrentDirectory(targetRecord.directory_id || null);
-      await loadCase(targetRecord, { force: true });
       const storedResult = readFunctionalCaseResult(resultToken);
       if (storedResult?.data && Number(storedResult?.targetCaseId) === Number(targetRecord.id)) {
-        applyImportedData(storedResult.data, storedResult.title || targetRecord.title);
-        setSkillAiModal((prev) => ({
-          ...prev,
-          open: false,
-          loading: false,
-          polling: false,
-          taskId: null,
-          targetProjectId: routeProjectId,
+        pendingRouteGeneratedResultRef.current = {
+          projectId: routeProjectId,
           targetCaseId: Number(storedResult.targetCaseId || targetRecord.id),
           targetCaseTitle: storedResult.targetCaseTitle || storedResult.title || targetRecord.title || '功能用例',
-          progress: 100,
-          stage: 'done',
-          stageText: appendElapsedToSkillText(
-            `模型已生成 ${Number(storedResult.caseCount || 0)} 条候选用例，当前画布已同步最新结果`,
-            storedResult.elapsedText || '',
-          ),
-          errorMessage: '',
+          title: storedResult.title || targetRecord.title || '功能用例',
+          data: storedResult.data,
+          caseCount: Number(storedResult.caseCount || 0),
           reviewProvider: storedResult.reviewProvider || '',
           reviewRounds: Number(storedResult.reviewRounds || 0),
-          resultCaseCount: Number(storedResult.caseCount || 0),
           elapsedText: storedResult.elapsedText || '',
-          hasPendingResult: false,
-        }));
-        clearFunctionalCaseResult(resultToken);
+          resultToken,
+        };
       }
-      clearGeneratedCaseRouteQuery();
+      await loadCase(targetRecord, { force: true });
+      if (!storedResult?.data || Number(storedResult?.targetCaseId) !== Number(targetRecord.id)) {
+        clearGeneratedCaseRouteQuery();
+      }
     };
 
     void openGeneratedCase();
@@ -3777,8 +3822,11 @@ const FunctionalCase = ({ project, dispatch }) => {
       elapsedText: '',
       requestStartedAt: 0,
       hasPendingResult: false,
-      instructionText: DEFAULT_SKILL_AI_INSTRUCTION,
-      selectedDocIds: [],
+      ruleDocIds: [],
+      generateDocIds: [],
+      generateInstructionText: DEFAULT_SKILL_AI_GENERATE_INSTRUCTION,
+      reviewDocIds: [],
+      reviewInstructionText: DEFAULT_SKILL_AI_REVIEW_INSTRUCTION,
       requirementItems: [createSkillRequirementItem()],
     }));
   };
@@ -3803,8 +3851,11 @@ const FunctionalCase = ({ project, dispatch }) => {
       elapsedText: '',
       requestStartedAt: 0,
       hasPendingResult: false,
-      instructionText: DEFAULT_SKILL_AI_INSTRUCTION,
-      selectedDocIds: [],
+      ruleDocIds: [],
+      generateDocIds: [],
+      generateInstructionText: DEFAULT_SKILL_AI_GENERATE_INSTRUCTION,
+      reviewDocIds: [],
+      reviewInstructionText: DEFAULT_SKILL_AI_REVIEW_INSTRUCTION,
       requirementItems: [createSkillRequirementItem()],
     }));
   }, []);
@@ -3959,9 +4010,15 @@ const FunctionalCase = ({ project, dispatch }) => {
       return;
     }
     const requestStartedAt = Date.now();
-    const instructionText = skillAiModal.instructionText.trim();
+    const generateInstructionText = skillAiModal.generateInstructionText.trim();
+    const reviewInstructionText = skillAiModal.reviewInstructionText.trim();
+    const selectedDocCount = (
+      (skillAiModal.ruleDocIds || []).length
+      + (skillAiModal.generateDocIds || []).length
+      + (skillAiModal.reviewDocIds || []).length
+    );
     const targetProjectId = projectId;
-    const targetCaseId = currentCase.id;
+        const targetCaseId = Number(currentCase.id || 0);
     const targetCaseTitle = currentCase.title || '功能用例';
     pendingModelGenerateResultRef.current = null;
     setSkillAiModal((prev) => ({
@@ -3975,8 +4032,8 @@ const FunctionalCase = ({ project, dispatch }) => {
     }));
     try {
       const requirementItems = await buildSkillRequirementItemsPayload();
-      if (requirementItems.length === 0 && !instructionText) {
-        throw new Error('请至少补充一组需求说明、需求图片、设计链接或生成提示词');
+      if (requirementItems.length === 0 && !generateInstructionText && !reviewInstructionText && selectedDocCount === 0) {
+        throw new Error('请至少补充一组需求说明、需求图片、设计链接，或选择文档并填写简短生成说明');
       }
 
       const requirementText = requirementItems.map((item, index) => {
@@ -3990,11 +4047,16 @@ const FunctionalCase = ({ project, dispatch }) => {
 
       const createRes = await generateFunctionalCaseByModel({
         project_id: projectId,
+        case_file_id: targetCaseId,
         title: targetCaseTitle,
         requirement_text: requirementText,
         requirement_items: requirementItems,
-        instruction_text: instructionText,
-        doc_ids: skillAiModal.selectedDocIds,
+        instruction_text: generateInstructionText,
+        generate_instruction_text: generateInstructionText,
+        review_instruction_text: reviewInstructionText,
+        rule_doc_ids: skillAiModal.ruleDocIds,
+        generate_doc_ids: skillAiModal.generateDocIds,
+        review_doc_ids: skillAiModal.reviewDocIds,
       });
       if (createRes?.code !== 0) {
         throw new Error(createRes?.msg || '模型生成请求失败');
@@ -4015,7 +4077,7 @@ const FunctionalCase = ({ project, dispatch }) => {
           data: generatedData,
           title: generatedTitle,
           targetCaseId,
-          caseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+          caseCount: resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data),
           reviewProvider: generatedPayload.review_provider || '',
           reviewRounds: Number(generatedPayload.review_rounds || 0),
           elapsedText,
@@ -4028,7 +4090,7 @@ const FunctionalCase = ({ project, dispatch }) => {
             targetCaseTitle,
             title: generatedTitle,
             data: generatedData,
-            caseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+              caseCount: resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data),
             reviewProvider: generatedPayload.review_provider || '',
             reviewRounds: Number(generatedPayload.review_rounds || 0),
             elapsedText,
@@ -4044,13 +4106,13 @@ const FunctionalCase = ({ project, dispatch }) => {
             progress: 100,
             stage: 'done',
             stageText: appendElapsedToSkillText(
-              `模型已生成 ${generatedPayload.case_count || generatedPayload.case_num || 0} 条候选用例，可点击通知中的“查看”前往结果页面`,
+              `模型已生成 ${resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data)} 条候选用例，可点击通知中的“查看”前往结果页面`,
               elapsedText,
             ),
             errorMessage: '',
             reviewProvider: generatedPayload.review_provider || prev.reviewProvider || '',
             reviewRounds: Number(generatedPayload.review_rounds || prev.reviewRounds || 0),
-            resultCaseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+            resultCaseCount: resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data),
             elapsedText: elapsedText || prev.elapsedText || '',
             hasPendingResult: true,
           }));
@@ -4058,7 +4120,8 @@ const FunctionalCase = ({ project, dispatch }) => {
         }
         const matchesCurrentCase = currentCase && Number(currentCase.id) === Number(targetCaseId);
         if (matchesCurrentCase) {
-          applyPendingModelGenerateResult();
+          applyImportedData(generatedData, generatedTitle);
+          pendingModelGenerateResultRef.current = null;
         }
         setSkillAiModal((prev) => ({
           ...prev,
@@ -4071,15 +4134,18 @@ const FunctionalCase = ({ project, dispatch }) => {
           progress: 100,
           stage: 'done',
           stageText: matchesCurrentCase
-            ? appendElapsedToSkillText(`模型已生成 ${generatedPayload.case_count || generatedPayload.case_num || 0} 条候选用例，当前画布已同步最新结果`, elapsedText)
-            : appendElapsedToSkillText(`模型已生成 ${generatedPayload.case_count || generatedPayload.case_num || 0} 条候选用例，你已切换到其他用例，请切回“${targetCaseTitle}”后应用结果`, elapsedText),
+            ? appendElapsedToSkillText(`模型已生成 ${resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data)} 条候选用例，当前画布已同步最新结果`, elapsedText)
+            : appendElapsedToSkillText(`模型已生成 ${resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data)} 条候选用例，你已切换到其他用例，请切回“${targetCaseTitle}”后应用结果`, elapsedText),
           errorMessage: matchesCurrentCase ? '' : prev.errorMessage,
           reviewProvider: generatedPayload.review_provider || prev.reviewProvider || '',
           reviewRounds: Number(generatedPayload.review_rounds || prev.reviewRounds || 0),
-          resultCaseCount: Number(generatedPayload.case_count || generatedPayload.case_num || 0),
+          resultCaseCount: resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data),
           elapsedText: elapsedText || prev.elapsedText || '',
           hasPendingResult: !matchesCurrentCase,
         }));
+        if (matchesCurrentCase) {
+          message.success(appendElapsedToSkillText(`模型生成完成，识别到 ${resolveGeneratedCaseCount(generatedPayload, generatedPayload?.data)} 条候选用例，当前画布已更新`, elapsedText));
+        }
         if (!matchesCurrentCase) {
           message.warning(appendElapsedToSkillText(`模型生成已完成，但当前不在原始用例“${targetCaseTitle}”上，结果尚未自动覆盖`, elapsedText));
         }
@@ -5092,13 +5158,13 @@ const FunctionalCase = ({ project, dispatch }) => {
       >
         <div className="functional-ai-modal-body">
           <div className="functional-ai-tip">
-            支持按需求组上传截图、补充需求说明、关联设计链接，并选择已有规则文档。提交后会直接调用当前启用的模型生成测试用例，并覆盖当前画布。
+            先按需求组补充说明、截图和设计链接，再按用途选择规则文档、生成要求和审查要求。提交后会按结构化提示生成测试用例，并覆盖当前画布。
           </div>
 
           <div className="functional-ai-field">
             <div className="functional-ai-label">需求组</div>
             <div style={{ color: '#6b7280', marginBottom: 12 }}>
-              每个需求组都可以单独维护说明、截图和设计链接，模型会按组装配，减少图片与文字错位。
+              每组都可以单独填写需求说明、上传截图、补充设计链接，模型会按组理解上下文，减少图文串位。
             </div>
 
             {skillAiModal.requirementItems.map((item, itemIndex) => (
@@ -5141,7 +5207,7 @@ const FunctionalCase = ({ project, dispatch }) => {
                   <div className="functional-ai-label">需求说明</div>
                   <Input.TextArea
                     rows={4}
-                    placeholder="请输入这一组需求说明。支持只写说明、只传图片、只贴链接，或任意组合。"
+                    placeholder="请输入这一组需求说明。可以只写文字、只传图片、只贴链接，也可以自由组合。"
                     value={item.text}
                     disabled={skillAiModal.polling}
                     onChange={(event) => updateSkillRequirementItem(item.key, (current) => ({
@@ -5206,28 +5272,73 @@ const FunctionalCase = ({ project, dispatch }) => {
           </div>
 
           <div className="functional-ai-field">
-            <div className="functional-ai-label">规则文档 / 参考文档</div>
+            <div className="functional-ai-label">规则文档</div>
             <Select
               mode="multiple"
               allowClear
               style={{ width: '100%' }}
-              placeholder="选择当前用户可见的规则文档、模板文档或普通说明文档"
+              placeholder="选择编写规范、模板约束、通用规则等文档"
               options={skillDocOptions}
-              value={skillAiModal.selectedDocIds}
+              value={skillAiModal.ruleDocIds}
               loading={loadingSkillDocs}
               disabled={skillAiModal.polling}
-              onChange={(value) => setSkillAiModal((prev) => ({ ...prev, selectedDocIds: value }))}
+              onChange={(value) => setSkillAiModal((prev) => ({ ...prev, ruleDocIds: value }))}
             />
           </div>
 
-          <div className="functional-ai-field">
-            <div className="functional-ai-label">生成要求 / 审查要求</div>
-            <Input.TextArea
-              rows={6}
-              placeholder="例如：按前置条件/操作步骤/预期结果组织；覆盖正常、异常、边界场景；结合已选规则文档补齐命名规范、模板要求和审查项"
-              value={skillAiModal.instructionText}
+          <div
+            className="functional-ai-field"
+            style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 10, background: '#fafbfc' }}
+          >
+            <div className="functional-ai-label">生成要求</div>
+            <div style={{ color: '#6b7280', marginBottom: 12 }}>
+              这里放“怎么生成”。可以选模板、示例、生成规则，再补一句本轮最想强调的生成目标。
+            </div>
+            <Select
+              mode="multiple"
+              allowClear
+              style={{ width: '100%', marginBottom: 12 }}
+              placeholder="选择生成要求文档、模板示例、输出结构说明等"
+              options={skillDocOptions}
+              value={skillAiModal.generateDocIds}
+              loading={loadingSkillDocs}
               disabled={skillAiModal.polling}
-              onChange={(event) => setSkillAiModal((prev) => ({ ...prev, instructionText: event.target.value }))}
+              onChange={(value) => setSkillAiModal((prev) => ({ ...prev, generateDocIds: value }))}
+            />
+            <Input.TextArea
+              rows={3}
+              placeholder="补一句本轮生成重点，例如：优先覆盖异常和边界；按前置条件/步骤/预期结果输出；语言简洁，可直接评审。"
+              value={skillAiModal.generateInstructionText}
+              disabled={skillAiModal.polling}
+              onChange={(event) => setSkillAiModal((prev) => ({ ...prev, generateInstructionText: event.target.value }))}
+            />
+          </div>
+
+          <div
+            className="functional-ai-field"
+            style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 10, background: '#fafbfc' }}
+          >
+            <div className="functional-ai-label">审查要求</div>
+            <div style={{ color: '#6b7280', marginBottom: 12 }}>
+              这里放“怎么审查”。可以选评审标准、检查清单，再补一句希望模型重点自检的内容。
+            </div>
+            <Select
+              mode="multiple"
+              allowClear
+              style={{ width: '100%', marginBottom: 12 }}
+              placeholder="选择审查要求文档、评审标准、检查清单等"
+              options={skillDocOptions}
+              value={skillAiModal.reviewDocIds}
+              loading={loadingSkillDocs}
+              disabled={skillAiModal.polling}
+              onChange={(value) => setSkillAiModal((prev) => ({ ...prev, reviewDocIds: value }))}
+            />
+            <Input.TextArea
+              rows={3}
+              placeholder="补一句本轮审查重点，例如：检查命名统一性；预期结果是否可验证；是否遗漏异常流和边界场景。"
+              value={skillAiModal.reviewInstructionText}
+              disabled={skillAiModal.polling}
+              onChange={(event) => setSkillAiModal((prev) => ({ ...prev, reviewInstructionText: event.target.value }))}
             />
           </div>
 
