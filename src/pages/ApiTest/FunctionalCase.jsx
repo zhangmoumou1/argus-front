@@ -81,6 +81,7 @@ import {
   moveFunctionalCaseDirectory,
   moveFunctionalCaseFile,
   queryFunctionalCaseFile,
+  cancelFunctionalCaseGenerateTask,
   generateFunctionalCaseByModel,
   queryFunctionalCaseGenerateTask,
   uploadFunctionalCaseNodeAttachment,
@@ -598,6 +599,15 @@ const unregisterFunctionalCaseActiveTask = (taskId) => {
   const taskIdText = String(taskId);
   const remainTasks = readFunctionalCaseActiveTasks().filter((item) => String(item?.taskId) !== taskIdText);
   writeFunctionalCaseActiveTasks(remainTasks);
+  try {
+    if (Array.isArray(window.__FUNCTIONAL_CASE_ACTIVE_TASKS__)) {
+      window.__FUNCTIONAL_CASE_ACTIVE_TASKS__ = window.__FUNCTIONAL_CASE_ACTIVE_TASKS__.filter(
+        (item) => String(item?.taskId) !== taskIdText,
+      );
+    }
+  } catch (error) {
+    // ignore global cache errors
+  }
 };
 
 const defaultCaseData = (title) => ({
@@ -1548,6 +1558,15 @@ const FunctionalCase = ({ project, dispatch }) => {
     if (!skillAiModal.polling || !skillAiModal.taskId) return undefined;
     let cancelled = false;
     let timer = null;
+    const stopPollingTask = () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      window.__FUNCTIONAL_CASE_TASK_POLLING__ = false;
+      unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+    };
 
     const pollTask = async () => {
       try {
@@ -1623,7 +1642,7 @@ const FunctionalCase = ({ project, dispatch }) => {
               elapsedText: elapsedText || prev.elapsedText || '',
               hasPendingResult: true,
             }));
-            unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+            stopPollingTask();
             return;
           }
           const matchesCurrentCase = currentCase && Number(currentCase.id) === Number(targetCaseId);
@@ -1640,7 +1659,7 @@ const FunctionalCase = ({ project, dispatch }) => {
               stage: 'done',
               elapsedText: elapsedText || prev.elapsedText || '',
             }));
-            unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+            stopPollingTask();
             message.success(appendElapsedToSkillText(`模型生成完成，识别到 ${caseCount} 条候选用例，当前画布已更新`, elapsedText));
             return;
           }
@@ -1660,11 +1679,25 @@ const FunctionalCase = ({ project, dispatch }) => {
             elapsedText: elapsedText || prev.elapsedText || '',
             hasPendingResult: true,
           }));
-          unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+          stopPollingTask();
           message.warning(appendElapsedToSkillText(`模型生成已完成，但当前不在原始用例“${targetCaseTitle}”上，结果尚未自动覆盖`, elapsedText));
           return;
         }
         const status = String(data.status || data.stage || '').toLowerCase();
+        if (status === 'cancelled' || status.includes('cancel')) {
+          setSkillAiModal((prev) => ({
+            ...prev,
+            loading: false,
+            polling: false,
+            progress: 100,
+            stage: 'done',
+            stageText: data.stage_text || '任务已停止',
+            errorMessage: '',
+          }));
+          stopPollingTask();
+          message.info(data.stage_text || '模型生成任务已停止');
+          return;
+        }
         if (status === 'failed' || status.includes('fail')) {
           setSkillAiModal((prev) => ({
             ...prev,
@@ -1672,7 +1705,7 @@ const FunctionalCase = ({ project, dispatch }) => {
             polling: false,
             errorMessage: data.error_message || '模型生成失败',
           }));
-          unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+          stopPollingTask();
           message.error(data.error_message || '模型生成失败');
           return;
         }
@@ -1685,15 +1718,14 @@ const FunctionalCase = ({ project, dispatch }) => {
           polling: false,
           errorMessage: error?.message || '查询生成结果失败',
         }));
-        unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+        stopPollingTask();
         message.error(error?.message || '查询生成结果失败');
       }
     };
 
     pollTask();
     return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
+      stopPollingTask();
     };
   }, [
     currentCase,
@@ -3883,18 +3915,34 @@ const FunctionalCase = ({ project, dispatch }) => {
   const closeModelGenerateModal = () => {
     if (skillAiModal.loading) return;
     Modal.confirm({
-      title: skillAiModal.polling ? '确认关闭模型生成弹窗？' : '确认取消当前操作？',
+      title: skillAiModal.polling ? '确认停止模型生成任务？' : '确认取消当前操作？',
       content: skillAiModal.polling
-        ? '关闭弹窗不会取消后台生成任务，后台仍会继续生成测试用例。确认关闭吗？'
+        ? '停止后后台将不再继续生成，本次结果不会回填到画布。确认停止吗？'
         : '关闭后当前填写的需求、提示词和已选文档将被清空。确认继续吗？',
       okText: '确认',
       cancelText: '继续编辑',
-      onOk: () => {
+      onOk: async () => {
         if (skillAiModal.polling) {
+          try {
+            if (skillAiModal.taskId) {
+              await cancelFunctionalCaseGenerateTask({ id: skillAiModal.taskId });
+              unregisterFunctionalCaseActiveTask(skillAiModal.taskId);
+            }
+          } catch (error) {
+            message.error(error?.message || '停止生成任务失败');
+            return;
+          }
           setSkillAiModal((prev) => ({
             ...prev,
             open: false,
+            loading: false,
+            polling: false,
+            taskId: null,
+            progress: 100,
+            stage: 'done',
+            stageText: '任务已停止',
           }));
+          message.info('模型生成任务已停止');
           return;
         }
         resetModelGenerateModal();

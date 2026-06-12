@@ -138,6 +138,14 @@ export async function queryFunctionalCaseGenerateTask(params) {
   });
 }
 
+export async function cancelFunctionalCaseGenerateTask(data) {
+  return request(`${CONFIG.URL}/functional-case/skill-task/cancel`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
 export const createFunctionalCaseSkillTask = generateFunctionalCaseByModel;
 
 export const queryFunctionalCaseSkillTask = queryFunctionalCaseGenerateTask;

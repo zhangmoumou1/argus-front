@@ -24,3 +24,11 @@ export async function querySharedReport(params) {
     params,
   });
 }
+
+export async function stopTestReport(data) {
+  return request(`${CONFIG.URL}/testcase/report/stop`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}

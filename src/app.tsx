@@ -321,6 +321,10 @@ const FunctionalCaseTaskWatcher = () => {
           }
 
           const status = String(statusData.status || statusData.stage || '').toLowerCase();
+          if (status === 'cancelled' || status.includes('cancel')) {
+            removeFunctionalCaseActiveTask(task.taskId);
+            continue;
+          }
           if (status === 'failed' || status.includes('fail')) {
             notification.error({
               message: '模型生成失败',
