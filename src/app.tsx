@@ -48,6 +48,7 @@ declare global {
       path?: string;
     };
     __FUNCTIONAL_CASE_TASK_POLLING__?: boolean;
+    __FUNCTIONAL_CASE_RESULT_CACHE__?: Record<string, any>;
   }
 }
 
@@ -111,6 +112,8 @@ const getFunctionalCaseResultStorageKey = (resultToken: string) => `${FUNCTIONAL
 
 const persistFunctionalCaseResult = (resultToken: string, payload: Record<string, any>) => {
   if (!resultToken || !payload) return;
+  window.__FUNCTIONAL_CASE_RESULT_CACHE__ = window.__FUNCTIONAL_CASE_RESULT_CACHE__ || {};
+  window.__FUNCTIONAL_CASE_RESULT_CACHE__[resultToken] = payload;
   try {
     sessionStorage.setItem(getFunctionalCaseResultStorageKey(resultToken), JSON.stringify(payload));
   } catch (error) {

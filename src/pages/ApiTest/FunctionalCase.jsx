@@ -435,8 +435,8 @@ const EXPORT_OPTIONS = [
 
 const AI_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.webp,.bmp';
 const DESIGN_LINK_PLACEHOLDER = '支持 Figma / 蓝湖 / 墨刀 / 原型地址';
-const DEFAULT_SKILL_AI_GENERATE_INSTRUCTION = '例如：按前置条件/操作步骤/预期结果组织，补齐正常、异常、边界场景，并尽量贴近已选模板和规范。';
-const DEFAULT_SKILL_AI_REVIEW_INSTRUCTION = '例如：生成前先自检命名规范、优先级标记、层级结构和覆盖完整性，不符合时按审查标准修正后再输出。';
+const DEFAULT_SKILL_AI_GENERATE_INSTRUCTION = '按前置条件/操作步骤/预期结果组织，补齐正常、异常、边界场景，并尽量贴近已选模板和规范。';
+const DEFAULT_SKILL_AI_REVIEW_INSTRUCTION = '生成前先自检命名规范、优先级标记、层级结构和覆盖完整性，不符合时按审查标准修正后再输出。';
 const FUNCTIONAL_CASE_ROUTE_PATH = '/scene-design/functionalCase';
 const FUNCTIONAL_CASE_RESULT_STORAGE_PREFIX = 'functional_case_skill_result_';
 const FUNCTIONAL_CASE_ACTIVE_TASKS_STORAGE_KEY = 'functional_case_skill_active_tasks';
@@ -525,6 +525,8 @@ const getFunctionalCaseResultStorageKey = (resultToken) => `${FUNCTIONAL_CASE_RE
 
 const persistFunctionalCaseResult = (resultToken, payload) => {
   if (!resultToken || !payload) return;
+  window.__FUNCTIONAL_CASE_RESULT_CACHE__ = window.__FUNCTIONAL_CASE_RESULT_CACHE__ || {};
+  window.__FUNCTIONAL_CASE_RESULT_CACHE__[resultToken] = payload;
   try {
     sessionStorage.setItem(getFunctionalCaseResultStorageKey(resultToken), JSON.stringify(payload));
   } catch (error) {
@@ -534,6 +536,10 @@ const persistFunctionalCaseResult = (resultToken, payload) => {
 
 const readFunctionalCaseResult = (resultToken) => {
   if (!resultToken) return null;
+  const memoryPayload = window.__FUNCTIONAL_CASE_RESULT_CACHE__?.[resultToken];
+  if (memoryPayload && typeof memoryPayload === 'object') {
+    return memoryPayload;
+  }
   try {
     const raw = sessionStorage.getItem(getFunctionalCaseResultStorageKey(resultToken));
     if (!raw) return null;
@@ -546,6 +552,9 @@ const readFunctionalCaseResult = (resultToken) => {
 
 const clearFunctionalCaseResult = (resultToken) => {
   if (!resultToken) return;
+  if (window.__FUNCTIONAL_CASE_RESULT_CACHE__) {
+    delete window.__FUNCTIONAL_CASE_RESULT_CACHE__[resultToken];
+  }
   try {
     sessionStorage.removeItem(getFunctionalCaseResultStorageKey(resultToken));
   } catch (error) {
@@ -2542,7 +2551,7 @@ const FunctionalCase = ({ project, dispatch }) => {
   }, [clearRenderFrame, syncScaleFromMind]);
 
   const loadCase = async (record, options = {}) => {
-    const { force = false } = options;
+    const { force = false, draftResult = null } = options;
     if (!projectId) return;
     if (!force && caseDirty && currentCase?.id && record?.id && currentCase.id !== record.id) {
       openUnsavedConfirm(() => {
@@ -2557,22 +2566,31 @@ const FunctionalCase = ({ project, dispatch }) => {
       if (res?.code === 0) {
         const fallbackTitle = res?.data?.title || record?.title || '功能用例';
         const safeData = sanitizeMindData(res?.data?.data || defaultCaseData(fallbackTitle), fallbackTitle);
+        const draftData = draftResult?.data
+          ? sanitizeMindData(draftResult.data, draftResult.title || fallbackTitle)
+          : null;
+        const displayTitle = draftResult?.title || fallbackTitle;
+        const displayData = draftData || safeData;
         const baseStats = countMindData(getMindRootData(safeData));
-        const nodeCount = Number(baseStats?.nodeCount || 0);
+        const displayStats = draftData ? countMindData(getMindRootData(displayData)) : baseStats;
+        const nodeCount = Number(displayStats?.nodeCount || 0);
         const isHugeCase = nodeCount >= HUGE_CASE_NODE_THRESHOLD;
-        const renderData = isHugeCase ? buildHugeCasePreview(safeData, 2) : safeData;
+        const renderData = isHugeCase ? buildHugeCasePreview(displayData, 2) : displayData;
         currentCaseRenderVersionRef.current += 1;
         suppressDirtyCheckRef.current = true;
         savedCaseSnapshotRef.current = buildCaseSnapshot(safeData, fallbackTitle);
-        setCaseDirty(false);
+        setCaseDirty(Boolean(draftData));
         setCurrentCase({
           ...res.data,
+          title: displayTitle,
           data: renderData,
           __dataSanitized: true,
           __nodeCount: nodeCount,
-          __wordCount: Number(baseStats?.wordCount || 0),
+          __wordCount: Number(displayStats?.wordCount || 0),
           __isHugeCase: isHugeCase,
-          case_count: Number(res?.data?.case_count ?? res?.data?.case_num ?? 0),
+          case_count: draftData
+            ? Number(draftResult?.caseCount || 0)
+            : Number(res?.data?.case_count ?? res?.data?.case_num ?? 0),
           create_user_name: res?.data?.create_user_name || res?.data?.creator_name || record?.create_user_name || '',
         });
         if (isHugeCase) {
@@ -2617,8 +2635,9 @@ const FunctionalCase = ({ project, dispatch }) => {
     const openGeneratedCase = async () => {
       setCurrentDirectory(targetRecord.directory_id || null);
       const storedResult = readFunctionalCaseResult(resultToken);
+      let draftResult = null;
       if (storedResult?.data && Number(storedResult?.targetCaseId) === Number(targetRecord.id)) {
-        pendingRouteGeneratedResultRef.current = {
+        draftResult = {
           projectId: routeProjectId,
           targetCaseId: Number(storedResult.targetCaseId || targetRecord.id),
           targetCaseTitle: storedResult.targetCaseTitle || storedResult.title || targetRecord.title || '功能用例',
@@ -2630,8 +2649,9 @@ const FunctionalCase = ({ project, dispatch }) => {
           elapsedText: storedResult.elapsedText || '',
           resultToken,
         };
+        pendingRouteGeneratedResultRef.current = draftResult;
       }
-      await loadCase(targetRecord, { force: true });
+      await loadCase(targetRecord, { force: true, draftResult });
       if (!storedResult?.data || Number(storedResult?.targetCaseId) !== Number(targetRecord.id)) {
         clearGeneratedCaseRouteQuery();
       }
