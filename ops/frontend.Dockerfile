@@ -3,7 +3,7 @@ ENV NODE_OPTIONS=--max-old-space-size=4096
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund
+RUN npm install --legacy-peer-deps --no-audit --no-fund --verbose
 COPY . .
 RUN npm run build
 

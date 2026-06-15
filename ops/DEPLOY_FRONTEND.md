@@ -29,10 +29,22 @@ server {
 
 ## 启动
 
-在前端项目根目录执行：
+首次部署或依赖变更：
 
 ```bash
 docker compose -f ops/docker-compose.yaml up -d --build
+```
+
+日常前端代码发布：
+
+```bash
+docker compose -f ops/docker-compose.yaml up -d --build
+```
+
+如果只是重启容器，不重新打包：
+
+```bash
+docker compose -f ops/docker-compose.yaml restart argus-front
 ```
 
 ## 检查
@@ -49,3 +61,7 @@ docker compose -f ops/docker-compose.yaml ps
 docker compose -f ops/docker-compose.yaml logs -f argus-front
 ```
 
+## 说明
+
+- 已添加 `.dockerignore`，减少无关文件进入 Docker 构建上下文
+- `package.json` / `package-lock.json` 不变时，`npm install` 层会优先复用 Docker 缓存
