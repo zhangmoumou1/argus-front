@@ -1,4 +1,4 @@
-version: "3.9"
+version: "3.3"
 
 services:
   argus-front:
@@ -16,4 +16,3 @@ services:
 
 networks:
   argus_frontend:
-    name: argus_frontend
