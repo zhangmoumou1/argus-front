@@ -1,8 +1,9 @@
 FROM node:18.20.4-alpine AS builder
+ENV NODE_OPTIONS=--max-old-space-size=4096
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps --no-audit --no-fund
 COPY . .
 RUN npm run build
 
