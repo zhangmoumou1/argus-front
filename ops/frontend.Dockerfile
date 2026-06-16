@@ -1,5 +1,5 @@
 FROM node:18.20.4-alpine AS builder
-ENV NODE_OPTIONS=--max-old-space-size=4096
+ENV NODE_OPTIONS=--max-old-space-size=2048
 ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 ENV NPM_CONFIG_FUND=false
 ENV NPM_CONFIG_AUDIT=false
@@ -19,4 +19,5 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
+
 

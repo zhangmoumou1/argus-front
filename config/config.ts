@@ -144,11 +144,6 @@ export default defineConfig({
       schemaPath: join(__dirname, 'oneapi.json'),
       mock: false,
     },
-    {
-      requestLibPath: "import { request } from '@umijs/max'",
-      schemaPath: 'https://gw.alipayobjects.com/os/antfincdn/CA1dOm%2631B/openapi.json',
-      projectName: 'swagger',
-    },
   ],
   /**
    * @name MFSU 依赖预编译
@@ -157,5 +152,9 @@ export default defineConfig({
   mfsu: {
     strategy: 'normal',
   },
+  jsMinifier: 'esbuild',
+  cssMinifier: 'esbuild',
   requestRecord: {},
 });
+
+
