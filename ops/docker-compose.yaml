@@ -11,10 +11,11 @@ services:
       - "80:80"
     environment:
       TZ: Asia/Shanghai
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       - argus_frontend
+      - argus_shared
 
 networks:
   argus_frontend:
+  argus_shared:
+    external: true
