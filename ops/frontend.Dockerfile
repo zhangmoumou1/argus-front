@@ -6,8 +6,8 @@ ENV NPM_CONFIG_AUDIT=false
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm install --legacy-peer-deps
+COPY package.json ./
+RUN npm install --legacy-peer-deps --no-package-lock
 COPY . .
 RUN npm run build
 
@@ -19,3 +19,4 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
+
