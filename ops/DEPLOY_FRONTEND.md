@@ -27,29 +27,15 @@ http://zhangyanc.club/docs
 修改：
 
 ```text
+argus-front/config/defaultSettings.ts
 argus-front/ops/nginx.frontend.conf
 ```
 
-确认域名正确：
+其中：
 
-```nginx
-server {
-  listen 80;
-  server_name zhangyanc.club www.zhangyanc.club;
-}
-```
-
-并确认前端请求的后端地址已经指向实际后端服务地址，且带上 `/argus` 前缀，例如：`http://zhangyanc.club/argus`。
-
-## 共享网络初始化
-
-首次部署前先执行一次：
-
-`ash
-docker network create argus_shared
-` 
-
-如果网络已存在，Docker 会提示已存在，可直接忽略。
+- `defaultSettings.ts` 中 `apiUrl` 推荐填写 `zhangyanc.club/argus`
+- `nginx.frontend.conf` 只负责前端静态资源
+- 对外统一入口由宿主机 Nginx 负责，配置文件见 `argus-end/ops/nginx.conf`
 
 ## 两套部署方式
 
@@ -126,5 +112,6 @@ docker-compose -f docker-compose.image.yaml logs -f argus-front
 
 - `docker-compose.yaml`：服务器自己构建前端镜像
 - `docker-compose.image.yaml`：直接拉腾讯云公有镜像
+- 前端容器对宿主机暴露 `8000`
+- 对外无端口访问由宿主机 Nginx 统一代理实现
 - `2核2G` 机器更推荐使用“公有镜像版”
-
