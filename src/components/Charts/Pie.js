@@ -1,14 +1,12 @@
-// import React from 'react';
-
-
 import React from 'react';
-import {Pie} from '@ant-design/plots';
+import { Pie } from '@ant-design/plots';
 
-export default ({data, height, name, value = 'count'}) => {
+export default ({ data, height, name, value = 'count' }) => {
   const total = (Array.isArray(data) ? data : []).reduce((sum, item) => {
     const current = Number(item?.[value] ?? 0);
     return sum + (Number.isNaN(current) ? 0 : current);
   }, 0);
+
   const config = {
     appendPadding: 10,
     data,
@@ -69,5 +67,6 @@ export default ({data, height, name, value = 'count'}) => {
     height,
     autoFit: true,
   };
+
   return <Pie {...config} />;
 };
