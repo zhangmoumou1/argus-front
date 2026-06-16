@@ -1,9 +1,13 @@
 FROM node:18.20.4-alpine AS builder
 ENV NODE_OPTIONS=--max-old-space-size=4096
+ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_AUDIT=false
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund --verbose
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 

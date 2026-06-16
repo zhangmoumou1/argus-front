@@ -2,6 +2,7 @@ version: "3.3"
 
 services:
   argus-front:
+    image: ${ARGUS_FRONT_IMAGE:-ccr.ccs.tencentyun.com/zhangyancheng/argus-front:1.0}
     build:
       context: ..
       dockerfile: ops/frontend.Dockerfile
