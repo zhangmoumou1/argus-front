@@ -21,11 +21,9 @@ const Settings: LayoutSettings & {
   pwa: false,
   logo: '/logo.ico',
   iconfontUrl: '//at.alicdn.com/t/font_915840_kom9s5w2t6k.js',
-  apiUrl: 'zhangyanc.club:7777',
+  apiUrl: 'zhangyanc.club:7777/argus',
   https: false,
   backend: false,
 };
 
 export default Settings;
-
-
