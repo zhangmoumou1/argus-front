@@ -26,7 +26,7 @@ server {
 }
 ```
 
-并确认前端请求的后端地址已经指向实际后端域名或后端服务地址。
+并确认前端请求的后端地址已经指向实际后端服务地址，且带上 /argus 前缀，例如：http://zhangyanc.club:7777/argus 。
 
 ## 两套部署方式
 
@@ -104,3 +104,4 @@ docker-compose -f docker-compose.image.yaml logs -f argus-front
 - `docker-compose.yaml`：服务器自己构建前端镜像
 - `docker-compose.image.yaml`：直接拉腾讯云公有镜像
 - `2核2G` 机器更推荐使用“公有镜像版”
+
