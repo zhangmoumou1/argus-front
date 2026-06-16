@@ -6,9 +6,11 @@ services:
     container_name: argus_front
     restart: always
     ports:
-      - "8000:80"
+      - "80:80"
     environment:
       TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - argus_frontend
 
