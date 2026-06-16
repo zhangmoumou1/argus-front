@@ -2,31 +2,15 @@
 
 前端项目路径：`argus-front`
 
-当前访问域名示例：
-
-- `http://zhangyanc.club`
-- `http://www.zhangyanc.club`
-
-## 公有镜像地址
-
-当前可直接使用腾讯云公有镜像：
-
-```bash
-docker pull ccr.ccs.tencentyun.com/zhangyancheng/argus-front:1.0
-```
-
-如果仓库已公开，通常不需要执行 `docker login`。  
-只有在拉取镜像时出现鉴权或频率限制问题，再补充登录：
-
-```bash
-docker login ccr.ccs.tencentyun.com --username=100006655230
-```
-
 ## 部署前先改配置
 
-### 1. 修改 `ops/nginx.frontend.conf`
+修改：
 
-确认域名配置正确：
+```text
+argus-front/ops/nginx.frontend.conf
+```
+
+确认域名正确：
 
 ```nginx
 server {
@@ -42,105 +26,81 @@ server {
 }
 ```
 
-### 2. 确认前端接口地址
+并确认前端请求的后端地址已经指向实际后端域名或后端服务地址。
 
-前端环境配置里的后端接口地址，需要指向实际部署后的后端域名或后端服务地址。
+## 两套部署方式
 
-### 3. 可选：镜像地址
+### 方案一：服务器自己构建
 
-如果需要切换镜像版本，可在 shell 环境中增加：
+使用文件：
 
-```env
-ARGUS_FRONT_IMAGE=ccr.ccs.tencentyun.com/zhangyancheng/argus-front:1.0
+```text
+ops/docker-compose.yaml
 ```
 
-## 启动
-
-进入前端部署目录：
+首次部署 / 更新发布：
 
 ```bash
 cd ~/argus/argus-front/ops
+docker-compose -f docker-compose.yaml up -d --build argus-front
 ```
 
-推荐：直接使用公有镜像启动：
+### 方案二：直接拉腾讯云公有镜像
+
+使用文件：
+
+```text
+ops/docker-compose.image.yaml
+```
+
+当前公有镜像：
 
 ```bash
-docker-compose pull argus-front
-docker-compose up -d argus-front
+docker pull ccr.ccs.tencentyun.com/zhangyancheng/argus-front:1.0
 ```
 
-首次部署或需要本地重建镜像时：
-
-```bash
-docker-compose up -d --build
-```
-
-只是重启服务：
-
-```bash
-docker-compose up -d
-```
-
-## 代码更新后如何发布
-
-前端代码改动后重新发布：
+首次部署 / 更新发布：
 
 ```bash
 cd ~/argus/argus-front/ops
-docker-compose pull argus-front
-docker-compose up -d argus-front
-```
-
-如果只是重启容器，不重新打包：
-
-```bash
-cd ~/argus/argus-front/ops
-docker-compose restart argus-front
+docker-compose -f docker-compose.image.yaml pull argus-front
+docker-compose -f docker-compose.image.yaml up -d argus-front
 ```
 
 ## 查看状态
 
+自己构建版：
+
 ```bash
 cd ~/argus/argus-front/ops
-docker-compose ps
+docker-compose -f docker-compose.yaml ps
+```
+
+公有镜像版：
+
+```bash
+cd ~/argus/argus-front/ops
+docker-compose -f docker-compose.image.yaml ps
 ```
 
 ## 看日志
 
-容器日志：
+自己构建版：
 
 ```bash
 cd ~/argus/argus-front/ops
-docker-compose logs -f argus-front
+docker-compose -f docker-compose.yaml logs -f argus-front
 ```
 
-最近日志：
+公有镜像版：
 
 ```bash
 cd ~/argus/argus-front/ops
-docker-compose logs --tail=100 argus-front
-```
-
-## SSH 断开后怎么处理
-
-重新登录服务器后执行：
-
-```bash
-cd ~/argus/argus-front/ops
-docker-compose ps
-docker-compose logs --tail=100 argus-front
-```
-
-如果服务没起来，再重新执行一次：
-
-```bash
-docker-compose pull argus-front
-docker-compose up -d argus-front
+docker-compose -f docker-compose.image.yaml logs -f argus-front
 ```
 
 ## 说明
 
-- 当前前端镜像支持直接从腾讯云镜像仓库拉取，不需要在服务器本机构建
-- 只有需要重新制作镜像时，才使用 `docker-compose up -d --build`
-- 已添加 `.dockerignore`，减少无关文件进入构建上下文
-
+- `docker-compose.yaml`：服务器自己构建前端镜像
+- `docker-compose.image.yaml`：直接拉腾讯云公有镜像
+- `2核2G` 机器更推荐使用“公有镜像版”

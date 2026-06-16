@@ -2,9 +2,7 @@ version: "3.3"
 
 services:
   argus-front:
-    build:
-      context: ..
-      dockerfile: ops/frontend.Dockerfile
+    image: ccr.ccs.tencentyun.com/zhangyancheng/argus-front:1.0
     container_name: argus_front
     restart: always
     ports:
