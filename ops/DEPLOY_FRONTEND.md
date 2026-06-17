@@ -37,6 +37,38 @@ argus-front/ops/nginx.frontend.conf
 - `nginx.frontend.conf` 只负责前端静态资源
 - 对外统一入口由宿主机 Nginx 负责，配置文件见 `argus-end/ops/nginx.conf`
 
+## 宿主机准备
+
+当前部署方案依赖宿主机 Nginx 作为统一入口。
+
+如果服务器还没安装 Nginx，先安装：
+
+```bash
+sudo apt update
+sudo apt install -y nginx
+```
+
+安装后确认服务状态：
+
+```bash
+sudo systemctl enable nginx
+sudo systemctl start nginx
+sudo systemctl status nginx
+```
+
+宿主机 Nginx 实际转发配置文件在：
+
+```text
+argus-end/ops/nginx.conf
+```
+
+加载方式：
+
+```bash
+sudo cp ~/argus/argus-end/ops/nginx.conf /etc/nginx/conf.d/argus.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
 ## 两套部署方式
 
 ### 方案一：服务器自己构建
@@ -115,3 +147,4 @@ docker-compose -f docker-compose.image.yaml logs -f argus-front
 - 前端容器对宿主机暴露 `8000`
 - 对外无端口访问由宿主机 Nginx 统一代理实现
 - `2核2G` 机器更推荐使用“公有镜像版”
+
