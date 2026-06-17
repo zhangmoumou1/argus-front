@@ -28,7 +28,6 @@ import auth from '@/utils/auth';
 
 import {listUsers} from '@/services/user';
 
-import noRecord from '@/assets/no_record.svg'
 
 import UserLink from "@/components/Button/UserLink";
 
@@ -430,7 +429,7 @@ const Project = ({dispatch, project, loading}) => {
 
               <Card>
 
-                <Empty description="暂无项目, 快点击『创建项目』创建一个吧!" image={noRecord} imageStyle={{height: 220}}/>
+                <Empty description="暂无项目，点击「创建项目」创建一个吧!" />
 
               </Card>
 

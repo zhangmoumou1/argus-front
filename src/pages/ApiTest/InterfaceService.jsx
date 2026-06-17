@@ -15,6 +15,7 @@ import {
   Switch,
   Table,
   Badge,
+  Empty,
   Tag,
 } from 'antd';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -391,6 +392,11 @@ const InterfaceService = ({ project, user, dispatch }) => {
             </Space>
           </Col>
         </Row>
+        {(services || []).length === 0 && !loading ? (
+          <Card bordered={false}>
+            <Empty description="暂无服务，点击「新建服务」创建一个吧!" />
+          </Card>
+        ) : null}
         <Row gutter={[16, 16]} className="interface-service-card-row">
           {(services || []).map((item) => (
             <Col xs={24} md={12} lg={8} xl={6} key={item.id}>
