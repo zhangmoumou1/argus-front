@@ -1,6 +1,0 @@
-- generic [ref=e3]:
-  - img "No Found" [ref=e5]
-  - generic [ref=e59]: "404"
-  - generic [ref=e60]: Sorry, the page you visited does not exist.
-  - button "Back Home" [ref=e62] [cursor=pointer]:
-    - generic [ref=e63]: Back Home
