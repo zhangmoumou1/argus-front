@@ -118,7 +118,7 @@ export default {
 
     * updateAiModelConfig({payload}, {call, put}) {
       const res = yield call(updateAiModelConfigService, payload);
-      if (auth.response(res, true)) {
+      if (auth.response(res, false)) {
         yield put({
           type: 'save',
           payload: {
@@ -432,3 +432,4 @@ export default {
     }
   },
 };
+

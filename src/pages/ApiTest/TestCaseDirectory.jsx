@@ -131,7 +131,7 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
 
   const {projects, project_id} = project;
 
-  const {envList} = gconfig;
+  const {envList, aiModelConfig = {providers: []}} = gconfig;
 
   const {userList, userMap} = user;
 
@@ -215,6 +215,8 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [treePaneSize, setTreePaneSize] = useState(320);
   const [aiForm] = Form.useForm();
+
+  const [aiModelOptions, setAiModelOptions] = useState([]);
 
 
   const [bodyType, setBodyType] = useState(0);
@@ -1569,6 +1571,8 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
 
     aiForm.setFieldsValue({
 
+      ai_model_id: aiModelOptions[0]?.value,
+
       generate_style: 'standard',
 
       include_negative: false,
@@ -1600,6 +1604,12 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
       return;
 
     }
+
+    dispatch({
+
+      type: 'gconfig/fetchAiModelConfig',
+
+    });
 
     let active = true;
 
@@ -1656,6 +1666,41 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
     };
 
   }, [aiDrawerOpen]);
+
+  useEffect(() => {
+
+    const providers = Array.isArray(aiModelConfig?.providers) ? aiModelConfig.providers : [];
+
+    const options = providers
+      .filter((item) => item?.enabled)
+      .map((item) => {
+        const providerName = String(item?.provider_name || item?.name || item?.provider_type || 'AI模型').trim();
+        const modelName = String(item?.model || '').trim();
+        const value = String(item?.id || '').trim();
+        return {
+          label: modelName ? `${providerName} / ${modelName}` : providerName,
+          value,
+        };
+      })
+      .filter((item) => item.value);
+
+    setAiModelOptions(options);
+
+    if (!aiDrawerOpen) {
+
+      return;
+
+    }
+
+    const currentValue = aiForm.getFieldValue('ai_model_id');
+    const exists = options.some((item) => item.value === currentValue);
+
+    if ((!currentValue || !exists) && options[0]?.value) {
+
+      aiForm.setFieldsValue({ai_model_id: options[0].value});
+
+    }
+  }, [aiDrawerOpen, aiForm, aiModelConfig]);
 
 
 
@@ -2951,6 +2996,22 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
 
               <Form form={aiForm} layout="vertical">
 
+                <Form.Item name="ai_model_id" label="执行模型" rules={[{required: true, message: '请选择一个已启用模型'}]}>
+
+                  <Select
+
+                    showSearch
+
+                    placeholder="选择用于生成流程场景的模型"
+
+                    options={aiModelOptions}
+
+                    optionFilterProp="label"
+
+                  />
+
+                </Form.Item>
+
                 <Form.Item name="service_id" label="接口服务" rules={[{required: true, message: '请选择接口服务'}]}>
 
                   <Select
@@ -3208,6 +3269,11 @@ export default connect(({testcase, gconfig, project, user, loading}) => ({
   testcase,
 
 }))(memo(TestCaseDirectory));
+
+
+
+
+
 
 
 

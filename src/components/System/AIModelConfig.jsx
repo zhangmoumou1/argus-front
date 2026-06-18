@@ -149,6 +149,7 @@ const buildConfigToSave = (draft) => ({
     model: String(item.model || "").trim(),
     model_options: Array.from(new Set((item.model_options || []).map((model) => String(model || "").trim()).filter(Boolean))),
     api_key: String(item.api_key || "").trim(),
+    enabled: Boolean(item.enabled),
   })),
 });
 
@@ -181,13 +182,10 @@ export default ({dispatch, aiModelConfig, aiModelProviders, loading}) => {
 
   useEffect(() => {
     const normalized = normalizeDraftConfig(aiModelConfig);
-    if (!normalized.active_model_id && normalized.providers[0]) {
-      normalized.active_model_id = normalized.providers[0].id;
+    const enabledProviders = normalized.providers.filter((item) => item.enabled);
+    if (!normalized.active_model_id || !enabledProviders.some((item) => item.id === normalized.active_model_id)) {
+      normalized.active_model_id = enabledProviders[0]?.id || normalized.providers[0]?.id || "";
     }
-    normalized.providers = normalized.providers.map((item) => ({
-      ...item,
-      enabled: item.id === normalized.active_model_id,
-    }));
     setDraft(normalized);
   }, [aiModelConfig]);
 
@@ -303,19 +301,43 @@ export default ({dispatch, aiModelConfig, aiModelProviders, loading}) => {
   };
 
   const handleEnable = async (id, checked) => {
-    if (!checked) {
+    const enabledCount = (draft.providers || []).filter((item) => item.enabled).length;
+    const currentItem = (draft.providers || []).find((item) => item.id === id);
+    if (!checked && currentItem?.enabled && enabledCount <= 1) {
       message.info("平台始终需要保留一个启用模型");
+      return;
+    }
+    const nextProviders = (draft.providers || []).map((item) => (
+      item.id === id ? { ...item, enabled: checked } : item
+    ));
+    let nextActiveId = draft.active_model_id;
+    if (checked) {
+      nextActiveId = id;
+    } else if (draft.active_model_id === id) {
+      nextActiveId = nextProviders.find((item) => item.enabled)?.id || "";
+    }
+    if (!nextActiveId) {
+      nextActiveId = nextProviders.find((item) => item.enabled)?.id || nextProviders[0]?.id || "";
+    }
+    const nextDraft = {
+      ...draft,
+      active_model_id: nextActiveId,
+      providers: nextProviders,
+    };
+    await persistDraft(nextDraft, checked ? "模型已启用并设为默认" : "模型启用状态已更新");
+  };
+
+  const handleSetActive = async (id) => {
+    const currentItem = (draft.providers || []).find((item) => item.id === id);
+    if (!currentItem?.enabled) {
+      message.info("请先启用该模型，再将它设为默认");
       return;
     }
     const nextDraft = {
       ...draft,
       active_model_id: id,
-      providers: (draft.providers || []).map((item) => ({
-        ...item,
-        enabled: item.id === id,
-      })),
     };
-    await persistDraft(nextDraft, "启用模型已更新，其他模型已自动关闭");
+    await persistDraft(nextDraft, "默认模型已更新");
   };
 
   const handleDelete = async (id) => {
@@ -324,14 +346,14 @@ export default ({dispatch, aiModelConfig, aiModelProviders, loading}) => {
       return;
     }
     const nextProviders = (draft.providers || []).filter((item) => item.id !== id);
-    const nextActiveId = draft.active_model_id === id ? nextProviders[0]?.id || "" : draft.active_model_id;
+    let nextActiveId = draft.active_model_id === id ? "" : draft.active_model_id;
+    if (!nextActiveId || !nextProviders.some((item) => item.id === nextActiveId && item.enabled)) {
+      nextActiveId = nextProviders.find((item) => item.enabled)?.id || nextProviders[0]?.id || "";
+    }
     const nextDraft = {
       ...draft,
       active_model_id: nextActiveId,
-      providers: nextProviders.map((item) => ({
-        ...item,
-        enabled: item.id === nextActiveId,
-      })),
+      providers: nextProviders,
     };
     const ok = await persistDraft(nextDraft, "模型配置已删除");
     if (ok && modalState.id === id) {
@@ -342,6 +364,7 @@ export default ({dispatch, aiModelConfig, aiModelProviders, loading}) => {
   const renderSummary = (item) => (
     <Space size={[8, 8]} wrap>
       <Tag color={item.enabled ? "green" : "default"}>{item.enabled ? "已启用" : "未启用"}</Tag>
+      {draft.active_model_id === item.id ? <Tag color="gold">默认模型</Tag> : null}
       <Tag color="blue">{item.provider_type || "custom"}</Tag>
       <Text type="secondary">模型：{item.model || "-"}</Text>
       <Text type="secondary">API Key：{item.has_api_key || item.api_key_masked ? "已配置" : "未配置"}</Text>
@@ -374,6 +397,14 @@ export default ({dispatch, aiModelConfig, aiModelProviders, loading}) => {
                   loading={loading.effects["gconfig/updateAiModelConfig"]}
                   onChange={(checked) => handleEnable(item.id, checked)}
                 />,
+                <Button
+                  key="default"
+                  type="link"
+                  disabled={!item.enabled || draft.active_model_id === item.id}
+                  onClick={() => handleSetActive(item.id)}
+                >
+                  设为默认
+                </Button>,
                 <Button key="detail" type="link" icon={<EyeOutlined />} onClick={() => openDetail(item.id)}>
                   详情
                 </Button>,
@@ -454,3 +485,9 @@ export default ({dispatch, aiModelConfig, aiModelProviders, loading}) => {
     </>
   );
 };
+
+
+
+
+
+

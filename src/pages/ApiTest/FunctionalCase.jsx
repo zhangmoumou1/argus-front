@@ -1341,10 +1341,11 @@ const buildHugeCasePreview = (data, collapseLevel = 2) => {
   return cloneNode(data, 0);
 };
 
-const FunctionalCase = ({ project, dispatch }) => {
+const FunctionalCase = ({ project, gconfig, dispatch }) => {
   const location = useLocation();
   const projects = project?.projects || [];
   const projectId = project?.project_id;
+  const aiModelConfig = gconfig?.aiModelConfig || { providers: [] };
   const mindRef = useRef(null);
   const mindContainerRef = useRef(null);
   const caseRenderTimerRef = useRef(null);
@@ -1402,6 +1403,7 @@ const FunctionalCase = ({ project, dispatch }) => {
     reviewProvider: '',
     reviewRounds: 0,
     resultCaseCount: 0,
+    aiModelId: '',
     elapsedText: '',
     requestStartedAt: 0,
     hasPendingResult: false,
@@ -1478,6 +1480,22 @@ const FunctionalCase = ({ project, dispatch }) => {
     [location?.pathname],
   );
 
+  const skillAiModelOptions = useMemo(() => {
+    const providers = Array.isArray(aiModelConfig?.providers) ? aiModelConfig.providers : [];
+    return providers
+      .filter((item) => item?.enabled)
+      .map((item) => {
+        const providerName = String(item?.provider_name || item?.name || item?.provider_type || 'AI模型').trim();
+        const modelName = String(item?.model || '').trim();
+        const value = String(item?.id || '').trim();
+        return {
+          label: modelName ? `${providerName} / ${modelName}` : providerName,
+          value,
+        };
+      })
+      .filter((item) => item.value);
+  }, [aiModelConfig]);
+
   const pendingGeneratedCaseView = useMemo(() => {
     const searchParams = new URLSearchParams(location?.search || '');
     const routeProjectId = Number(searchParams.get('projectId') || 0);
@@ -1492,6 +1510,7 @@ const FunctionalCase = ({ project, dispatch }) => {
 
   useEffect(() => {
     if (!skillAiModal.open) return;
+    dispatch({ type: 'gconfig/fetchAiModelConfig' });
     let active = true;
     const loadSkillDocs = async () => {
       setLoadingSkillDocs(true);
@@ -1519,7 +1538,12 @@ const FunctionalCase = ({ project, dispatch }) => {
     return () => {
       active = false;
     };
-  }, [skillAiModal.open]);
+  }, [dispatch, skillAiModal.open]);
+
+  useEffect(() => {
+    if (!skillAiModal.open || skillAiModal.aiModelId || !skillAiModelOptions[0]?.value) return;
+    setSkillAiModal((prev) => ({ ...prev, aiModelId: skillAiModelOptions[0].value }));
+  }, [skillAiModelOptions, skillAiModal.aiModelId, skillAiModal.open]);
 
   const applyPendingModelGenerateResult = useCallback(() => {
     const pending = pendingModelGenerateResultRef.current;
@@ -3927,6 +3951,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       reviewRounds: 0,
       progress: 0,
       resultCaseCount: 0,
+      aiModelId: skillAiModelOptions[0]?.value || '',
       elapsedText: '',
       requestStartedAt: 0,
       hasPendingResult: false,
@@ -3956,6 +3981,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       reviewProvider: '',
       reviewRounds: 0,
       resultCaseCount: 0,
+      aiModelId: skillAiModelOptions[0]?.value || '',
       elapsedText: '',
       requestStartedAt: 0,
       hasPendingResult: false,
@@ -4134,6 +4160,11 @@ const FunctionalCase = ({ project, dispatch }) => {
       return;
     }
     const requestStartedAt = Date.now();
+    const selectedAiModelId = String(skillAiModal.aiModelId || '').trim();
+    if (!selectedAiModelId) {
+      message.warning('请选择一个已启用模型');
+      return;
+    }
     const generateInstructionText = skillAiModal.generateInstructionText.trim();
     const reviewInstructionText = skillAiModal.reviewInstructionText.trim();
     const selectedDocCount = (
@@ -4172,6 +4203,7 @@ const FunctionalCase = ({ project, dispatch }) => {
       const createRes = await generateFunctionalCaseByModel({
         project_id: projectId,
         case_file_id: targetCaseId,
+        ai_model_id: selectedAiModelId,
         title: targetCaseTitle,
         requirement_text: requirementText,
         requirement_items: requirementItems,
@@ -5396,6 +5428,19 @@ const FunctionalCase = ({ project, dispatch }) => {
           </div>
 
           <div className="functional-ai-field">
+            <div className="functional-ai-label">执行模型</div>
+            <Select
+              allowClear
+              style={{ width: '100%' }}
+              placeholder="选择用于生成功能用例的模型"
+              options={skillAiModelOptions}
+              value={skillAiModal.aiModelId || undefined}
+              disabled={skillAiModal.polling}
+              onChange={(value) => setSkillAiModal((prev) => ({ ...prev, aiModelId: value || '' }))}
+            />
+          </div>
+
+          <div className="functional-ai-field">
             <div className="functional-ai-label">规则文档</div>
             <Select
               mode="multiple"
@@ -5581,4 +5626,6 @@ const FunctionalCase = ({ project, dispatch }) => {
   );
 };
 
-export default connect(({ project }) => ({ project }))(FunctionalCase);
+export default connect(({ project, gconfig }) => ({ project, gconfig }))(FunctionalCase);
+
+
