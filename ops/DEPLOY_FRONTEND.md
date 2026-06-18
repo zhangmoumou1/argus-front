@@ -1,106 +1,107 @@
-# Argus 前端部署说明
+# Argus 前端部署文档
 
 前端项目路径：`argus-front`
 
 ## 访问地址
 
-前端访问地址：
+- 平台首页：`http://你的域名或IP/`
+- 后端接口：`http://你的域名或IP/argus/`
+- 后端接口文档：`http://你的域名或IP/docs`
+- OpenAPI：`http://你的域名或IP/openapi.json`
 
-```text
-http://zhangyanc.club/
-```
+默认端口：
 
-后端接口地址：
+- 前端容器：`127.0.0.1:8000`
+- 后端容器：`127.0.0.1:7777`
+- 宿主机统一入口：Nginx
 
-```text
-http://zhangyanc.club/argus/
-```
+## 本地启动
 
-后端文档地址：
+本机建议先安装：
 
-```text
-http://zhangyanc.club/docs
-```
+- `Node.js 18+`
+- `npm`
 
-## 部署前先改配置
-
-修改：
+前端改这里：
 
 ```text
 argus-front/config/defaultSettings.ts
-argus-front/ops/nginx.frontend.conf
 ```
 
-其中：
+本机联调推荐：
 
-- `defaultSettings.ts` 中 `apiUrl` 推荐填写 `zhangyanc.club/argus`
-- `nginx.frontend.conf` 只负责前端静态资源
-- 对外统一入口由宿主机 Nginx 负责，配置文件见 `argus-end/ops/nginx.conf`
+```ts
+apiUrl: 'localhost:7777/argus'
+```
 
-## 宿主机准备
+如果后端也在本机启动，同时确认：
 
-当前部署方案依赖宿主机 Nginx 作为统一入口。
+```text
+argus-end/conf/dev.env
+```
 
-如果服务器还没安装 Nginx，先安装：
+至少要让后端跑在：
+
+```env
+SERVER_PORT=7777
+SERVER_REPORT=http://localhost:8000
+```
+
+并且本机已经启动：
+
+- `MySQL`
+- `Redis`
+- `RabbitMQ`
+- `RustFS / S3 兼容对象存储`
+
+启动命令：
+
+```bash
+cd ~/argus/argus-front
+npm install
+npm run start
+```
+
+## 服务器部署
+
+### 服务器部署前要改的地方
+
+1. `argus-front/config/defaultSettings.ts`
+2. `argus-front/ops/nginx.frontend.conf`
+3. `argus-end/ops/nginx.conf`
+4. `argus-end/conf/pro.env`
+
+如果你用域名部署：
+
+- `config/defaultSettings.ts` 的 `apiUrl` 改成 `你的域名/argus`
+- `ops/nginx.frontend.conf` 的 `server_name` 改成你的域名
+- `argus-end/ops/nginx.conf` 的 `server_name` 改成你的域名
+- `argus-end/conf/pro.env` 的 `SERVER_REPORT` 改成 `http://你的域名` 或 `https://你的域名`
+
+如果你用 IP 部署：
+
+- `config/defaultSettings.ts` 的 `apiUrl` 改成 `服务器IP/argus`
+- `ops/nginx.frontend.conf` 的 `server_name` 改成 `_`
+- `argus-end/ops/nginx.conf` 的 `server_name` 改成 `_`
+- `argus-end/conf/pro.env` 的 `SERVER_REPORT` 改成 `http://服务器IP`
+
+### 宿主机准备
 
 ```bash
 sudo apt update
 sudo apt install -y nginx
-```
-
-安装后确认服务状态：
-
-```bash
 sudo systemctl enable nginx
 sudo systemctl start nginx
-sudo systemctl status nginx
 ```
 
-宿主机 Nginx 实际转发配置文件在：
-
-```text
-argus-end/ops/nginx.conf
-```
-
-加载方式：
-
-```bash
-sudo cp ~/argus/argus-end/ops/nginx.conf /etc/nginx/conf.d/argus.conf
-sudo nginx -t
-sudo systemctl reload nginx
-```
-## 两套部署方式
-
-### 方案一：服务器自己构建
-
-使用文件：
-
-```text
-ops/docker-compose.yaml
-```
-
-首次部署 / 更新发布：
+### 方式一：服务器本机构建
 
 ```bash
 cd ~/argus/argus-front/ops
 docker-compose -f docker-compose.yaml up -d --build argus-front
 ```
 
-### 方案二：直接拉腾讯云公有镜像
-
-使用文件：
-
-```text
-ops/docker-compose.image.yaml
-```
-
-当前公有镜像：
-
-```bash
-docker pull ccr.ccs.tencentyun.com/zhangyancheng/argus-front:1.0
-```
-
-首次部署 / 更新发布：
+### 方式二：使用公有镜像
 
 ```bash
 cd ~/argus/argus-front/ops
@@ -108,43 +109,48 @@ docker-compose -f docker-compose.image.yaml pull argus-front
 docker-compose -f docker-compose.image.yaml up -d argus-front
 ```
 
-## 查看状态
+### Nginx
 
-自己构建版：
+前端静态资源文件：
+
+```text
+argus-front/ops/nginx.frontend.conf
+```
+
+宿主机统一入口文件：
+
+```text
+argus-end/ops/nginx.conf
+```
+
+加载命令：
+
+```bash
+sudo cp ~/argus/argus-end/ops/nginx.conf /etc/nginx/conf.d/argus.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 验证
+
+查看状态：
 
 ```bash
 cd ~/argus/argus-front/ops
 docker-compose -f docker-compose.yaml ps
-```
-
-公有镜像版：
-
-```bash
-cd ~/argus/argus-front/ops
 docker-compose -f docker-compose.image.yaml ps
 ```
 
-## 看日志
-
-自己构建版：
+查看日志：
 
 ```bash
 cd ~/argus/argus-front/ops
 docker-compose -f docker-compose.yaml logs -f argus-front
-```
-
-公有镜像版：
-
-```bash
-cd ~/argus/argus-front/ops
 docker-compose -f docker-compose.image.yaml logs -f argus-front
 ```
 
-## 说明
+能正常打开下面这些地址，就说明部署基本成功：
 
-- `docker-compose.yaml`：服务器自己构建前端镜像
-- `docker-compose.image.yaml`：直接拉腾讯云公有镜像
-- 前端容器对宿主机暴露 `8000`
-- 对外无端口访问由宿主机 Nginx 统一代理实现
-- `2核2G` 机器更推荐使用“公有镜像版”
-
+- `http://你的域名或IP/`
+- `http://你的域名或IP/docs`
+- `http://你的域名或IP/openapi.json`
