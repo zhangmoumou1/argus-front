@@ -743,6 +743,8 @@ const PageTopBar = ({
 
     const logo = document.querySelector('.ant-pro-sider .ant-pro-sider-logo') as HTMLElement | null;
 
+    const logoLink = document.querySelector('.ant-pro-sider .ant-pro-sider-logo a') as HTMLElement | null;
+
     const siderSpacers = getMobileSiderSpacers();
 
     if (!sider) {
@@ -766,6 +768,44 @@ const PageTopBar = ({
     menu?.classList.toggle('ant-pro-base-menu-vertical-collapsed', collapsed);
 
     logo?.classList.toggle('ant-pro-sider-logo-collapsed', collapsed);
+
+    if (logo) {
+
+      logo.style.setProperty('width', '100px', 'important');
+
+      logo.style.setProperty('padding-left', '0', 'important');
+
+      logo.style.setProperty('padding-right', '0', 'important');
+
+      logo.style.setProperty('justify-content', 'flex-start', 'important');
+
+      logo.style.setProperty('align-items', 'center', 'important');
+
+    }
+
+    if (logoLink) {
+
+      logoLink.style.setProperty('width', '100%', 'important');
+
+      logoLink.style.setProperty('margin-left', '0', 'important');
+
+      logoLink.style.setProperty('margin-right', '0', 'important');
+
+      logoLink.style.setProperty('padding-left', '6px', 'important');
+
+      logoLink.style.setProperty('padding-right', '0', 'important');
+
+      logoLink.style.setProperty('display', 'flex', 'important');
+
+      logoLink.style.setProperty('justify-content', 'flex-start', 'important');
+
+      logoLink.style.setProperty('align-items', 'center', 'important');
+
+      logoLink.style.setProperty('gap', '0', 'important');
+
+      logoLink.style.setProperty('transform', 'translate(9px, 14px)', 'important');
+
+    }
 
     siderSpacers.forEach((siderSpacer) => {
 
@@ -795,6 +835,16 @@ const PageTopBar = ({
 
     const nextCollapsed = !document.body.classList.contains('argus-sider-collapsed');
 
+    if (nextCollapsed) {
+
+      document.querySelectorAll('.ant-pro-sider .ant-menu-submenu-title[aria-expanded="true"]').forEach((title) => {
+
+        (title as HTMLElement).click();
+
+      });
+
+    }
+
     document.body.classList.toggle('argus-sider-collapsed', nextCollapsed);
 
     syncMobileSiderDom(nextCollapsed);
@@ -802,12 +852,6 @@ const PageTopBar = ({
     document.querySelectorAll('.ant-pro-sider .ant-menu-inline-collapsed').forEach((menu) => {
 
       menu.classList.remove('ant-menu-inline-collapsed');
-
-    });
-
-    document.querySelectorAll('.ant-menu-submenu-popup').forEach((popup) => {
-
-      popup.parentElement?.removeChild(popup);
 
     });
 
