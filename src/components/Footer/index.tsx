@@ -7,11 +7,12 @@ const Footer: React.FC = () => {
     <div
       style={{
         position: 'fixed',
-        left: 216,
-        right: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
         bottom: 12,
         zIndex: 100,
-        height: 40,
+        width: 'max-content',
+        maxWidth: 'calc(100vw - 24px)',
         textAlign: 'center',
         background: 'transparent',
       }}
@@ -20,6 +21,8 @@ const Footer: React.FC = () => {
         style={{
           display: 'inline-flex',
           alignItems: 'center',
+          justifyContent: 'center',
+          flexWrap: 'wrap',
           gap: 10,
           padding: '6px 14px',
           borderRadius: 999,

@@ -709,11 +709,95 @@ const PageTopBar = ({
 
 }) => {
 
+  const getMobileSiderSpacers = () => {
+
+    const layout = document.querySelector('.ant-layout.ant-layout-has-sider') as HTMLElement | null;
+
+    if (!layout) {
+
+      return [] as HTMLElement[];
+
+    }
+
+    return Array.from(layout.children).filter((node) => {
+
+      const el = node as HTMLElement;
+
+      return el.tagName === 'DIV' && !el.classList.contains('ant-pro-layout-container') && !el.classList.contains('ant-pro-sider');
+
+    }) as HTMLElement[];
+
+  };
+
+  const syncMobileSiderDom = (collapsed: boolean) => {
+
+    if (window.innerWidth >= 992) {
+
+      return;
+
+    }
+
+    const sider = document.querySelector('.ant-pro-sider') as HTMLElement | null;
+
+    const menu = document.querySelector('.ant-pro-sider .ant-menu') as HTMLElement | null;
+
+    const logo = document.querySelector('.ant-pro-sider .ant-pro-sider-logo') as HTMLElement | null;
+
+    const siderSpacers = getMobileSiderSpacers();
+
+    if (!sider) {
+
+      return;
+
+    }
+
+    sider.classList.toggle('ant-layout-sider-collapsed', collapsed);
+
+    sider.classList.toggle('ant-pro-sider-collapsed', collapsed);
+
+    sider.style.setProperty('width', '100px');
+
+    sider.style.setProperty('min-width', '100px');
+
+    sider.style.setProperty('max-width', '100px');
+
+    sider.style.setProperty('flex', '0 0 100px');
+
+    menu?.classList.toggle('ant-pro-base-menu-vertical-collapsed', collapsed);
+
+    logo?.classList.toggle('ant-pro-sider-logo-collapsed', collapsed);
+
+    siderSpacers.forEach((siderSpacer) => {
+
+      siderSpacer.style.setProperty('display', 'none');
+
+      siderSpacer.style.setProperty('width', '0');
+
+      siderSpacer.style.setProperty('min-width', '0');
+
+      siderSpacer.style.setProperty('max-width', '0');
+
+      siderSpacer.style.setProperty('flex', '0 0 0');
+
+      siderSpacer.style.setProperty('margin', '0');
+
+      siderSpacer.style.setProperty('padding', '0');
+
+      siderSpacer.style.setProperty('overflow', 'hidden');
+
+      siderSpacer.style.setProperty('transition', 'none');
+
+    });
+
+  };
+
   const onToggleSider = () => {
 
     const nextCollapsed = !document.body.classList.contains('argus-sider-collapsed');
 
     document.body.classList.toggle('argus-sider-collapsed', nextCollapsed);
+
+    syncMobileSiderDom(nextCollapsed);
 
     document.querySelectorAll('.ant-pro-sider .ant-menu-inline-collapsed').forEach((menu) => {
 
@@ -842,6 +926,134 @@ const GlobalPageShell = ({
     root.style.setProperty('--argus-accent-soft', accentSoft);
 
   }, [accent, accentSoft]);
+
+  useEffect(() => {
+
+    const getMobileSiderSpacers = () => {
+
+      const layout = document.querySelector('.ant-layout.ant-layout-has-sider') as HTMLElement | null;
+
+      if (!layout) {
+
+        return [] as HTMLElement[];
+
+      }
+
+      return Array.from(layout.children).filter((node) => {
+
+        const el = node as HTMLElement;
+
+        return el.tagName === 'DIV' && !el.classList.contains('ant-pro-layout-container') && !el.classList.contains('ant-pro-sider');
+
+      }) as HTMLElement[];
+
+    };
+
+    const syncMobileSiderState = () => {
+
+      const sider = document.querySelector('.ant-pro-sider') as HTMLElement | null;
+
+      const menu = document.querySelector('.ant-pro-sider .ant-menu') as HTMLElement | null;
+
+      const logo = document.querySelector('.ant-pro-sider .ant-pro-sider-logo') as HTMLElement | null;
+
+      const siderPlaceholders = getMobileSiderSpacers();
+
+      if (window.innerWidth < 992) {
+
+        document.body.classList.add('argus-sider-collapsed');
+
+        if (sider) {
+
+          sider.classList.add('ant-layout-sider-collapsed', 'ant-pro-sider-collapsed');
+
+          sider.style.setProperty('width', '290px');
+
+          sider.style.setProperty('min-width', '290px');
+
+          sider.style.setProperty('max-width', '290px');
+
+          sider.style.setProperty('flex', '0 0 290px');
+
+        }
+
+        menu?.classList.add('ant-pro-base-menu-vertical-collapsed');
+
+        logo?.classList.add('ant-pro-sider-logo-collapsed');
+
+        siderPlaceholders.forEach((siderPlaceholder) => {
+
+          siderPlaceholder.style.setProperty('display', 'none');
+
+          siderPlaceholder.style.setProperty('width', '0');
+
+          siderPlaceholder.style.setProperty('min-width', '0');
+
+          siderPlaceholder.style.setProperty('max-width', '0');
+
+          siderPlaceholder.style.setProperty('flex', '0 0 0');
+
+          siderPlaceholder.style.setProperty('margin', '0');
+
+          siderPlaceholder.style.setProperty('padding', '0');
+
+          siderPlaceholder.style.setProperty('overflow', 'hidden');
+
+        });
+
+      } else {
+
+        document.body.classList.remove('argus-sider-collapsed');
+
+        if (sider) {
+
+          sider.classList.remove('ant-layout-sider-collapsed', 'ant-pro-sider-collapsed');
+
+          sider.style.removeProperty('width');
+
+          sider.style.removeProperty('min-width');
+
+          sider.style.removeProperty('max-width');
+
+          sider.style.removeProperty('flex');
+
+        }
+
+        menu?.classList.remove('ant-pro-base-menu-vertical-collapsed');
+
+        logo?.classList.remove('ant-pro-sider-logo-collapsed');
+
+        siderPlaceholders.forEach((siderPlaceholder) => {
+
+          siderPlaceholder.style.removeProperty('display');
+
+          siderPlaceholder.style.removeProperty('width');
+
+          siderPlaceholder.style.removeProperty('min-width');
+
+          siderPlaceholder.style.removeProperty('max-width');
+
+          siderPlaceholder.style.removeProperty('flex');
+
+          siderPlaceholder.style.removeProperty('margin');
+
+          siderPlaceholder.style.removeProperty('padding');
+
+          siderPlaceholder.style.removeProperty('overflow');
+
+        });
+
+      }
+
+    };
+
+    syncMobileSiderState();
+
+    window.addEventListener('resize', syncMobileSiderState);
+
+    return () => window.removeEventListener('resize', syncMobileSiderState);
+
+  }, []);
 
 
 
@@ -1107,6 +1319,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
   return {
 
     siderWidth: 290,
+    disableMobile: true,
 
     headerRender: false,
 
@@ -1273,4 +1486,10 @@ export const request = {
   ...errorConfig,
 
 };
+
+
+
+
+
+
 
