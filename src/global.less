@@ -737,7 +737,7 @@ body,
   height: auto !important;
   line-height: 20px !important;
   margin: 0 0 2px !important;
-  padding-left: 5px !important;
+  padding-left: 21px !important;
   color: #667085 !important;
   font-size: 13px !important;
   border-radius: 8px !important;
@@ -750,9 +750,13 @@ body,
 .ant-pro-sider-menu .ant-menu-sub .ant-pro-base-menu-inline-item-text-has-icon {
   display: flex !important;
   align-items: center !important;
-  margin-left: 10px !important;
-  margin-inline-start: 10px !important;
+  flex: 1 1 auto !important;
+  width: auto !important;
+  margin-left: 0 !important;
+  margin-inline-start: 0 !important;
   line-height: 20px !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
 }
 
 .ant-pro-sider-menu .ant-menu-sub .ant-menu-item-selected {
@@ -1730,4 +1734,42 @@ body.argus-sider-collapsed .argus-page-shell__content {
     min-width: 10px !important;
     font-size: 12px !important;
   }
+}
+
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item .ant-menu-title-content,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item .ant-menu-title-content > a,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item .ant-pro-base-menu-inline-item-title,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item .ant-pro-base-menu-inline-item-text,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item .ant-pro-base-menu-inline-item-text-has-icon,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected .ant-menu-title-content,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected .ant-menu-title-content > a,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected .ant-pro-base-menu-inline-item-title,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected .ant-pro-base-menu-inline-item-text,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected .ant-pro-base-menu-inline-item-text-has-icon {
+  margin-left: 10px !important;
+  margin-inline-start: 10px !important;
+}
+
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 38px !important;
+  height: auto !important;
+  line-height: 20px !important;
+  padding-left: 21px !important;
+  font-weight: 500 !important;
+}
+
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item .ant-menu-title-content,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item .ant-menu-title-content > a,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected .ant-menu-title-content,
+body:not(.argus-sider-collapsed) .ant-pro-sider .ant-menu-sub .ant-menu-item-selected .ant-menu-title-content > a {
+  font-weight: 500 !important;
+  flex: 1 1 auto !important;
+  width: auto !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  margin-left: 0 !important;
+  margin-inline-start: 0 !important;
 }
