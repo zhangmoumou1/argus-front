@@ -85,6 +85,30 @@ export async function deleteTestCaseAsserts(data) {
   });
 }
 
+export async function insertTestCaseOutParameters(data) {
+  return request(`${CONFIG.URL}/testcase/parameters/insert`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function updateTestCaseOutParameters(data) {
+  return request(`${CONFIG.URL}/testcase/parameters/update`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function deleteTestCaseOutParameters(data) {
+  return request(`${CONFIG.URL}/testcase/parameters/delete`, {
+    method: 'GET',
+    params: data,
+    headers: auth.headers(),
+  });
+}
+
 export async function queryXmindData(params) {
   return request(`${CONFIG.URL}/testcase/xmind`, {
     method: 'GET',

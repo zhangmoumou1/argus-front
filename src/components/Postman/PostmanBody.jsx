@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   Button,
   Card,
@@ -6,6 +6,7 @@ import {
   Dropdown,
   Form,
   Input,
+  message,
   Menu,
   notification,
   Radio,
@@ -73,6 +74,7 @@ const PostmanBody = ({
   const [url, setUrl] = useState('');
   const [editor, setEditor] = useState(null);
   const [open, setOpen] = useState(false);
+  const responseRef = useRef(null);
   const {ossFileList, envMap, addressList} = gconfig;
 
   const parseFormData = () => {
@@ -130,6 +132,18 @@ const PostmanBody = ({
   useEffect(() => {
     init()
   }, [body, assetQueryParams])
+
+  useEffect(() => {
+    if (!response || Object.keys(response).length === 0 || !responseRef.current) {
+      return;
+    }
+    setTimeout(() => {
+      responseRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 0);
+  }, [response]);
 
 
   // 请求url+params
@@ -217,10 +231,47 @@ const PostmanBody = ({
     return result;
   };
 
+  const isAbsoluteUrl = (value) => /^https?:\/\//i.test((value || '').trim());
+
+  const resolveBasePathGateway = () => {
+    const basePath = form.getFieldValue('base_path');
+    if (!basePath || !currentAddress[basePath]) {
+      return '';
+    }
+    const gatewayMap = currentAddress[basePath];
+    return Object.values(gatewayMap).find((item) => !!item) || '';
+  };
+
+  const buildRequestUrl = () => {
+    const rawUrl = (form.getFieldValue('url') || '').trim();
+    if (!rawUrl || isAbsoluteUrl(rawUrl)) {
+      return rawUrl;
+    }
+    const gateway = resolveBasePathGateway();
+    if (!gateway) {
+      return rawUrl;
+    }
+    const normalizedGateway = gateway.replace(/\/+$/, '');
+    const normalizedPath = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
+    return `${normalizedGateway}${normalizedPath}`;
+  };
+
   // 拼接http请求
   const onRequest = async () => {
-    const url = form.getFieldValue('url')
-    if (url === '') {
+    try {
+      await form.validateFields(['request_method', 'url']);
+    } catch (e) {
+      return;
+    }
+    const requestMethod = form.getFieldValue('request_method');
+    const url = form.getFieldValue('url');
+    if (!requestMethod) {
+      notification.error({
+        message: '请求方式不能为空',
+      });
+      return;
+    }
+    if (!url) {
       notification.error({
         message: '请求Url不能为空',
       });
@@ -228,8 +279,8 @@ const PostmanBody = ({
     }
     setLoading(true);
     const params = {
-      method: method || 'GET',
-      url,
+      method: requestMethod || method || 'GET',
+      url: buildRequestUrl(),
       body,
       body_type: bodyType,
       headers: getHeaders(),
@@ -239,7 +290,8 @@ const PostmanBody = ({
     }
     const res = await httpRequest(params);
     setLoading(false);
-    if (auth.response(res, true)) {
+    if (auth.response(res, false)) {
+      message.success('请求成功');
       setResponse(res.data);
     }
   };
@@ -532,7 +584,7 @@ const PostmanBody = ({
           </TabPane>
           </Tabs>
       </Row>
-      <Row gutter={[8, 8]}>
+      <Row gutter={[8, 8]} ref={responseRef}>
         {Object.keys(response).length === 0 ? null : (
           <Tabs style={{width: '100%'}} tabBarExtraContent={tabExtra(response)}>
             <TabPane tab="Body" key="1">

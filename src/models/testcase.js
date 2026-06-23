@@ -5,10 +5,12 @@ import {
   copyTestCase,
   deleteTestcase,
   deleteTestCaseAsserts,
+  deleteTestCaseOutParameters,
   deleteTestcaseData,
   deleteTestcaseDirectory,
   generateCase,
   insertTestCaseAsserts,
+  insertTestCaseOutParameters,
   insertTestcaseData,
   insertTestcaseDirectory,
   listTestcase,
@@ -23,6 +25,7 @@ import {
   stopRecord,
   updateTestCase,
   updateTestCaseAsserts,
+  updateTestCaseOutParameters,
   updateTestcaseData,
   updateTestcaseDirectory
 } from "@/services/testcase";
@@ -198,10 +201,7 @@ export default {
             // constructors: res.data.constructors.map((v, index) => ({...v, index})),
             constructors_case: res.data.constructors_case,
             testData: res.data.test_data,
-            outParameters: [...res.data.out_parameters.map((item, index) => ({...item, key: index})), {
-              key: res.data.out_parameters.length,
-              source: 0
-            }]
+            outParameters: (res.data.out_parameters || []).map((item, index) => ({...item, key: index}))
           }
         })
       }
@@ -227,10 +227,7 @@ export default {
           type: 'save',
           payload: {
             caseInfo: res.data.case_info,
-            outParameters: [...res.data.out_parameters.map((item, index) => ({...item, key: index})), {
-              key: res.data.out_parameters.length,
-              source: 0
-            }],
+            outParameters: (res.data.out_parameters || []).map((item, index) => ({...item, key: index})),
             editing: false,
           }
         })
@@ -263,6 +260,17 @@ export default {
     },
     * deleteTestCaseAsserts({payload}, {call, put}) {
       const res = yield call(deleteTestCaseAsserts, payload)
+      return auth.response(res, true);
+    },
+
+    * insertTestCaseOutParameters({payload}, {call, put}) {
+      return yield call(insertTestCaseOutParameters, payload)
+    },
+    * updateTestCaseOutParameters({payload}, {call, put}) {
+      return yield call(updateTestCaseOutParameters, payload)
+    },
+    * deleteTestCaseOutParameters({payload}, {call, put}) {
+      const res = yield call(deleteTestCaseOutParameters, payload)
       return auth.response(res, true);
     },
 

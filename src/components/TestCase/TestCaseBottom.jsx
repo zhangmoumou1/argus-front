@@ -696,7 +696,6 @@ const TestCaseBottom = ({
                   setBodyType={setBodyType}
                   assetQueryParams={assetQueryParams}
                   bordered={false}
-                  save={onSubmit}
                   editable={editable}
                 />
               </Col>
@@ -715,14 +714,12 @@ const TestCaseBottom = ({
               </span>
             }
           >
-            <div style={!editable ? {pointerEvents: 'none', opacity: 0.75} : {}}>
-              <TestCaseOutParameters
-                caseId={case_id}
-                createMode={createMode}
-                dispatch={dispatch}
-                testcase={testcase}
-              />
-            </div>
+            <TestCaseOutParameters
+              caseId={case_id}
+              createMode={createMode}
+              dispatch={dispatch}
+              testcase={testcase}
+            />
           </TabPane>
           <TabPane
             key="5"

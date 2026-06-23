@@ -4,7 +4,7 @@ import styles from "@/components/Drawer/CaseDetail.less";
 import getComponent from "@/components/ArgusForm";
 import fields from "@/consts/fields";
 import React, {useEffect, useState} from "react";
-import {PlayCircleOutlined, SaveOutlined} from "@ant-design/icons";
+import {SaveOutlined} from "@ant-design/icons";
 import TestCaseBottom from "@/components/TestCase/TestCaseBottom";
 import {
   getApiEndpointSample,
@@ -32,7 +32,7 @@ const TestCaseEditor = ({
                           setBodyType,
                           setSuffix,
                           onSubmit,
-                        create = false
+                          create = false
                         }) => {
 
   const {caseInfo} = testcase;
@@ -325,19 +325,20 @@ const TestCaseEditor = ({
     >
       <Card title={<span className={styles.caseTitle}>接口信息</span>}
             extra={
-              create ? null :
-                <>
-                  <Button type="primary" onClick={async () => {
-                    await onSubmit(create)
-                  }}><SaveOutlined/> 提交</Button>
-                  {!create ? <Button style={{marginLeft: 8}} onClick={() => {
-                      dispatch({
-                        type: 'testcase/save',
-                        payload: {editing: false}
-                      })
-                    }}><SaveOutlined/> 取消</Button> :
-                    <Button style={{marginLeft: 8}}><PlayCircleOutlined/> 测试</Button>}
-                </>}>
+              <>
+                <Button type="primary" onClick={async () => {
+                  await onSubmit(create)
+                }}><SaveOutlined/> 提交</Button>
+                {!create ? (
+                  <Button style={{marginLeft: 8}} onClick={() => {
+                    dispatch({
+                      type: 'testcase/save',
+                      payload: {editing: false}
+                    })
+                  }}><SaveOutlined/> 取消</Button>
+                ) : null}
+              </>
+            }>
         <Row gutter={[8, 8]}>
           {
             fields.CaseDetail.map(item => <Col key={item.name} span={item.span || 24}>

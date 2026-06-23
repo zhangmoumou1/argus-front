@@ -68,6 +68,57 @@ export default {
     },
   ],
 
+  CaseOutParameters: [
+    {
+      name: 'name',
+      label: '出参名',
+      required: true,
+      message: '请输入出参名',
+      type: 'input',
+      placeholder: '请输入出参名',
+      component: null,
+      span: 24,
+    },
+    {
+      name: 'source',
+      label: '来源',
+      required: true,
+      message: '请选择来源',
+      component: <Select placeholder="请选择来源">
+        <Option value={0}>Response: 正则</Option>
+        <Option value={1}>Response: JSONPath</Option>
+        <Option value={2}>Header: K/V</Option>
+        <Option value={3}>Cookie: K/V</Option>
+        <Option value={4}>响应状态码</Option>
+        <Option value={5}>Body: 正则</Option>
+        <Option value={6}>Body: JSONPath</Option>
+        <Option value={7}>Request Header: K/V</Option>
+      </Select>,
+      type: 'select',
+      span: 24,
+    },
+    {
+      name: 'expression',
+      label: '解析表达式',
+      required: false,
+      message: '请输入解析表达式',
+      type: 'input',
+      placeholder: '请输入解析表达式',
+      component: null,
+      span: 24,
+    },
+    {
+      name: 'match_index',
+      label: '第几个匹配项',
+      required: false,
+      message: '请输入匹配项',
+      type: 'input',
+      placeholder: '请输入匹配项',
+      component: null,
+      span: 24,
+    },
+  ],
+
   CaseDetail: [
     {
       name: 'name',
