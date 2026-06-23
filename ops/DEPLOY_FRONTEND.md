@@ -44,7 +44,7 @@ argus-end/conf/dev.env
 
 ```env
 SERVER_PORT=7777
-SERVER_REPORT=http://localhost:8000
+PUBLIC_BASE_URL=http://localhost:8000
 ```
 
 并且本机已经启动：
@@ -76,14 +76,14 @@ npm run start
 - `config/defaultSettings.ts` 的 `apiUrl` 改成 `你的域名/argus`
 - `ops/nginx.frontend.conf` 的 `server_name` 改成你的域名
 - `argus-end/ops/nginx.conf` 的 `server_name` 改成你的域名
-- `argus-end/conf/pro.env` 的 `SERVER_REPORT` 改成 `http://你的域名` 或 `https://你的域名`
+- `argus-end/conf/pro.env` 的 `PUBLIC_BASE_URL` 改成 `http://你的域名` 或 `https://你的域名`
 
 如果你用 IP 部署：
 
 - `config/defaultSettings.ts` 的 `apiUrl` 改成 `服务器IP/argus`
 - `ops/nginx.frontend.conf` 的 `server_name` 改成 `_`
 - `argus-end/ops/nginx.conf` 的 `server_name` 改成 `_`
-- `argus-end/conf/pro.env` 的 `SERVER_REPORT` 改成 `http://服务器IP`
+- `argus-end/conf/pro.env` 的 `PUBLIC_BASE_URL` 改成 `http://服务器IP`
 
 ### 宿主机准备
 
