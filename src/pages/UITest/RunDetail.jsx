@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -36,7 +36,13 @@ import {
 } from '@ant-design/icons';
 import { useParams, useLocation } from '@umijs/max';
 import auth from '@/utils/auth';
-import { getUiTestRunDetail, getUiTestRunStepDetail, querySharedUiTestRunDetail } from '@/services/uiTest';
+import {
+  getUiTestRunDetail,
+  getUiTestRunStepDetail,
+  querySharedUiTestRunDetail,
+  subscribeSharedUiTestRunStream,
+  subscribeUiTestRunStream,
+} from '@/services/uiTest';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import Pie from '@/components/Charts/Pie';
@@ -231,8 +237,18 @@ const RunDetail = () => {
   const [selectedStep, setSelectedStep] = useState(null);
   const [stepDetailLoading, setStepDetailLoading] = useState(false);
   const [expandedCaseKeys, setExpandedCaseKeys] = useState([]);
+  const runStreamRef = useRef(null);
 
-  const fetchDetail = async () => {
+  const applyRunPayload = useCallback((next) => {
+    setPayload(next);
+    setSelectedStep((prev) => {
+      if (!prev?.id || !next) return prev;
+      const latestStep = (next.steps || []).find((item) => String(item.id) === String(prev.id));
+      return latestStep ? { ...prev, ...latestStep } : prev;
+    });
+  }, []);
+
+  const fetchDetail = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     const api = isShared ? querySharedUiTestRunDetail : getUiTestRunDetail;
@@ -244,18 +260,13 @@ const RunDetail = () => {
     if (isShared) {
       if (res?.code === 0) {
         const next = res.data || res;
-        setPayload(next);
+        applyRunPayload(next);
       }
     } else if (auth.response(res)) {
       const next = res.data || res;
-      setPayload(next);
-      setSelectedStep((prev) => {
-        if (!prev?.id) return prev;
-        const latestStep = (next.steps || []).find((item) => String(item.id) === String(prev.id));
-        return latestStep ? { ...prev, ...latestStep } : prev;
-      });
+      applyRunPayload(next);
     }
-  };
+  }, [applyRunPayload, id, isShared]);
 
   const openStepDetail = async (step) => {
     if (!step?.id) {
@@ -273,7 +284,40 @@ const RunDetail = () => {
 
   useEffect(() => {
     fetchDetail();
-  }, [id]);
+  }, [fetchDetail]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    runStreamRef.current?.close?.();
+    const subscribe = isShared ? subscribeSharedUiTestRunStream : subscribeUiTestRunStream;
+    const stream = subscribe(
+      {
+        id,
+        include_step_artifacts: false,
+        include_step_payload: true,
+        include_payload: true,
+        include_artifacts: true,
+      },
+      {
+        onMessage: (event, data) => {
+          if (event === 'snapshot' && data?.run) {
+            setLoading(false);
+            applyRunPayload(data.run);
+          }
+          if (event === 'done' || data?.done) {
+            stream.close();
+          }
+        },
+      },
+    );
+    runStreamRef.current = stream;
+    return () => {
+      stream.close();
+      if (runStreamRef.current === stream) {
+        runStreamRef.current = null;
+      }
+    };
+  }, [applyRunPayload, id, isShared]);
 
 
   const getShareName = () => payload?.run_name || `UI测试报告_${id}`;

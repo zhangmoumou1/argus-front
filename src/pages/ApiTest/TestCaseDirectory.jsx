@@ -214,6 +214,61 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
   const [reviewStatus, setReviewStatus] = useState('no_impact');
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [treePaneSize, setTreePaneSize] = useState(320);
+  const [searchText, setSearchText] = useState('');
+  const [treeExpandedKeys, setTreeExpandedKeys] = useState([]);
+  const [treeAutoExpandParent, setTreeAutoExpandParent] = useState(true);
+
+  // Search helpers for tree
+  const flattenTree = (data) => {
+    const list = [];
+    const walk = (nodes) => {
+      nodes.forEach(node => {
+        list.push({key: node.key, title: node.title});
+        if (node.children) walk(node.children);
+      });
+    };
+    walk(data);
+    return list;
+  };
+
+  const getParentKey = (key, tree) => {
+    let parentKey;
+    for (let i = 0; i < tree.length; i++) {
+      const node = tree[i];
+      if (node.children) {
+        if (node.children.some(item => item.key === key)) {
+          parentKey = node.key;
+        } else if (getParentKey(key, node.children)) {
+          parentKey = getParentKey(key, node.children);
+        }
+      }
+    }
+    return parentKey;
+  };
+
+  const computeExpandedKeys = (value, tree) => {
+    const flat = flattenTree(tree);
+    return flat
+      .map(item => item.title.indexOf(value) > -1 ? getParentKey(item.key, tree) : null)
+      .filter((item, i, self) => item && self.indexOf(item) === i);
+  };
+
+  const handleTreeSearch = (value) => {
+    setSearchText(value);
+    setTreeExpandedKeys(computeExpandedKeys(value, directory));
+    setTreeAutoExpandParent(true);
+  };
+
+  const handleTreeSearchSubmit = () => {
+    setTreeExpandedKeys(computeExpandedKeys(searchText, directory));
+    setTreeAutoExpandParent(true);
+  };
+
+  const handleTreeReset = () => {
+    setSearchText('');
+    setTreeExpandedKeys([]);
+    setTreeAutoExpandParent(true);
+  };
   const [aiForm] = Form.useForm();
 
   const [aiModelOptions, setAiModelOptions] = useState([]);
@@ -1496,21 +1551,6 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
 
 
 
-  const AddDirectory = (
-    <Tooltip title="点击可新建根目录, 子目录需要在树上新建">
-      <span
-        className="directoryButton interface-tree-add-btn"
-        onClick={() => {
-          setRootModal(true);
-          setRecord({name: ''});
-          setModalTitle('新建根目录');
-          setCurrentNode(null);
-        }}
-      >
-        <PlusOutlined className="interface-tree-add-icon"/>
-      </span>
-    </Tooltip>
-  );
 
 
   const onAddTestCase = () => {
@@ -2546,30 +2586,62 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                     />
                   </Tooltip>
                 </div>
-                <div className="interface-project-switch">
-                  <Select
-                    className="interface-project-select"
-                    showSearch
-                    allowClear
-                    placeholder="请选择项目"
-                    value={project_id}
-                    onChange={(value) => {
-                      if (value !== undefined) {
-                        save({project_id: value});
-                      } else {
-                        save({project_id: undefined});
+                <div className="interface-tree-toolbar">
+                  <div className="interface-project-switch">
+                    <Select
+                      className="interface-project-select"
+                      showSearch
+                      allowClear
+                      placeholder="请选择项目"
+                      value={project_id}
+                      onChange={(value) => {
+                        if (value !== undefined) {
+                          save({project_id: value});
+                        } else {
+                          save({project_id: undefined});
+                        }
+                      }}
+                      filterOption={(input, option) =>
+                        String(option?.children || '').toLowerCase().includes(input.toLowerCase())
                       }
-                    }}
-                    filterOption={(input, option) =>
-                      String(option?.children || '').toLowerCase().includes(input.toLowerCase())
-                    }
-                  >
-                    {projects.map((item) => (
-                      <Option key={item.id} value={item.id}>
-                        {item.name}
-                      </Option>
-                    ))}
-                  </Select>
+                    >
+                      {projects.map((item) => (
+                        <Option key={item.id} value={item.id}>
+                          {item.name}
+                        </Option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="interface-tree-search">
+                    <Input
+                      size="small"
+                      className="treeSearch"
+                      placeholder="输入要查找的目录"
+                      prefix={<SearchOutlined />}
+                      value={searchText}
+                      onChange={(e) => handleTreeSearch(e.target.value)}
+                      onPressEnter={handleTreeSearchSubmit}
+                    />
+                    <Tooltip title="查询">
+                      <SearchOutlined className="toolbar-button" onClick={handleTreeSearchSubmit} />
+                    </Tooltip>
+                    <Tooltip title="重置">
+                      <ReloadOutlined className="toolbar-button" onClick={handleTreeReset} />
+                    </Tooltip>
+                    <Tooltip title="点击可新建根目录, 子目录需要在树上新建">
+                      <span
+                        className="interface-tree-add-btn"
+                        onClick={() => {
+                          setRootModal(true);
+                          setRecord({name: ''});
+                          setModalTitle('新建根目录');
+                          setCurrentNode(null);
+                        }}
+                      >
+                        <PlusOutlined className="interface-tree-add-icon"/>
+                      </span>
+                    </Tooltip>
+                  </div>
                 </div>
 
                   {pendingReviewRows.length > 0 && (
@@ -2609,8 +2681,13 @@ const TestCaseDirectory = ({testcase, gconfig, project, user, loading, dispatch}
                       <SearchTree
                         treeData={directory}
                         menu={content}
-                        addDirectory={AddDirectory}
-
+                        searchValue={searchText}
+                        expandedKeys={treeExpandedKeys}
+                        autoExpandParent={treeAutoExpandParent}
+                        onExpand={(keys) => {
+                          setTreeExpandedKeys(keys);
+                          setTreeAutoExpandParent(false);
+                        }}
                         onSelect={(keys) => {
 
                           saveCase({

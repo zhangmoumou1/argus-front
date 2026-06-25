@@ -114,6 +114,7 @@ import {
   listUiTestCases,
   listUiTestRuns,
   previewUiTestDsl,
+  subscribeUiTestDebugStream,
   stopUiTestRun,
   trialRunUiTestCase,
   trialRunUiTestCases,
@@ -1551,6 +1552,8 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
   const waitingCaseRenderRef = useRef(false);
   const handledGeneratedViewRef = useRef('');
   const internalClipboardRef = useRef({ data: null, at: 0, source: '' });
+  const uiDebugFocusedRunIdRef = useRef(0);
+  const uiDebugStreamRef = useRef(null);
   const [directoryTree, setDirectoryTree] = useState([]);
   const [caseFiles, setCaseFiles] = useState([]);
   const [currentDirectory, setCurrentDirectory] = useState(null);
@@ -1659,11 +1662,16 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
   const [uiDebugLoading, setUiDebugLoading] = useState(false);
   const [uiDebugDetail, setUiDebugDetail] = useState(null);
   const [uiDebugDetailLoading, setUiDebugDetailLoading] = useState(false);
+  const [uiDebugFocusedRunId, setUiDebugFocusedRunId] = useState(0);
   const [uiImagePreview, setUiImagePreview] = useState({ open: false, title: '', src: '' });
   const caseLabel = uiOnly ? 'UI用例' : '功能用例';
   const caseTreeLabel = uiOnly ? 'UI用例树' : '功能用例树';
   const caseCanvasLabel = uiOnly ? 'UI用例脑图' : '功能用例脑图';
   const emptyCanvasHint = uiOnly ? `选择一个${caseLabel}后开始查看` : `选择或新增一个${caseLabel}后开始编辑`;
+  useEffect(() => {
+    uiDebugFocusedRunIdRef.current = Number(uiDebugFocusedRunId || 0);
+  }, [uiDebugFocusedRunId]);
+
   const openFunctionalCaseEditor = useCallback((caseId = currentCase?.id) => {
     const query = new URLSearchParams();
     if (projectId) {
@@ -2365,8 +2373,22 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
     }
   }, [appliedKeyword, projectId, uiOnly, caseTreeLabel]);
 
+  const applyUiDebugStreamSnapshot = useCallback((snapshot) => {
+    const list = Array.isArray(snapshot?.runs) ? snapshot.runs : [];
+    const nextDetail = snapshot?.detail || null;
+    const nextFocusedRunId = Number(snapshot?.active_run_id || nextDetail?.id || uiDebugFocusedRunIdRef.current || list[0]?.id || 0);
+    setUiDebugRuns(list);
+    setUiDebugFocusedRunId(nextFocusedRunId);
+    if (nextDetail || list.length === 0) {
+      setUiDebugDetail(nextDetail);
+    }
+    setUiDebugLoading(false);
+    setUiDebugDetailLoading(false);
+  }, []);
+
   const fetchUiDebugDetail = useCallback(async (runId) => {
     if (!runId) return;
+    setUiDebugFocusedRunId(runId);
     setUiDebugDetailLoading(true);
     try {
       const res = await getUiTestRunDetail({
@@ -2395,13 +2417,14 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
         case_ref_id: node.id,
         scope: 'debug',
         page: 1,
-        size: 5,
+        size: 100,
         paged: true,
       });
       if (res?.code === 0) {
         const list = Array.isArray(res?.data?.list) ? res.data.list : (Array.isArray(res?.data) ? res.data : []);
         setUiDebugRuns(list);
-        const targetRunId = focusRunId || uiDebugDetail?.id || list[0]?.id;
+        const targetRunId = focusRunId || uiDebugFocusedRunIdRef.current || uiDebugDetail?.id || list[0]?.id;
+        setUiDebugFocusedRunId(Number(targetRunId || 0));
         if (targetRunId) {
           fetchUiDebugDetail(targetRunId);
         } else {
@@ -2537,6 +2560,43 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
     if (!uiOnly || !uiNodeDrawerOpen || uiDrawerActiveTab !== 'debug' || !uiSelectedNode?.id) return;
     fetchUiDebugRuns(uiSelectedNode);
   }, [fetchUiDebugRuns, uiDrawerActiveTab, uiNodeDrawerOpen, uiOnly, uiSelectedNode]);
+
+  useEffect(() => {
+    if (!uiOnly || !uiNodeDrawerOpen || uiDrawerActiveTab !== 'debug' || !uiSelectedNode?.id || !projectId) {
+      uiDebugStreamRef.current?.close?.();
+      uiDebugStreamRef.current = null;
+      return undefined;
+    }
+    setUiDebugLoading(true);
+    if (uiDebugFocusedRunIdRef.current > 0) {
+      setUiDebugDetailLoading(true);
+    }
+    const stream = subscribeUiTestDebugStream(
+      {
+        project_id: projectId,
+        case_ref_id: uiSelectedNode.id,
+        focus_run_id: uiDebugFocusedRunId || undefined,
+        include_payload: true,
+        include_artifacts: true,
+        include_step_payload: false,
+        include_step_artifacts: true,
+      },
+      {
+        onMessage: (event, data) => {
+          if (event === 'snapshot') {
+            applyUiDebugStreamSnapshot(data);
+          }
+        },
+      },
+    );
+    uiDebugStreamRef.current = stream;
+    return () => {
+      stream.close();
+      if (uiDebugStreamRef.current === stream) {
+        uiDebugStreamRef.current = null;
+      }
+    };
+  }, [applyUiDebugStreamSnapshot, projectId, uiDebugFocusedRunId, uiDrawerActiveTab, uiNodeDrawerOpen, uiOnly, uiSelectedNode]);
 
   const clearRenderFrame = useCallback(() => {
     if (renderFrameRef.current) {
@@ -5490,72 +5550,74 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
               />
             </Tooltip>
           </div>
-          <div className="functional-project-switch">
-            <Select
-              className="functional-project-select"
-              showSearch
-              allowClear
-              placeholder="请选择项目"
-              value={projectId}
-              onChange={(value) => {
-                if (value !== undefined) {
-                  saveProject(value);
+          <div className="functional-tree-toolbar">
+            <div className="functional-project-switch">
+              <Select
+                className="functional-project-select"
+                showSearch
+                allowClear
+                placeholder="请选择项目"
+                value={projectId}
+                onChange={(value) => {
+                  if (value !== undefined) {
+                    saveProject(value);
+                  }
+                  setCurrentDirectory(null);
+                  setCurrentCase(null);
+                  destroyMindMap();
+                }}
+                filterOption={(input, option) =>
+                  String(option?.children || '').toLowerCase().includes(input.toLowerCase())
                 }
-                setCurrentDirectory(null);
-                setCurrentCase(null);
-                destroyMindMap();
-              }}
-              filterOption={(input, option) =>
-                String(option?.children || '').toLowerCase().includes(input.toLowerCase())
-              }
-            >
-              {projects.map((item) => (
-                <Option key={item.id} value={item.id}>
-                  {item.name}
-                </Option>
-              ))}
-            </Select>
-          </div>
-          <div className="functional-tree-search">
-            <Input
-              size="small"
-              className="treeSearch"
-              placeholder="输入目录或用例名称"
-              prefix={<SearchOutlined />}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onPressEnter={async () => {
-                if (!projectId) return;
-                setAppliedKeyword(searchText.trim());
-                await fetchTree(searchText.trim());
-              }}
-            />
-            <Tooltip title="查询">
-              <SearchOutlined
-                className="directoryButton functional-search-action"
-                onClick={async () => {
+              >
+                {projects.map((item) => (
+                  <Option key={item.id} value={item.id}>
+                    {item.name}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+            <div className="functional-tree-search">
+              <Input
+                size="small"
+                className="treeSearch"
+                placeholder="输入目录或用例名称"
+                prefix={<SearchOutlined />}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onPressEnter={async () => {
                   if (!projectId) return;
                   setAppliedKeyword(searchText.trim());
                   await fetchTree(searchText.trim());
                 }}
               />
-            </Tooltip>
-            <Tooltip title="重置">
-              <ReloadOutlined
-                className="directoryButton functional-search-action"
-                onClick={async () => {
-                  if (!projectId) return;
-                  setSearchText('');
-                  setAppliedKeyword('');
-                  await fetchTree('');
-                }}
-              />
-            </Tooltip>
-            <Tooltip title="点击可新建根目录，子目录需要在树上新建">
-              {!uiOnly ? (
-                <PlusOutlined className="directoryButton functional-root-add" onClick={() => projectId && openDirectoryModal()} />
-              ) : null}
-            </Tooltip>
+              <Tooltip title="查询">
+                <SearchOutlined
+                  className="toolbar-button"
+                  onClick={async () => {
+                    if (!projectId) return;
+                    setAppliedKeyword(searchText.trim());
+                    await fetchTree(searchText.trim());
+                  }}
+                />
+              </Tooltip>
+              <Tooltip title="重置">
+                <ReloadOutlined
+                  className="toolbar-button"
+                  onClick={async () => {
+                    if (!projectId) return;
+                    setSearchText('');
+                    setAppliedKeyword('');
+                    await fetchTree('');
+                  }}
+                />
+              </Tooltip>
+              <Tooltip title="点击可新建根目录，子目录需要在树上新建">
+                {!uiOnly ? (
+                  <PlusOutlined className="toolbar-button" onClick={() => projectId && openDirectoryModal()} />
+                ) : null}
+              </Tooltip>
+            </div>
           </div>
           <div className="functional-panel-body">
             <Spin spinning={loadingTree}>
@@ -6304,7 +6366,6 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
             <Tag style={{ margin: 0, borderRadius: 999, background: '#f8fafc' }}>
               {currentUiCaseMeta?.file_title || currentCase?.title || 'UI 用例'}
             </Tag>
-            <Badge count={uiDrawerNodes.length} style={{ backgroundColor: uiPalette.primary, transform: 'scale(0.85)', transformOrigin: 'left center' }} />
           </Space>
         }
         open={uiNodeDrawerOpen}
@@ -6315,19 +6376,35 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
           setUiDrawerActiveTab('dsl');
         }}
         styles={{
-          body: { background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)', padding: 0 },
+          body: {
+            background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+            padding: 0,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          },
           header: { borderBottom: `1px solid ${uiPalette.border}` },
         }}
       >
-        <Spin spinning={uiNodeDrawerLoading}>
-          <div className="functional-ui-drawer functional-ui-drawer-single">
+        {uiNodeDrawerLoading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <Spin />
+          </div>
+        ) : (
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div className="functional-ui-drawer functional-ui-drawer-single" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             {uiDrawerActiveTab === 'debug' ? (
-              <div style={{ padding: 20 }}>
+              <div className="functional-ui-dsl-layout functional-ui-debug-layout">
                 {uiSelectedNode ? (
-                  <Row gutter={16}>
+                  <Row gutter={16} className="functional-ui-dsl-row">
                     <Col xs={24} lg={10}>
                       <InsetCard
-                        title="用例列表"
+                        title={(
+                          <Space size={8}>
+                            <span>用例列表</span>
+                            <Tag className="functional-ui-count-tag">{uiDrawerNodes.length}</Tag>
+                          </Space>
+                        )}
                         compact
                         icon={<HistoryOutlined />}
                         actions={
@@ -6376,6 +6453,7 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                           </Space>
                         }
                       >
+                        <div className="functional-ui-debug-side">
                         <div className="functional-ui-case-tree-tools">
                           <Input
                             allowClear
@@ -6416,6 +6494,7 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                             <UiEmpty description="暂无匹配的 UI 自动化用例" />
                           )}
                         </div>
+                        </div>
                         <div className="functional-ui-debug-record-head">
                           <Space>
                             <RefreshButton
@@ -6428,18 +6507,21 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                           </Space>
                         </div>
                         <Table
+                          className="functional-ui-debug-run-table"
                           rowKey="id"
                           size="small"
                           loading={uiDebugLoading}
                           columns={uiDebugRunColumns}
                           dataSource={uiDebugRuns}
-                          pagination={{ pageSize: 5, showSizeChanger: false }}
+                          pagination={false}
+                          scroll={{ y: 150 }}
                           locale={{ emptyText: <UiEmpty description="当前用例还没有调试记录" /> }}
                           style={{ marginTop: 8 }}
                         />
                       </InsetCard>
                     </Col>
                     <Col xs={24} lg={14}>
+                      <div className="functional-ui-debug-result">
                       <InsetCard
                         title={uiDebugDetail ? `Run #${uiDebugDetail.id} 步骤结果` : '步骤结果'}
                         compact
@@ -6451,7 +6533,7 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                         ) : null}
                       >
                         {uiDebugDetail ? (
-                          <>
+                          <div className="functional-ui-debug-result-body">
                             <Space wrap size={[8, 8]} style={{ marginBottom: 12 }}>
                               <Tag style={{ borderRadius: 6, border: 'none', background: '#f1f5f9' }}>
                                 触发: {uiDebugDetail.trigger_mode || 'trial'}
@@ -6537,11 +6619,14 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                               })}
                               locale={{ emptyText: <UiEmpty description="Runner 尚未回传步骤结果" /> }}
                             />
-                          </>
+                          </div>
                         ) : (
-                          <UiEmpty description="选择一次调试任务查看步骤、截图和错误" />
+                          <div className="functional-ui-debug-result-body">
+                            <UiEmpty description="选择一次调试任务查看步骤、截图和错误" />
+                          </div>
                         )}
                       </InsetCard>
+                      </div>
                     </Col>
                   </Row>
                 ) : (
@@ -6569,14 +6654,6 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                               <strong>{uiSelectedNode?.node_path || uiSelectedNode?.node_title || '-'}</strong>
                             </div>
                             <div className="functional-ui-dsl-info-row">
-                              <span>步骤数</span>
-                              <strong>{uiSelectedNode?.step_count || 0}</strong>
-                            </div>
-                            <div className="functional-ui-dsl-info-row">
-                              <span>断言数</span>
-                              <strong>{resolveUiNodeAssertCount(uiSelectedNode)}</strong>
-                            </div>
-                            <div className="functional-ui-dsl-info-row">
                               <span>模式</span>
                               <strong>{uiDslPreview.dsl?.mode || '-'}</strong>
                             </div>
@@ -6584,17 +6661,13 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                               <span>浏览器</span>
                               <strong>{uiDslPreview.dsl?.browser || '-'}</strong>
                             </div>
-                            <div className="functional-ui-dsl-info-row">
-                              <span>入口 URL</span>
-                              <strong>{uiDslPreview.dsl?.entry_url || '-'}</strong>
-                            </div>
                           </div>
                         </div>
                         <div className="functional-ui-dsl-list">
                           <div className="functional-ui-dsl-section-head">
                             <CodeOutlined />
                             <span>用例列表</span>
-                            <Tag style={{ margin: 0, borderRadius: 999 }}>{uiDrawerNodes.length}</Tag>
+                            <Tag className="functional-ui-count-tag">{uiDrawerNodes.length}</Tag>
                           </div>
                           <div className="functional-ui-case-tree-tools">
                             <Input
@@ -6632,7 +6705,7 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                     <Col xs={24} xl={16}>
                       <div className="functional-ui-dsl-preview">
                         <InsetCard title="DSL 结构" compact icon={<CodeOutlined />}>
-                          <DslCodeBlock data={uiDslPreview.dsl || uiDslPreview} />
+                          <DslCodeBlock data={uiDslPreview.dsl || uiDslPreview} style={{ height: '100%', maxHeight: 'none', minHeight: 0 }} />
                         </InsetCard>
                       </div>
                     </Col>
@@ -6643,7 +6716,8 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
               </div>
             )}
           </div>
-        </Spin>
+        </div>
+      )}
       </Drawer>
 
       <Modal
@@ -6812,5 +6886,3 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
 };
 
 export default connect(({ project, gconfig }) => ({ project, gconfig }))(FunctionalCase);
-
-

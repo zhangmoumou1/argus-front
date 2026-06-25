@@ -184,22 +184,70 @@
   border-radius: 4px;
 }
 
-.interface-project-switch {
-  padding: 8px 12px 2px;
-}
+.interface-tree-toolbar {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid #edf1f7;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 
-.interface-project-select {
-  width: 100%;
-
-  .ant-select-selector {
-    border-radius: 10px !important;
-    background: #f8fafc !important;
-    border-color: #e2e8f0 !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  .interface-project-switch {
+    padding: 0;
   }
 
-  .ant-select-selector:hover {
-    border-color: #cbd5e1 !important;
+  .interface-project-select {
+    width: 100%;
+
+    .ant-select-selector {
+      border-radius: 10px !important;
+      background: #f8fafc !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+
+    .ant-select-selector:hover {
+      border-color: #cbd5e1 !important;
+    }
+  }
+
+  .interface-tree-search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .treeSearch {
+      flex: 1;
+      border-radius: 10px;
+      height: 34px;
+    }
+
+    .toolbar-button {
+      font-size: 15px;
+      color: #8c8c8c;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: color 0.2s;
+
+      &:hover {
+        color: #465fff;
+      }
+    }
+
+    // Root directory add button in toolbar
+    .interface-tree-add-btn {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      font-size: 15px;
+      color: #8c8c8c;
+
+      &:hover {
+        color: #465fff;
+      }
+    }
+
+    .interface-tree-add-icon {
+      margin-left: 0;
+    }
   }
 }
 
