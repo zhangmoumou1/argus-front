@@ -2,14 +2,6 @@ import request from '@/utils/request';
 import CONFIG from '@/consts/config';
 import auth from '@/utils/auth';
 
-export async function scanUiTestCases(data) {
-  return request(`${CONFIG.URL}/ui-test/case/scan`, {
-    method: 'POST',
-    data,
-    headers: auth.headers(),
-  });
-}
-
 export async function listUiTestCases(params) {
   return request(`${CONFIG.URL}/ui-test/case/list`, {
     method: 'GET',
@@ -52,6 +44,14 @@ export async function previewUiTestDsl(data) {
 
 export async function trialRunUiTestCase(data) {
   return request(`${CONFIG.URL}/ui-test/case/trial-run`, {
+    method: 'POST',
+    data,
+    headers: auth.headers(),
+  });
+}
+
+export async function trialRunUiTestCases(data) {
+  return request(`${CONFIG.URL}/ui-test/case/trial-run-batch`, {
     method: 'POST',
     data,
     headers: auth.headers(),

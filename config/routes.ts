@@ -194,7 +194,7 @@ export default [
       {
         path: '/ui-test/cases',
         name: 'UI用例',
-        component: './UITest/CaseLibrary',
+        component: './UITest/CaseDesigner',
       },
       {
         path: '/ui-test/plans',
@@ -520,4 +520,3 @@ export default [
     component: './404',
   },
 ];
-

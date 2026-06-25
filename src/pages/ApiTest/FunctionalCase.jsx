@@ -1,19 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Avatar,
+  Badge,
   Button,
   Checkbox,
+  Col,
+  Drawer,
   Dropdown,
   Empty,
+  Image,
   Input,
   InputNumber,
+  List,
   Menu,
   Modal,
   Popconfirm,
+  Row,
   Steps,
   Select,
   Slider,
+  Space,
   Spin,
+  Table,
+  Tag,
   Tooltip,
   Tree,
   TreeSelect,
@@ -30,13 +40,17 @@ import {
   BgColorsOutlined,
   BorderOutlined,
   CloseCircleOutlined,
+  CodeOutlined,
+  CloudDownloadOutlined,
   DeleteOutlined,
   DownloadOutlined,
   DoubleLeftOutlined,
   DoubleRightOutlined,
   EditOutlined,
   EnvironmentOutlined,
+  EyeOutlined,
   ExportOutlined,
+  FileImageOutlined,
   FolderAddOutlined,
   FileAddOutlined,
   FileTextOutlined,
@@ -47,6 +61,7 @@ import {
   MoreOutlined,
   PaperClipOutlined,
   PictureOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   LeftOutlined,
@@ -55,8 +70,11 @@ import {
   SettingOutlined,
   SmileOutlined,
   StarOutlined,
+  StopOutlined,
+  SyncOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
+  HistoryOutlined,
   UploadOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
@@ -89,7 +107,29 @@ import {
   updateFunctionalCaseDirectory,
   updateFunctionalCaseFile,
 } from '@/services/functionalCase';
+import { listEnvironment, listGateway } from '@/services/configure';
+import {
+  getUiTestRunDetail,
+  listUiTestCaseNodes,
+  listUiTestCases,
+  listUiTestRuns,
+  previewUiTestDsl,
+  stopUiTestRun,
+  trialRunUiTestCase,
+  trialRunUiTestCases,
+  validateUiTestCase,
+} from '@/services/uiTest';
 import CONFIG from '@/consts/config';
+import {
+  DslCodeBlock,
+  InsetCard,
+  Kv,
+  PillButton,
+  RefreshButton,
+  UiEmpty,
+  uiPalette,
+  uiStatusTag,
+} from '@/pages/UITest/shared';
 import './FunctionalCase.less';
 
 const { Option } = Select;
@@ -1310,6 +1350,148 @@ const countGeneratedCaseNodes = (data) => {
   return outline.filter((item) => /(^|[\s_（(-])P[0-2]([\s_）)-]|$)/i.test(String(item.text || '').trim())).length;
 };
 
+const normalizeNamedNodeText = (value) => String(value || '').replace(/[\s:：]+/g, '').trim().toLowerCase();
+
+const isNamedMindNode = (value, expected) => normalizeNamedNodeText(value) === normalizeNamedNodeText(expected);
+
+const cloneNodeChildren = (node) => (Array.isArray(node?.children) ? node.children : []);
+
+const findNamedMindNode = (node, expectedName) => {
+  if (!node || typeof node !== 'object') return null;
+  const currentText = node?.data?.text || '';
+  if (isNamedMindNode(currentText, expectedName)) {
+    return node;
+  }
+  for (const child of cloneNodeChildren(node)) {
+    const matched = findNamedMindNode(child, expectedName);
+    if (matched) {
+      return matched;
+    }
+  }
+  return null;
+};
+
+const extractNamedSubtreeData = (data, expectedName, fallbackTitle = '') => {
+  const safeData = sanitizeMindData(data || defaultCaseData(fallbackTitle), fallbackTitle);
+  const root = getMindRootData(safeData);
+  const target = findNamedMindNode(root, expectedName);
+  return target ? sanitizeMindData(cloneMindData(target), fallbackTitle) : safeData;
+};
+
+const replaceNamedSubtreeData = (fullData, expectedName, subtreeData, fallbackTitle = '') => {
+  const safeFullData = sanitizeMindData(fullData || defaultCaseData(fallbackTitle), fallbackTitle);
+  const safeSubtree = sanitizeMindData(subtreeData || defaultCaseData(expectedName), expectedName);
+  const root = getMindRootData(safeFullData);
+  if (!root) {
+    return safeFullData;
+  }
+  if (isNamedMindNode(root?.data?.text, expectedName)) {
+    return safeSubtree;
+  }
+  const walk = (node) => {
+    const children = cloneNodeChildren(node);
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index];
+      if (isNamedMindNode(child?.data?.text, expectedName)) {
+        children[index] = cloneMindData(safeSubtree);
+        node.children = children;
+        return true;
+      }
+      if (walk(child)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  walk(root);
+  return sanitizeMindData(safeFullData, fallbackTitle);
+};
+
+const collectVisibleDirectoryIds = (nodes, fileDirectoryIds = new Set()) => {
+  const visibleIds = new Set();
+  const walk = (items = []) => {
+    items.forEach((item) => {
+      const childVisible = walk(item.children || []);
+      const selfVisible = fileDirectoryIds.has(Number(item.id)) || childVisible;
+      if (selfVisible) {
+        visibleIds.add(Number(item.id));
+      }
+    });
+    return items.some((item) => visibleIds.has(Number(item.id)));
+  };
+  walk(nodes);
+  return visibleIds;
+};
+
+const filterDirectoryTreeByIds = (nodes, visibleIds) => (nodes || []).reduce((acc, item) => {
+  const filteredChildren = filterDirectoryTreeByIds(item.children || [], visibleIds);
+  if (!visibleIds.has(Number(item.id)) && filteredChildren.length === 0) {
+    return acc;
+  }
+  acc.push({
+    ...item,
+    children: filteredChildren,
+  });
+  return acc;
+}, []);
+
+const applyUiCaseCountsToTree = (directories, files, uiCases = []) => {
+  const fileCountMap = new Map();
+  (uiCases || []).forEach((item) => {
+    const fileId = Number(item?.file_id ?? item?.case_file_id ?? 0);
+    if (fileId <= 0) return;
+    const uiCaseCount = Number(item?.ui_case_count ?? item?.case_count ?? item?.case_num ?? 0) || 0;
+    fileCountMap.set(fileId, (fileCountMap.get(fileId) || 0) + Math.max(uiCaseCount, 0));
+  });
+
+  const nextFiles = (files || []).map((item) => ({
+    ...item,
+    case_count: fileCountMap.get(Number(item?.id || 0)) || 0,
+    pass_count: 0,
+  }));
+
+  const fileCountByDirectory = new Map();
+  nextFiles.forEach((item) => {
+    const directoryId = Number(item?.directory_id || 0);
+    if (directoryId <= 0) return;
+    fileCountByDirectory.set(
+      directoryId,
+      (fileCountByDirectory.get(directoryId) || 0) + Number(item?.case_count || 0),
+    );
+  });
+
+  const decorateDirectories = (nodes) => (nodes || []).map((item) => {
+    const children = decorateDirectories(item.children || []);
+    const ownCount = fileCountByDirectory.get(Number(item?.id || 0)) || 0;
+    const childCount = children.reduce((sum, child) => sum + Number(child?.case_count || 0), 0);
+    return {
+      ...item,
+      children,
+      case_count: ownCount + childCount,
+      pass_count: 0,
+    };
+  });
+
+  return {
+    directories: decorateDirectories(directories || []),
+    files: nextFiles,
+  };
+};
+
+const resolveUiNodeAssertCount = (node) => {
+  const explicitCount = Number(
+    node?.assert_count
+    ?? node?.assertion_count
+    ?? node?.assertions_count
+    ?? node?.check_count
+    ?? -1,
+  );
+  if (explicitCount >= 0) return explicitCount;
+  const dsl = node?.dsl_json || node?.dsl || {};
+  const steps = Array.isArray(dsl?.steps) ? dsl.steps : [];
+  return steps.filter((step) => String(step?.type || '').startsWith('assert_')).length;
+};
+
 const resolveGeneratedCaseCount = (payload, fallbackData) => {
   const explicitCount = Number(payload?.case_count || payload?.case_num || 0);
   if (explicitCount > 0) return explicitCount;
@@ -1341,7 +1523,7 @@ const buildHugeCasePreview = (data, collapseLevel = 2) => {
   return cloneNode(data, 0);
 };
 
-const FunctionalCase = ({ project, gconfig, dispatch }) => {
+const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName = 'UI自动化用例' }) => {
   const location = useLocation();
   const projects = project?.projects || [];
   const projectId = project?.project_id;
@@ -1458,6 +1640,41 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
     type: '',
     value: '',
   });
+  const [uiCaseRecords, setUiCaseRecords] = useState([]);
+  const [uiNodeDrawerOpen, setUiNodeDrawerOpen] = useState(false);
+  const [uiNodeDrawerLoading, setUiNodeDrawerLoading] = useState(false);
+  const [uiDrawerActiveTab, setUiDrawerActiveTab] = useState('dsl');
+  const [uiDrawerNodes, setUiDrawerNodes] = useState([]);
+  const [uiSelectedNode, setUiSelectedNode] = useState(null);
+  const [uiNodeKeyword, setUiNodeKeyword] = useState('');
+  const [uiDslPreview, setUiDslPreview] = useState(null);
+  const [uiValidateLoading, setUiValidateLoading] = useState(false);
+  const [uiTrialLoading, setUiTrialLoading] = useState({});
+  const [uiStopLoading, setUiStopLoading] = useState({});
+  const [uiEnvOptions, setUiEnvOptions] = useState([]);
+  const [uiAddressOptions, setUiAddressOptions] = useState([]);
+  const [uiTrialModal, setUiTrialModal] = useState({ open: false, node: null, envId: undefined, addressId: undefined });
+  const [uiDebugRuns, setUiDebugRuns] = useState([]);
+  const [uiDebugSelectedNodeIds, setUiDebugSelectedNodeIds] = useState([]);
+  const [uiDebugLoading, setUiDebugLoading] = useState(false);
+  const [uiDebugDetail, setUiDebugDetail] = useState(null);
+  const [uiDebugDetailLoading, setUiDebugDetailLoading] = useState(false);
+  const [uiImagePreview, setUiImagePreview] = useState({ open: false, title: '', src: '' });
+  const caseLabel = uiOnly ? 'UI用例' : '功能用例';
+  const caseTreeLabel = uiOnly ? 'UI用例树' : '功能用例树';
+  const caseCanvasLabel = uiOnly ? 'UI用例脑图' : '功能用例脑图';
+  const emptyCanvasHint = uiOnly ? `选择一个${caseLabel}后开始查看` : `选择或新增一个${caseLabel}后开始编辑`;
+  const openFunctionalCaseEditor = useCallback((caseId = currentCase?.id) => {
+    const query = new URLSearchParams();
+    if (projectId) {
+      query.set('projectId', String(projectId));
+    }
+    if (caseId) {
+      query.set('caseId', String(caseId));
+    }
+    const search = query.toString();
+    history.push(search ? `${FUNCTIONAL_CASE_ROUTE_PATH}?${search}` : FUNCTIONAL_CASE_ROUTE_PATH);
+  }, [projectId, currentCase?.id]);
   const [styleDraft, setStyleDraft] = useState({
     fontSize: 16,
     borderWidth: 1,
@@ -1473,6 +1690,93 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
   const caseTree = useMemo(
     () => buildCaseTree(directoryTree, caseFiles, appliedKeyword),
     [directoryTree, caseFiles, appliedKeyword],
+  );
+  const currentUiCaseMeta = useMemo(
+    () =>
+      uiCaseRecords.find(
+        (item) => Number(item?.file_id || item?.id || 0) === Number(currentCase?.id || 0),
+      ) || null,
+    [currentCase?.id, uiCaseRecords],
+  );
+  const uiCurrentRunningDebugRun = useMemo(
+    () =>
+      uiDebugRuns.find((item) => ['queued', 'claimed', 'running', 'uploading'].includes(String(item?.status || '')))
+      || null,
+    [uiDebugRuns],
+  );
+  const uiDebugSelectedNodes = useMemo(() => {
+    const selectedIds = new Set(uiDebugSelectedNodeIds.map((id) => Number(id)));
+    return uiDrawerNodes.filter((node) => selectedIds.has(Number(node?.id)));
+  }, [uiDebugSelectedNodeIds, uiDrawerNodes]);
+  const uiDrawerNodeMap = useMemo(() => {
+    const map = new Map();
+    uiDrawerNodes.forEach((node) => {
+      if (node?.id) {
+        map.set(`case-${node.id}`, node);
+      }
+    });
+    return map;
+  }, [uiDrawerNodes]);
+  const uiDrawerTreeData = useMemo(() => {
+    const keyword = String(uiNodeKeyword || '').trim().toLowerCase();
+    const filteredNodes = uiDrawerNodes.filter((node) => {
+      if (!keyword) return true;
+      return [node?.node_title, node?.node_path, node?.file_title]
+        .some((value) => String(value || '').toLowerCase().includes(keyword));
+    });
+    const roots = [];
+    const groupMap = new Map();
+    const ensureGroup = (pathKey, title, parentChildren) => {
+      if (groupMap.has(pathKey)) return groupMap.get(pathKey);
+      const group = {
+        key: `group-${pathKey}`,
+        title,
+        children: [],
+      };
+      parentChildren.push(group);
+      groupMap.set(pathKey, group);
+      return group;
+    };
+    filteredNodes.forEach((node) => {
+      const nodeTitle = String(node?.node_title || '').trim();
+      const pathSegments = String(node?.node_path || nodeTitle || `用例 #${node?.id}`)
+        .split('/')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const leafTitle = nodeTitle || pathSegments[pathSegments.length - 1] || `用例 #${node?.id}`;
+      const segments = pathSegments.length > 0 ? [...pathSegments] : [leafTitle];
+      if (segments[segments.length - 1] !== leafTitle) {
+        segments.push(leafTitle);
+      }
+      let children = roots;
+      let pathKey = '';
+      segments.slice(0, -1).forEach((segment) => {
+        pathKey = pathKey ? `${pathKey}/${segment}` : segment;
+        children = ensureGroup(pathKey, segment, children).children;
+      });
+      children.push({
+        key: `case-${node.id}`,
+        title: (
+          <div className="functional-ui-case-tree-title">
+            <span>{leafTitle}</span>
+            <em>{Number(node.step_count || 0)} 步骤 / {resolveUiNodeAssertCount(node)} 断言</em>
+          </div>
+        ),
+        isLeaf: true,
+      });
+    });
+    return roots;
+  }, [uiDrawerNodes, uiNodeKeyword]);
+  const uiDebugArtifacts = useMemo(
+    () =>
+      Array.isArray(uiDebugDetail?.artifacts)
+        ? uiDebugDetail.artifacts.filter((item) => item?.label !== '结果JSON' && item?.name !== 'result.json')
+        : [],
+    [uiDebugDetail],
+  );
+  const uiDebugArtifactWarnings = useMemo(
+    () => (Array.isArray(uiDebugDetail?.result_payload?.artifact_warnings) ? uiDebugDetail.result_payload.artifact_warnings : []),
+    [uiDebugDetail],
   );
 
   const isFunctionalCaseRouteActive = useMemo(
@@ -1544,6 +1848,41 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
     if (!skillAiModal.open || skillAiModal.aiModelId || !skillAiModelOptions[0]?.value) return;
     setSkillAiModal((prev) => ({ ...prev, aiModelId: skillAiModelOptions[0].value }));
   }, [skillAiModelOptions, skillAiModal.aiModelId, skillAiModal.open]);
+
+  const resolveUiAddressPreview = useCallback((item) => {
+    if (!item) return '';
+    const pageUrl = String(item.page_url || '').trim();
+    const gateway = String(item.gateway || '').trim().replace(/\/$/, '');
+    if (!pageUrl) return gateway;
+    if (/^https?:\/\//i.test(pageUrl)) return pageUrl.replace(/\/$/, '');
+    if (!gateway) return pageUrl;
+    return `${gateway}${pageUrl.startsWith('/') ? pageUrl : `/${pageUrl}`}`;
+  }, []);
+
+  const fetchUiEnvironments = useCallback(async () => {
+    const res = await listEnvironment({ page: 1, size: 1000, exactly: true });
+    if (res?.code === 0) {
+      setUiEnvOptions(Array.isArray(res.data) ? res.data : []);
+      return;
+    }
+    setUiEnvOptions([]);
+  }, []);
+
+  const fetchUiAddresses = useCallback(async (envId) => {
+    const targetEnvId = Number(envId || 0);
+    if (!targetEnvId) {
+      setUiAddressOptions([]);
+      return [];
+    }
+    const res = await listGateway({ env: targetEnvId });
+    if (res?.code === 0) {
+      const list = Array.isArray(res.data) ? res.data : [];
+      setUiAddressOptions(list);
+      return list;
+    }
+    setUiAddressOptions([]);
+    return [];
+  }, []);
 
   const applyPendingModelGenerateResult = useCallback(() => {
     const pending = pendingModelGenerateResultRef.current;
@@ -1963,37 +2302,241 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
     if (!targetProjectId) {
       setDirectoryTree([]);
       setCaseFiles([]);
+      setUiCaseRecords([]);
       setCurrentDirectory(null);
       setCurrentCase(null);
       return;
     }
     setLoadingTree(true);
     try {
-      const [directoryRes, fileRes] = await Promise.all([
+      const requestList = [
         listFunctionalCaseDirectory({ project_id: targetProjectId }),
         listFunctionalCaseFiles({ title: keyword || '', project_id: targetProjectId }),
-      ]);
+      ];
+      if (uiOnly) {
+        requestList.push(listUiTestCases({
+          project_id: targetProjectId,
+          page: 1,
+          size: 10000,
+          paged: false,
+        }));
+      }
+      const [directoryRes, fileRes, uiCaseRes] = await Promise.all(requestList);
 
-      if (directoryRes?.code === 0 && fileRes?.code === 0) {
+      if (directoryRes?.code === 0 && fileRes?.code === 0 && (!uiOnly || uiCaseRes?.code === 0)) {
         const directories = Array.isArray(directoryRes.data) ? directoryRes.data : [];
-        const files = (Array.isArray(fileRes.data) ? fileRes.data : []).map((item) => ({
+        let files = (Array.isArray(fileRes.data) ? fileRes.data : []).map((item) => ({
           ...item,
           case_count: Number(item?.case_count ?? item?.case_num ?? 0),
           pass_count: Number(item?.pass_count ?? 0),
           create_user_name: item?.create_user_name || item?.creator_name || '',
         }));
-        setDirectoryTree(directories);
+        let visibleDirectories = directories;
+        if (uiOnly) {
+          const uiCases = Array.isArray(uiCaseRes?.data?.list)
+            ? uiCaseRes.data.list
+            : (Array.isArray(uiCaseRes?.data) ? uiCaseRes.data : []);
+          setUiCaseRecords(uiCases);
+          const visibleFileIds = new Set(
+            uiCases
+              .map((item) => Number(item?.file_id ?? item?.case_file_id ?? item?.id ?? 0))
+              .filter((item) => item > 0),
+          );
+          files = files.filter((item) => visibleFileIds.has(Number(item.id)));
+          const fileDirectoryIds = new Set(files.map((item) => Number(item.directory_id)).filter((item) => item > 0));
+          const visibleDirectoryIds = collectVisibleDirectoryIds(directories, fileDirectoryIds);
+          visibleDirectories = filterDirectoryTreeByIds(directories, visibleDirectoryIds);
+          const countedResult = applyUiCaseCountsToTree(visibleDirectories, files, uiCases);
+          visibleDirectories = countedResult.directories;
+          files = countedResult.files;
+        } else {
+          setUiCaseRecords([]);
+        }
+        setDirectoryTree(visibleDirectories);
         setCaseFiles(files);
-        if (!currentDirectoryRef.current && directories.length > 0) {
-          setCurrentDirectory(directories[0].id);
+        if (!currentDirectoryRef.current && visibleDirectories.length > 0) {
+          setCurrentDirectory(visibleDirectories[0].id);
         }
       } else {
-        message.error(directoryRes?.msg || fileRes?.msg || '获取功能用例树失败');
+        message.error(directoryRes?.msg || fileRes?.msg || uiCaseRes?.msg || `获取${caseTreeLabel}失败`);
       }
     } finally {
       setLoadingTree(false);
     }
-  }, [appliedKeyword, projectId]);
+  }, [appliedKeyword, projectId, uiOnly, caseTreeLabel]);
+
+  const fetchUiDebugDetail = useCallback(async (runId) => {
+    if (!runId) return;
+    setUiDebugDetailLoading(true);
+    try {
+      const res = await getUiTestRunDetail({
+        id: runId,
+        include_payload: true,
+        include_artifacts: true,
+        include_step_payload: false,
+        include_step_artifacts: true,
+      });
+      if (res?.code === 0) {
+        setUiDebugDetail(res.data || null);
+      } else {
+        message.error(res?.msg || '获取调试详情失败');
+      }
+    } finally {
+      setUiDebugDetailLoading(false);
+    }
+  }, []);
+
+  const fetchUiDebugRuns = useCallback(async (node, focusRunId) => {
+    if (!projectId || !node?.id) return;
+    setUiDebugLoading(true);
+    try {
+      const res = await listUiTestRuns({
+        project_id: projectId,
+        case_ref_id: node.id,
+        scope: 'debug',
+        page: 1,
+        size: 5,
+        paged: true,
+      });
+      if (res?.code === 0) {
+        const list = Array.isArray(res?.data?.list) ? res.data.list : (Array.isArray(res?.data) ? res.data : []);
+        setUiDebugRuns(list);
+        const targetRunId = focusRunId || uiDebugDetail?.id || list[0]?.id;
+        if (targetRunId) {
+          fetchUiDebugDetail(targetRunId);
+        } else {
+          setUiDebugDetail(null);
+        }
+      } else {
+        message.error(res?.msg || '获取调试记录失败');
+      }
+    } finally {
+      setUiDebugLoading(false);
+    }
+  }, [fetchUiDebugDetail, projectId, uiDebugDetail?.id]);
+
+  const openUiNodeDrawer = useCallback(async (targetCase = currentUiCaseMeta) => {
+    if (!targetCase?.file_id) {
+      message.warning('当前 UI 用例还没有扫描节点');
+      return [];
+    }
+    setUiNodeDrawerOpen(true);
+    setUiNodeDrawerLoading(true);
+    setUiDrawerActiveTab('dsl');
+    setUiSelectedNode(null);
+    setUiDslPreview(null);
+    setUiNodeKeyword('');
+    try {
+      const res = await listUiTestCaseNodes({ file_id: targetCase.file_id, include_dsl: true });
+      if (res?.code === 0) {
+        const list = Array.isArray(res.data) ? res.data : [];
+        setUiDrawerNodes(list);
+        if (!uiSelectedNode && list[0]) {
+          setUiSelectedNode(list[0]);
+        }
+        return list;
+      } else {
+        message.error(res?.msg || '获取 UI 节点失败');
+      }
+    } finally {
+      setUiNodeDrawerLoading(false);
+    }
+    return [];
+  }, [currentUiCaseMeta, uiSelectedNode]);
+
+  const handleValidateCurrentUiCase = useCallback(async () => {
+    if (!currentUiCaseMeta?.id) {
+      message.warning('请先选择一个 UI 用例');
+      return;
+    }
+    setUiValidateLoading(true);
+    try {
+      const res = await validateUiTestCase({ id: currentUiCaseMeta.id });
+      if (res?.code === 0) {
+        message.success(res?.msg || '校验完成');
+        await fetchTree();
+        if (uiNodeDrawerOpen) {
+          await openUiNodeDrawer(currentUiCaseMeta);
+        }
+      } else {
+        message.error(res?.msg || '校验失败');
+      }
+    } finally {
+      setUiValidateLoading(false);
+    }
+  }, [currentUiCaseMeta, fetchTree, openUiNodeDrawer, uiNodeDrawerOpen]);
+
+  const handlePreviewUiDsl = useCallback(async (node) => {
+    if (!node?.id) return;
+    const res = await previewUiTestDsl({ id: node.id });
+    if (res?.code === 0) {
+      setUiSelectedNode(node);
+      setUiDslPreview(res.data || null);
+      setUiDrawerActiveTab('dsl');
+      setUiNodeDrawerOpen(true);
+    } else {
+      message.error(res?.msg || '预览 DSL 失败');
+    }
+  }, []);
+
+  const submitUiTrialRun = useCallback(async ({ node, nodes, envId, addressId }) => {
+    const targetNodes = Array.isArray(nodes) && nodes.length > 0 ? nodes : (node?.id ? [node] : []);
+    if (targetNodes.length === 0 || !envId) return;
+    const targetIds = targetNodes.map((item) => Number(item.id)).filter(Boolean);
+    setUiTrialLoading((prev) => targetIds.reduce((next, id) => ({ ...next, [id]: true }), prev));
+    try {
+      const res = targetIds.length > 1
+        ? await trialRunUiTestCases({ ids: targetIds, env_id: envId, address_id: addressId })
+        : await trialRunUiTestCase({ id: targetIds[0], env_id: envId, address_id: addressId });
+      if (res?.code === 0) {
+        message.success('调试任务已启动');
+        const firstNode = targetNodes[0];
+        setUiSelectedNode(firstNode);
+        setUiDebugSelectedNodeIds(targetIds);
+        setUiDrawerActiveTab('debug');
+        setUiNodeDrawerOpen(true);
+        await fetchUiDebugRuns(firstNode, res?.data?.id || res?.data?.run_id || res?.data?.run_ids?.[0]);
+      } else {
+        message.error(res?.msg || '启动调试失败');
+      }
+    } finally {
+      setUiTrialLoading((prev) => targetIds.reduce((next, id) => ({ ...next, [id]: false }), prev));
+    }
+  }, [fetchUiDebugRuns]);
+
+  const handleOpenUiTrialModal = useCallback(async (nodeOrNodes) => {
+    const nodes = Array.isArray(nodeOrNodes) ? nodeOrNodes.filter((item) => item?.id) : (nodeOrNodes?.id ? [nodeOrNodes] : []);
+    if (nodes.length === 0) {
+      message.warning('请先选择要调试的用例');
+      return;
+    }
+    await fetchUiEnvironments();
+    setUiAddressOptions([]);
+    setUiTrialModal({ open: true, node: nodes[0], nodes, envId: undefined, addressId: undefined });
+  }, [fetchUiEnvironments]);
+
+  const handleStopUiDebugRun = useCallback(async (runId) => {
+    if (!runId) return;
+    setUiStopLoading((prev) => ({ ...prev, [runId]: true }));
+    try {
+      const res = await stopUiTestRun({ id: runId });
+      if (res?.code === 0) {
+        message.success(res?.msg || '调试任务已停止');
+        if (uiSelectedNode) {
+          await fetchUiDebugRuns(uiSelectedNode);
+        }
+      } else {
+        message.error(res?.msg || '停止调试失败');
+      }
+    } finally {
+      setUiStopLoading((prev) => ({ ...prev, [runId]: false }));
+    }
+  }, [fetchUiDebugRuns, uiSelectedNode]);
+
+  useEffect(() => {
+    if (!uiOnly || !uiNodeDrawerOpen || uiDrawerActiveTab !== 'debug' || !uiSelectedNode?.id) return;
+    fetchUiDebugRuns(uiSelectedNode);
+  }, [fetchUiDebugRuns, uiDrawerActiveTab, uiNodeDrawerOpen, uiOnly, uiSelectedNode]);
 
   const clearRenderFrame = useCallback(() => {
     if (renderFrameRef.current) {
@@ -2170,7 +2713,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
 
   const execCommand = (command, ...args) => {
     if (!mindRef.current) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return false;
     }
     mindRef.current.execCommand(command, ...args);
@@ -2196,7 +2739,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
       return false;
     }
     if (!mindRef.current) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return false;
     }
     if (node.isRoot) {
@@ -2560,7 +3103,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
           theme: fullData?.theme?.template || 'default',
           themeConfig: fullData?.theme?.config || {},
           fit: true,
-          readonly: false,
+          readonly: uiOnly,
           enableFreeDrag: true,
           enableCtrlKeyNodeSelection: true,
           useLeftKeySelectionRightKeyDrag: false,
@@ -2644,7 +3187,10 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
       const res = await queryFunctionalCaseFile({ id: record.id, project_id: projectId });
       if (res?.code === 0) {
         const fallbackTitle = res?.data?.title || record?.title || '功能用例';
-        const safeData = sanitizeMindData(res?.data?.data || defaultCaseData(fallbackTitle), fallbackTitle);
+        const safeFullData = sanitizeMindData(res?.data?.data || defaultCaseData(fallbackTitle), fallbackTitle);
+        const safeData = uiOnly
+          ? extractNamedSubtreeData(safeFullData, uiRootName, fallbackTitle)
+          : safeFullData;
         const draftData = draftResult?.data
           ? sanitizeMindData(draftResult.data, draftResult.title || fallbackTitle)
           : null;
@@ -2657,12 +3203,13 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
         const renderData = isHugeCase ? buildHugeCasePreview(displayData, 2) : displayData;
         currentCaseRenderVersionRef.current += 1;
         suppressDirtyCheckRef.current = true;
-        savedCaseSnapshotRef.current = buildCaseSnapshot(safeData, fallbackTitle);
+        savedCaseSnapshotRef.current = buildCaseSnapshot(displayData, fallbackTitle);
         setCaseDirty(Boolean(draftData));
         setCurrentCase({
           ...res.data,
           title: displayTitle,
           data: renderData,
+          __fullData: safeFullData,
           __dataSanitized: true,
           __nodeCount: nodeCount,
           __wordCount: Number(displayStats?.wordCount || 0),
@@ -2958,6 +3505,29 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
   }, [currentCase?.id, refreshMindGeometry]);
 
   useEffect(() => {
+    if (!currentCase) return undefined;
+    let frame = null;
+    let fitFrame = null;
+    const handleWindowResize = () => {
+      if (frame) cancelAnimationFrame(frame);
+      if (fitFrame) cancelAnimationFrame(fitFrame);
+      frame = requestAnimationFrame(() => {
+        refreshMindGeometry(false);
+        fitFrame = requestAnimationFrame(() => {
+          mindRef.current?.view?.fit?.();
+          syncScaleFromMind();
+        });
+      });
+    };
+    window.addEventListener('resize', handleWindowResize);
+    return () => {
+      window.removeEventListener('resize', handleWindowResize);
+      if (frame) cancelAnimationFrame(frame);
+      if (fitFrame) cancelAnimationFrame(fitFrame);
+    };
+  }, [currentCase?.id, refreshMindGeometry, syncScaleFromMind]);
+
+  useEffect(() => {
     const el = mindContainerRef.current;
     if (!el || !currentCase) return undefined;
     const handleWheel = (event) => {
@@ -3155,6 +3725,19 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
       data = detailRes.data?.data;
     }
     data = sanitizeMindData(data || defaultCaseData(title), title);
+    if (uiOnly) {
+      if (!caseModal.record) {
+        data = sanitizeMindData({
+          data: { text: title || caseCanvasLabel },
+          children: [defaultCaseData(uiRootName)],
+        }, title);
+      } else {
+        const fullCaseData = caseModal.record?.id === currentCase?.id
+          ? (currentCase?.__fullData || data)
+          : data;
+        data = replaceNamedSubtreeData(fullCaseData, uiRootName, data, title);
+      }
+    }
     const res = caseModal.record
       ? await updateFunctionalCaseFile({
         ...caseModal.record,
@@ -3182,24 +3765,32 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
       return;
     }
     if (!currentCase) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return;
     }
     setSaving(true);
     try {
       const latestData = sanitizeMindData(getMindData());
+      const persistedData = uiOnly
+        ? replaceNamedSubtreeData(currentCase.__fullData || defaultCaseData(currentCase.title), uiRootName, latestData, currentCase.title)
+        : latestData;
       const res = await updateFunctionalCaseFile({
         id: currentCase.id,
         project_id: projectId,
         title: currentCase.title,
         directory_id: currentCase.directory_id,
-        data: latestData,
+        data: persistedData,
         sort_index: currentCase.sort_index || 0,
       });
       if (res?.code === 0) {
         message.success('保存成功');
         savedCaseSnapshotRef.current = buildCaseSnapshot(latestData, currentCase.title);
         setCaseDirty(false);
+        setCurrentCase((prev) => (prev ? ({
+          ...prev,
+          data: latestData,
+          __fullData: persistedData,
+        }) : prev));
         await refreshTree();
       } else {
         message.error(res?.msg || '保存失败');
@@ -3375,7 +3966,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
 
   const setThemeValue = (prop, value) => {
     if (!mindRef.current) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return;
     }
     const viewData = mindRef.current.view?.getTransformData?.();
@@ -3397,7 +3988,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
 
   const updateMindConfig = (config) => {
     if (!mindRef.current) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return;
     }
     mindRef.current.updateConfig(config);
@@ -3405,7 +3996,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
 
   const fitView = () => {
     if (!mindRef.current) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return;
     }
     mindRef.current.view?.fit?.();
@@ -3414,7 +4005,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
 
   const resetView = () => {
     if (!mindRef.current) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return;
     }
     mindRef.current.view?.reset?.();
@@ -3700,7 +4291,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
 
   const submitExport = async () => {
     if (!mindRef.current || !currentCase) {
-      message.warning('请先选择功能用例');
+      message.warning(`请先选择${caseLabel}`);
       return;
     }
     const fileName = (exportModal.name || currentCase.title || '功能用例').trim();
@@ -4354,7 +4945,121 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
     }
   };
 
+  const openUiDslDrawer = useCallback(async () => {
+    const nodes = await openUiNodeDrawer();
+    const targetNode = Array.isArray(nodes) ? nodes[0] : null;
+    if (targetNode?.id) {
+      await handlePreviewUiDsl(targetNode);
+      return;
+    }
+    setUiDrawerActiveTab('dsl');
+    setUiNodeDrawerOpen(true);
+  }, [handlePreviewUiDsl, openUiNodeDrawer]);
+
+  const openUiDebugDrawer = useCallback(async () => {
+    const nodes = await openUiNodeDrawer();
+    const targetNode = Array.isArray(nodes) ? nodes[0] : null;
+    if (targetNode?.id) {
+      setUiSelectedNode(targetNode);
+      setUiDebugSelectedNodeIds([targetNode.id]);
+    } else {
+      setUiDebugSelectedNodeIds([]);
+    }
+    setUiDrawerActiveTab('debug');
+    setUiNodeDrawerOpen(true);
+  }, [openUiNodeDrawer]);
+
+  const uiDebugRunColumns = useMemo(() => ([
+    {
+      title: '调试任务',
+      dataIndex: 'id',
+      width: 110,
+      render: (value) => (
+        <a onClick={() => fetchUiDebugDetail(value)}>{`Run #${value}`}</a>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 110,
+      render: (value) => uiStatusTag(value),
+    },
+    {
+      title: '开始时间',
+      dataIndex: 'started_at',
+      render: (value) => value || '-',
+    },
+  ]), [fetchUiDebugDetail]);
+
+  const getUiDebugStepScreenshotArtifact = useCallback((record) => (
+    record?.screenshot_artifact?.view_url
+      ? record.screenshot_artifact
+      : (Array.isArray(record?.artifacts)
+        ? record.artifacts.find((item) => item?.preview_type === 'image' && item?.view_url)
+        : null)
+  ), []);
+
+  const uiDebugStepColumns = useMemo(() => ([
+    {
+      title: '步骤',
+      dataIndex: 'step_index',
+      width: 70,
+      render: (value) => value ?? '-',
+    },
+    {
+      title: '名称',
+      dataIndex: 'step_name',
+      render: (_, record) => record?.step_name || record?.title || record?.name || '-',
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 110,
+      render: (value) => uiStatusTag(value),
+    },
+    {
+      title: '截图',
+      key: 'screenshot',
+      width: 110,
+      render: (_, record) => {
+        const imageArtifact = getUiDebugStepScreenshotArtifact(record);
+        if (!imageArtifact?.view_url) return '-';
+        return (
+          <Button
+            type="link"
+            size="small"
+            icon={<FileImageOutlined />}
+            onClick={() => setUiImagePreview({ open: true, title: imageArtifact.label || record?.title || '步骤截图', src: imageArtifact.view_url })}
+          >
+            查看
+          </Button>
+        );
+      },
+    },
+  ]), [getUiDebugStepScreenshotArtifact]);
+
   const treeMenu = (node) => {
+    if (uiOnly) {
+      if (node.nodeType === 'case') {
+        return (
+          <Menu>
+            <Menu.Item key="open" icon={<FileTextOutlined />} onClick={() => loadCase(node.raw)}>
+              打开用例
+            </Menu.Item>
+            <Menu.Item key="edit-source" icon={<EditOutlined />} onClick={() => openFunctionalCaseEditor(node.id)}>
+              去功能用例编辑
+            </Menu.Item>
+          </Menu>
+        );
+      }
+      return (
+        <Menu>
+          <Menu.Item key="open-source" icon={<EditOutlined />} onClick={() => openFunctionalCaseEditor()}>
+            去功能用例编辑
+          </Menu.Item>
+        </Menu>
+      );
+    }
     if (node.nodeType === 'case') {
       return (
         <Menu>
@@ -4424,7 +5129,9 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
       const nodeText = getNodeText(node.title) || '未命名';
       const caseCount = toCountNumber(node.case_count);
       const passCount = toCountNumber(node.pass_count);
-      const hoverTitle = `${nodeText} 用例数${caseCount}/通过数${passCount}`;
+      const hoverTitle = uiOnly
+        ? `${nodeText} UI用例数${caseCount}`
+        : `${nodeText} 用例数${caseCount}/通过数${passCount}`;
       return (
     <div
       className={`functional-tree-title ${node.nodeType === 'case' ? 'functional-tree-case' : ''}`}
@@ -4436,18 +5143,24 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
       ) : (
         <FolderCode theme="outline" size="15" className="folder" />
       )}
-      <span className="functional-tree-content">
-        <span className="functional-tree-name-line" title={hoverTitle}>
-          <span className="functional-tree-text">{getNodeText(node.title)}</span>
-          <span className="functional-tree-count">
-            <span className="functional-tree-count-total">{toCountNumber(node.case_count)}</span>
-            <span className="functional-tree-count-sep">/</span>
-            <span className="functional-tree-count-pass">{toCountNumber(node.pass_count)}</span>
+        <span className="functional-tree-content">
+          <span className="functional-tree-name-line" title={hoverTitle}>
+            <span className="functional-tree-text">{getNodeText(node.title)}</span>
+            <span className="functional-tree-count">
+              {uiOnly ? (
+                <span className="functional-tree-count-total">{toCountNumber(node.case_count)}</span>
+              ) : (
+                <>
+                  <span className="functional-tree-count-total">{toCountNumber(node.case_count)}</span>
+                  <span className="functional-tree-count-sep">/</span>
+                  <span className="functional-tree-count-pass">{toCountNumber(node.pass_count)}</span>
+                </>
+              )}
+            </span>
           </span>
         </span>
-      </span>
       <span className={`suffixButton ${node.nodeType === 'directory' ? 'directory-actions' : 'case-actions'} ${nodeKey === node.key ? 'visible' : ''}`}>
-        {node.nodeType === 'directory' ? (
+        {!uiOnly && node.nodeType === 'directory' ? (
           <FolderAddOutlined
             className="icon-left"
             onClick={(event) => {
@@ -4456,7 +5169,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
             }}
           />
         ) : null}
-        {node.nodeType === 'directory' ? (
+        {!uiOnly && node.nodeType === 'directory' ? (
           <FileAddOutlined
             className="icon-mid"
             onClick={(event) => {
@@ -4758,7 +5471,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
   return (
     <PageContainer title={false} breadcrumb={null}>
       <div className={`functional-case-page ${treeCollapsed ? 'tree-collapsed' : ''}`}>
-        <Tooltip title="展开功能用例树">
+        <Tooltip title={`展开${caseTreeLabel}`}>
           <Button
             className="functional-tree-restore"
             icon={<DoubleRightOutlined />}
@@ -4767,8 +5480,8 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
         </Tooltip>
         <div className="functional-panel functional-tree-panel">
           <div className="functional-panel-header">
-            <strong>功能用例树</strong>
-            <Tooltip title="收起功能用例树">
+            <strong>{caseTreeLabel}</strong>
+            <Tooltip title={`收起${caseTreeLabel}`}>
               <Button
                 size="small"
                 type="text"
@@ -4839,7 +5552,9 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
               />
             </Tooltip>
             <Tooltip title="点击可新建根目录，子目录需要在树上新建">
-              <PlusOutlined className="directoryButton functional-root-add" onClick={() => projectId && openDirectoryModal()} />
+              {!uiOnly ? (
+                <PlusOutlined className="directoryButton functional-root-add" onClick={() => projectId && openDirectoryModal()} />
+              ) : null}
             </Tooltip>
           </div>
           <div className="functional-panel-body">
@@ -4853,7 +5568,8 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
                   selectedKeys={selectedKeys}
                   defaultExpandAll
                   titleRender={titleRender}
-                  onDrop={handleDrop}
+                  draggable={!uiOnly}
+                  onDrop={uiOnly ? undefined : handleDrop}
                   onSelect={(_, { node }) => {
                     if (node.nodeType === 'case') {
                       setCurrentDirectory(node.directory_id);
@@ -4866,7 +5582,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
                   }}
                 />
               ) : (
-                <Empty description="暂无功能用例" />
+                <Empty description={`暂无${caseLabel}`} />
               )}
             </Spin>
           </div>
@@ -4875,107 +5591,126 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
         <div ref={editorPanelRef} className={`functional-panel functional-editor ${canvasFullscreen ? 'canvas-fullscreen' : ''}`}>
           <div className="functional-editor-stage">
             <div className="functional-editor-top">
-              <div className="functional-toolbar-group">
-                <Tooltip title="回退">
-                  <Button icon={<span>↶</span>} disabled={!currentCase} onClick={() => execCommand('BACK')} />
-                </Tooltip>
-                <Tooltip title="前进">
-                  <Button icon={<span>↷</span>} disabled={!currentCase} onClick={() => execCommand('FORWARD')} />
-                </Tooltip>
-                <Tooltip title={formatPainterActive ? '格式刷进行中，点击可取消' : '格式刷'}>
-                  <Button
-                    icon={<FormatPainterOutlined />}
-                    className={formatPainterActive ? 'functional-toolbar-active' : ''}
-                    disabled={!currentCase}
-                    onClick={() => (formatPainterActive ? stopFormatPainter() : startFormatPainter())}
-                  />
-                </Tooltip>
-                <Tooltip title="同级节点">
-                  <Button icon={<FileAddOutlined />} disabled={!currentCase} onClick={() => execCommand('INSERT_NODE')} />
-                </Tooltip>
-                <Tooltip title="子节点">
-                  <Button icon={<PlusOutlined />} disabled={!currentCase} onClick={() => execCommand('INSERT_CHILD_NODE')} />
-                </Tooltip>
-                <Tooltip title="父节点">
-                  <Button icon={<DoubleLeftOutlined />} disabled={!currentCase} onClick={() => execCommand('INSERT_PARENT_NODE')} />
-                </Tooltip>
-                <Tooltip title="前插节点">
-                  <Button icon={<span>↑</span>} disabled={!currentCase} onClick={() => insertSiblingNode('before')} />
-                </Tooltip>
-                <Tooltip title="后插节点">
-                  <Button icon={<span>↓</span>} disabled={!currentCase} onClick={() => insertSiblingNode('after')} />
-                </Tooltip>
-                <Tooltip title="删除节点">
-                  <Button icon={<DeleteOutlined />} disabled={!currentCase} onClick={() => execCommand('REMOVE_CURRENT_NODE')} />
-                </Tooltip>
-                <Tooltip title="图片">
-                  <Button icon={<PictureOutlined />} disabled={!currentCase} onClick={openImage} />
-                </Tooltip>
-                <Tooltip title="图标">
-                  <Button
-                    icon={<SmileOutlined />}
-                    disabled={!currentCase}
-                    className={activePanel === 'icon' && panelOpen ? 'functional-toolbar-active' : ''}
-                    onClick={() => {
-                      setActivePanel('icon');
-                      setPanelOpen(true);
-                    }}
-                  />
-                </Tooltip>
-                <Tooltip title="超链接">
-                  <Button icon={<LinkOutlined />} disabled={!currentCase} onClick={openLink} />
-                </Tooltip>
-                <Tooltip title="备注">
-                  <Button icon={<FileTextOutlined />} disabled={!currentCase} onClick={openNote} />
-                </Tooltip>
-                <Tooltip title="概要">
-                  <Button icon={<AppstoreOutlined />} disabled={!currentCase} onClick={() => execCommand('ADD_GENERALIZATION')} />
-                </Tooltip>
-                <Tooltip title="删除概要">
-                  <Button icon={<CloseCircleOutlined />} disabled={!currentCase} onClick={() => execCommand('REMOVE_GENERALIZATION')} />
-                </Tooltip>
-                <Tooltip title="公式">
-                  <Button icon={<span>Σ</span>} disabled={!currentCase} onClick={openFormulaModal} />
-                </Tooltip>
-                <Tooltip title="附件">
-                  <Button icon={<PaperClipOutlined />} disabled={!currentCase} onClick={openAttachment} />
-                </Tooltip>
-              </div>
+              {uiOnly ? (
+                <>
+                  <div className="functional-ui-canvas-tools">
+                    <Tooltip title="预览当前 UI 用例的 DSL 结构">
+                      <Button className="functional-ui-tool-button" icon={<CodeOutlined />} disabled={!currentCase} onClick={openUiDslDrawer}>
+                        DSL预览
+                      </Button>
+                    </Tooltip>
+                    <Tooltip title="打开当前 UI 用例的调试台">
+                      <Button className="functional-ui-tool-button" icon={<HistoryOutlined />} disabled={!currentCase} onClick={openUiDebugDrawer}>
+                        调试台
+                      </Button>
+                    </Tooltip>
+                  </div>
+                </>
+              ) : (
+                <>
+                <div className="functional-toolbar-group">
+                  <Tooltip title="回退">
+                    <Button icon={<span>↶</span>} disabled={!currentCase} onClick={() => execCommand('BACK')} />
+                  </Tooltip>
+                  <Tooltip title="前进">
+                    <Button icon={<span>↷</span>} disabled={!currentCase} onClick={() => execCommand('FORWARD')} />
+                  </Tooltip>
+                  <Tooltip title={formatPainterActive ? '格式刷进行中，点击可取消' : '格式刷'}>
+                    <Button
+                      icon={<FormatPainterOutlined />}
+                      className={formatPainterActive ? 'functional-toolbar-active' : ''}
+                      disabled={!currentCase}
+                      onClick={() => (formatPainterActive ? stopFormatPainter() : startFormatPainter())}
+                    />
+                  </Tooltip>
+                  <Tooltip title="同级节点">
+                    <Button icon={<FileAddOutlined />} disabled={!currentCase} onClick={() => execCommand('INSERT_NODE')} />
+                  </Tooltip>
+                  <Tooltip title="子节点">
+                    <Button icon={<PlusOutlined />} disabled={!currentCase} onClick={() => execCommand('INSERT_CHILD_NODE')} />
+                  </Tooltip>
+                  <Tooltip title="父节点">
+                    <Button icon={<DoubleLeftOutlined />} disabled={!currentCase} onClick={() => execCommand('INSERT_PARENT_NODE')} />
+                  </Tooltip>
+                  <Tooltip title="前插节点">
+                    <Button icon={<span>↑</span>} disabled={!currentCase} onClick={() => insertSiblingNode('before')} />
+                  </Tooltip>
+                  <Tooltip title="后插节点">
+                    <Button icon={<span>↓</span>} disabled={!currentCase} onClick={() => insertSiblingNode('after')} />
+                  </Tooltip>
+                  <Tooltip title="删除节点">
+                    <Button icon={<DeleteOutlined />} disabled={!currentCase} onClick={() => execCommand('REMOVE_CURRENT_NODE')} />
+                  </Tooltip>
+                  <Tooltip title="图片">
+                    <Button icon={<PictureOutlined />} disabled={!currentCase} onClick={openImage} />
+                  </Tooltip>
+                  <Tooltip title="图标">
+                    <Button
+                      icon={<SmileOutlined />}
+                      disabled={!currentCase}
+                      className={activePanel === 'icon' && panelOpen ? 'functional-toolbar-active' : ''}
+                      onClick={() => {
+                        setActivePanel('icon');
+                        setPanelOpen(true);
+                      }}
+                    />
+                  </Tooltip>
+                  <Tooltip title="超链接">
+                    <Button icon={<LinkOutlined />} disabled={!currentCase} onClick={openLink} />
+                  </Tooltip>
+                  <Tooltip title="备注">
+                    <Button icon={<FileTextOutlined />} disabled={!currentCase} onClick={openNote} />
+                  </Tooltip>
+                  <Tooltip title="概要">
+                    <Button icon={<AppstoreOutlined />} disabled={!currentCase} onClick={() => execCommand('ADD_GENERALIZATION')} />
+                  </Tooltip>
+                  <Tooltip title="删除概要">
+                    <Button icon={<CloseCircleOutlined />} disabled={!currentCase} onClick={() => execCommand('REMOVE_GENERALIZATION')} />
+                  </Tooltip>
+                  <Tooltip title="公式">
+                    <Button icon={<span>Σ</span>} disabled={!currentCase} onClick={openFormulaModal} />
+                  </Tooltip>
+                  <Tooltip title="附件">
+                    <Button icon={<PaperClipOutlined />} disabled={!currentCase} onClick={openAttachment} />
+                  </Tooltip>
+                </div>
 
-              <div className="functional-toolbar-group">
-                <Tooltip title="导入(JSON/XMind)">
-                  <Button icon={<UploadOutlined />} disabled={!currentCase} onClick={triggerImport} />
-                </Tooltip>
-                <Tooltip title="导出">
-                  <Button icon={<DownloadOutlined />} disabled={!currentCase} onClick={openExportModal} />
-                </Tooltip>
-                <Tooltip title="删除用例">
-                  <Button danger icon={<DeleteOutlined />} disabled={!currentCase} onClick={confirmDeleteCurrentCase} />
-                </Tooltip>
-                <Tooltip title="AI 生成用例">
-                  <Button
-                    className="functional-ai-trigger"
-                    icon={<span className="ai-icon-text">AI</span>}
-                    disabled={!currentCase || !projectId}
-                    onClick={openModelGenerateModal}
-                  />
-                </Tooltip>
-                <Tooltip title="保存">
-                  <Button
-                    className={`functional-save-button ${caseDirty ? 'is-dirty' : ''}`}
-                    icon={<SaveOutlined />}
-                    loading={saving}
-                    disabled={!currentCase}
-                    onClick={saveMind}
-                  />
-                </Tooltip>
-              </div>
+                <div className="functional-toolbar-group">
+                  <Tooltip title="导入(JSON/XMind)">
+                    <Button icon={<UploadOutlined />} disabled={!currentCase} onClick={triggerImport} />
+                  </Tooltip>
+                  <Tooltip title="导出">
+                    <Button icon={<DownloadOutlined />} disabled={!currentCase} onClick={openExportModal} />
+                  </Tooltip>
+                  <Tooltip title="删除用例">
+                    <Button danger icon={<DeleteOutlined />} disabled={!currentCase} onClick={confirmDeleteCurrentCase} />
+                  </Tooltip>
+                  <Tooltip title="AI 生成用例">
+                    <Button
+                      className="functional-ai-trigger"
+                      icon={<span className="ai-icon-text">AI</span>}
+                      disabled={!currentCase || !projectId}
+                      onClick={openModelGenerateModal}
+                    />
+                  </Tooltip>
+                  <Tooltip title="保存">
+                    <Button
+                      className={`functional-save-button ${caseDirty ? 'is-dirty' : ''}`}
+                      icon={<SaveOutlined />}
+                      loading={saving}
+                      disabled={!currentCase}
+                      onClick={saveMind}
+                    />
+                  </Tooltip>
+                </div>
+                </>
+              )}
             </div>
 
-            <div className={`functional-canvas-shell ${panelOpen ? 'panel-open' : ''}`}>
+            <div className={`functional-canvas-shell ${!uiOnly && panelOpen ? 'panel-open' : ''}`}>
               <div className="functional-canvas-area">
                 <div className="functional-case-name">
-                  <span className="functional-case-title">{currentCase?.title || '功能用例脑图'}</span>
+                  <span className="functional-case-title">{currentCase?.title || caseCanvasLabel}</span>
                   {currentCase ? (
                     <span className="functional-case-meta">
                       {`创建人 ${currentCase.create_user_name || currentCase.creator_name || '-'} · 创建时间 ${formatTreeTime(currentCase.created_at) || '-'}`}
@@ -4986,7 +5721,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
                   <div ref={mindContainerRef} className="functional-mind" />
                 ) : (
                   <div className="functional-empty">
-                    <Empty description="选择或新增一个功能用例后开始编辑" />
+                    <Empty description={emptyCanvasHint} />
                   </div>
                 )}
                 {loadingCase && currentCase ? (
@@ -5013,46 +5748,50 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
                 </div>
               </div>
 
-              <Tooltip title="展开功能面板">
-                <button
-                  type="button"
-                  className="functional-drawer-trigger"
-                  onClick={() => setPanelOpen(true)}
-                >
-                  <LeftOutlined />
-                </button>
-              </Tooltip>
-              <div className="functional-right-tabs">
-                {SIDE_PANELS.map((item) => (
-                  <button
-                    type="button"
-                    key={item.key}
-                    className={panelOpen && activePanel === item.key ? 'active' : ''}
-                    onClick={() => {
-                      if (activePanel === item.key) {
-                        setPanelOpen((open) => !open);
-                        return;
-                      }
-                      setActivePanel(item.key);
-                      setPanelOpen(true);
-                    }}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div className={`functional-side-panel ${panelOpen ? 'open' : ''}`}>
-                <button
-                  type="button"
-                  className="functional-side-close"
-                  onClick={() => setPanelOpen(false)}
-                >
-                  ×
-                </button>
-                {renderSidePanel()}
-              </div>
-              {mindContextMenu.open ? (
+              {!uiOnly ? (
+                <>
+                  <Tooltip title="展开功能面板">
+                    <button
+                      type="button"
+                      className="functional-drawer-trigger"
+                      onClick={() => setPanelOpen(true)}
+                    >
+                      <LeftOutlined />
+                    </button>
+                  </Tooltip>
+                  <div className="functional-right-tabs">
+                    {SIDE_PANELS.map((item) => (
+                      <button
+                        type="button"
+                        key={item.key}
+                        className={panelOpen && activePanel === item.key ? 'active' : ''}
+                        onClick={() => {
+                          if (activePanel === item.key) {
+                            setPanelOpen((open) => !open);
+                            return;
+                          }
+                          setActivePanel(item.key);
+                          setPanelOpen(true);
+                        }}
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className={`functional-side-panel ${panelOpen ? 'open' : ''}`}>
+                    <button
+                      type="button"
+                      className="functional-side-close"
+                      onClick={() => setPanelOpen(false)}
+                    >
+                      ×
+                    </button>
+                    {renderSidePanel()}
+                  </div>
+                </>
+              ) : null}
+              {!uiOnly && mindContextMenu.open ? (
                 <div
                   className="functional-mind-contextmenu"
                   style={{ left: mindContextMenu.x, top: mindContextMenu.y }}
@@ -5073,7 +5812,7 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
                   )}
                 </div>
               ) : null}
-              {iconQuickMenu.open ? (
+              {!uiOnly && iconQuickMenu.open ? (
                 <div
                   className="functional-icon-quick-menu"
                   style={{ left: iconQuickMenu.x, top: iconQuickMenu.y }}
@@ -5551,6 +6290,452 @@ const FunctionalCase = ({ project, gconfig, dispatch }) => {
             </div>
           ) : null}
         </div>
+      </Modal>
+
+      <Drawer
+        title={
+          <Space>
+            {uiDrawerActiveTab === 'debug' ? (
+              <HistoryOutlined style={{ color: uiPalette.primary }} />
+            ) : (
+              <CodeOutlined style={{ color: uiPalette.primary }} />
+            )}
+            <span>{uiDrawerActiveTab === 'debug' ? '调试台' : 'DSL预览'}</span>
+            <Tag style={{ margin: 0, borderRadius: 999, background: '#f8fafc' }}>
+              {currentUiCaseMeta?.file_title || currentCase?.title || 'UI 用例'}
+            </Tag>
+            <Badge count={uiDrawerNodes.length} style={{ backgroundColor: uiPalette.primary, transform: 'scale(0.85)', transformOrigin: 'left center' }} />
+          </Space>
+        }
+        open={uiNodeDrawerOpen}
+        width={1480}
+        destroyOnClose={false}
+        onClose={() => {
+          setUiNodeDrawerOpen(false);
+          setUiDrawerActiveTab('dsl');
+        }}
+        styles={{
+          body: { background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)', padding: 0 },
+          header: { borderBottom: `1px solid ${uiPalette.border}` },
+        }}
+      >
+        <Spin spinning={uiNodeDrawerLoading}>
+          <div className="functional-ui-drawer functional-ui-drawer-single">
+            {uiDrawerActiveTab === 'debug' ? (
+              <div style={{ padding: 20 }}>
+                {uiSelectedNode ? (
+                  <Row gutter={16}>
+                    <Col xs={24} lg={10}>
+                      <InsetCard
+                        title="用例列表"
+                        compact
+                        icon={<HistoryOutlined />}
+                        actions={
+                          <Space>
+                            <Button
+                              size="small"
+                              onClick={() => setUiDebugSelectedNodeIds(uiDrawerNodes.map((item) => item.id))}
+                              disabled={uiDrawerNodes.length === 0}
+                            >
+                              全选
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() => setUiDebugSelectedNodeIds([])}
+                              disabled={uiDebugSelectedNodeIds.length === 0}
+                            >
+                              清空
+                            </Button>
+                            {uiCurrentRunningDebugRun ? (
+                              <Popconfirm
+                                title="确认停止该调试任务？"
+                                okText="停止"
+                                cancelText="取消"
+                                onConfirm={() => handleStopUiDebugRun(uiCurrentRunningDebugRun.id)}
+                              >
+                                <PillButton
+                                  size="small"
+                                  danger
+                                  icon={uiStopLoading[uiCurrentRunningDebugRun.id] ? <SyncOutlined spin /> : <StopOutlined />}
+                                  loading={uiStopLoading[uiCurrentRunningDebugRun.id]}
+                                >
+                                  停止
+                                </PillButton>
+                              </Popconfirm>
+                            ) : (
+                              <PillButton
+                                size="small"
+                                icon={<PlayCircleOutlined />}
+                                disabled={uiDebugSelectedNodes.length === 0}
+                                loading={uiDebugSelectedNodes.some((item) => uiTrialLoading[item.id])}
+                                onClick={() => handleOpenUiTrialModal(uiDebugSelectedNodes)}
+                              >
+                                运行选中
+                              </PillButton>
+                            )}
+                          </Space>
+                        }
+                      >
+                        <div className="functional-ui-case-tree-tools">
+                          <Input
+                            allowClear
+                            size="small"
+                            prefix={<SearchOutlined />}
+                            value={uiNodeKeyword}
+                            placeholder="搜索用例名称或节点路径"
+                            onChange={(event) => setUiNodeKeyword(event.target.value)}
+                          />
+                        </div>
+                        <div className="functional-ui-debug-case-list functional-ui-case-tree-wrap">
+                          {uiDrawerTreeData.length > 0 ? (
+                            <Tree
+                              checkable
+                              defaultExpandAll
+                              className="functional-ui-case-tree"
+                              treeData={uiDrawerTreeData}
+                              selectedKeys={uiSelectedNode?.id ? [`case-${uiSelectedNode.id}`] : []}
+                              checkedKeys={uiDebugSelectedNodeIds.map((id) => `case-${id}`)}
+                              onSelect={(selectedKeys) => {
+                                const node = uiDrawerNodeMap.get(selectedKeys?.[0]);
+                                if (node) {
+                                  setUiSelectedNode(node);
+                                }
+                              }}
+                              onCheck={(checkedKeys) => {
+                                const keys = Array.isArray(checkedKeys) ? checkedKeys : checkedKeys?.checked || [];
+                                setUiDebugSelectedNodeIds(
+                                  keys
+                                    .map((key) => String(key))
+                                    .filter((key) => key.startsWith('case-'))
+                                    .map((key) => Number(key.replace('case-', '')))
+                                    .filter(Boolean),
+                                );
+                              }}
+                            />
+                          ) : (
+                            <UiEmpty description="暂无匹配的 UI 自动化用例" />
+                          )}
+                        </div>
+                        <div className="functional-ui-debug-record-head">
+                          <Space>
+                            <RefreshButton
+                              size="small"
+                              text="刷新"
+                              onClick={() => fetchUiDebugRuns(uiSelectedNode)}
+                              loading={uiDebugLoading}
+                              disabled={!uiSelectedNode?.id}
+                            />
+                          </Space>
+                        </div>
+                        <Table
+                          rowKey="id"
+                          size="small"
+                          loading={uiDebugLoading}
+                          columns={uiDebugRunColumns}
+                          dataSource={uiDebugRuns}
+                          pagination={{ pageSize: 5, showSizeChanger: false }}
+                          locale={{ emptyText: <UiEmpty description="当前用例还没有调试记录" /> }}
+                          style={{ marginTop: 8 }}
+                        />
+                      </InsetCard>
+                    </Col>
+                    <Col xs={24} lg={14}>
+                      <InsetCard
+                        title={uiDebugDetail ? `Run #${uiDebugDetail.id} 步骤结果` : '步骤结果'}
+                        compact
+                        icon={<EyeOutlined />}
+                        actions={uiDebugDetail ? (
+                          <Space>
+                            {uiStatusTag(uiDebugDetail.status)}
+                          </Space>
+                        ) : null}
+                      >
+                        {uiDebugDetail ? (
+                          <>
+                            <Space wrap size={[8, 8]} style={{ marginBottom: 12 }}>
+                              <Tag style={{ borderRadius: 6, border: 'none', background: '#f1f5f9' }}>
+                                触发: {uiDebugDetail.trigger_mode || 'trial'}
+                              </Tag>
+                              <Tag style={{ borderRadius: 6, border: 'none', background: '#f1f5f9' }}>
+                                步骤: {uiDebugDetail.steps?.length || 0}
+                              </Tag>
+                              <Tag style={{ borderRadius: 6, border: 'none', background: '#f1f5f9' }}>
+                                开始: {uiDebugDetail.started_at || '-'}
+                              </Tag>
+                            </Space>
+                            {uiDebugDetail.error_message ? (
+                              <div
+                                style={{
+                                  border: `1px solid ${uiPalette.error}22`,
+                                  background: '#fff1f2',
+                                  color: uiPalette.error,
+                                  borderRadius: 8,
+                                  padding: 10,
+                                  marginBottom: 12,
+                                  whiteSpace: 'pre-wrap',
+                                  wordBreak: 'break-word',
+                                }}
+                              >
+                                {uiDebugDetail.error_message}
+                              </div>
+                            ) : null}
+                            {uiDebugArtifactWarnings.length > 0 ? (
+                              <Alert
+                                type="warning"
+                                showIcon
+                                icon={<CloudDownloadOutlined />}
+                                style={{ borderRadius: 8, marginBottom: 12 }}
+                                message={`对象存储上传存在 ${uiDebugArtifactWarnings.length} 个告警`}
+                              />
+                            ) : null}
+                            {uiDebugArtifacts.length > 0 ? (
+                              <div
+                                style={{
+                                  border: `1px solid ${uiPalette.border}`,
+                                  background: '#fff',
+                                  borderRadius: 8,
+                                  padding: 10,
+                                  marginBottom: 12,
+                                }}
+                              >
+                                <Space wrap size={[8, 8]}>
+                                  {uiDebugArtifacts.map((item) => (
+                                    <PillButton
+                                      key={item.object_key || item.name}
+                                      size="small"
+                                      icon={item.preview_type === 'image' ? <FileImageOutlined /> : <CloudDownloadOutlined />}
+                                      href={item.view_url || undefined}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      disabled={!item.view_url}
+                                    >
+                                      {item.label || item.name}
+                                      {!item.available ? '（未就绪）' : ''}
+                                    </PillButton>
+                                  ))}
+                                </Space>
+                              </div>
+                            ) : null}
+                            <Table
+                              rowKey={(record) => record.id || record.step_index}
+                              size="small"
+                              loading={uiDebugDetailLoading}
+                              columns={uiDebugStepColumns}
+                              dataSource={uiDebugDetail.steps || []}
+                              pagination={false}
+                              onRow={(record) => ({
+                                onClick: () => {
+                                  const imageArtifact = getUiDebugStepScreenshotArtifact(record);
+                                  if (!imageArtifact?.view_url) return;
+                                  setUiImagePreview({
+                                    open: true,
+                                    title: imageArtifact.label || record?.step_name || record?.title || '步骤截图',
+                                    src: imageArtifact.view_url,
+                                  });
+                                },
+                                style: { cursor: getUiDebugStepScreenshotArtifact(record)?.view_url ? 'pointer' : 'default' },
+                              })}
+                              locale={{ emptyText: <UiEmpty description="Runner 尚未回传步骤结果" /> }}
+                            />
+                          </>
+                        ) : (
+                          <UiEmpty description="选择一次调试任务查看步骤、截图和错误" />
+                        )}
+                      </InsetCard>
+                    </Col>
+                  </Row>
+                ) : (
+                  <UiEmpty description="选择一个节点，点击「调试台」开始调试" />
+                )}
+              </div>
+            ) : (
+              <div className="functional-ui-dsl-layout">
+                {uiDslPreview ? (
+                  <Row gutter={16} className="functional-ui-dsl-row">
+                    <Col xs={24} xl={8}>
+                      <div className="functional-ui-dsl-side">
+                        <div className="functional-ui-dsl-info">
+                          <div className="functional-ui-dsl-section-head">
+                            <FileTextOutlined />
+                            <span>用例信息</span>
+                          </div>
+                          <div className="functional-ui-dsl-info-body">
+                            <div className="functional-ui-dsl-info-row">
+                              <span>状态</span>
+                              <strong>{uiStatusTag(uiDslPreview.status)}</strong>
+                            </div>
+                            <div className="functional-ui-dsl-info-row">
+                              <span>节点路径</span>
+                              <strong>{uiSelectedNode?.node_path || uiSelectedNode?.node_title || '-'}</strong>
+                            </div>
+                            <div className="functional-ui-dsl-info-row">
+                              <span>步骤数</span>
+                              <strong>{uiSelectedNode?.step_count || 0}</strong>
+                            </div>
+                            <div className="functional-ui-dsl-info-row">
+                              <span>断言数</span>
+                              <strong>{resolveUiNodeAssertCount(uiSelectedNode)}</strong>
+                            </div>
+                            <div className="functional-ui-dsl-info-row">
+                              <span>模式</span>
+                              <strong>{uiDslPreview.dsl?.mode || '-'}</strong>
+                            </div>
+                            <div className="functional-ui-dsl-info-row">
+                              <span>浏览器</span>
+                              <strong>{uiDslPreview.dsl?.browser || '-'}</strong>
+                            </div>
+                            <div className="functional-ui-dsl-info-row">
+                              <span>入口 URL</span>
+                              <strong>{uiDslPreview.dsl?.entry_url || '-'}</strong>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="functional-ui-dsl-list">
+                          <div className="functional-ui-dsl-section-head">
+                            <CodeOutlined />
+                            <span>用例列表</span>
+                            <Tag style={{ margin: 0, borderRadius: 999 }}>{uiDrawerNodes.length}</Tag>
+                          </div>
+                          <div className="functional-ui-case-tree-tools">
+                            <Input
+                              allowClear
+                              size="small"
+                              prefix={<SearchOutlined />}
+                              value={uiNodeKeyword}
+                              placeholder="搜索用例名称或节点路径"
+                              onChange={(event) => setUiNodeKeyword(event.target.value)}
+                            />
+                          </div>
+                          <div className="functional-ui-dsl-list-body">
+                            {uiDrawerTreeData.length > 0 ? (
+                              <div className="functional-ui-case-tree-wrap">
+                                <Tree
+                                  defaultExpandAll
+                                  className="functional-ui-case-tree"
+                                  treeData={uiDrawerTreeData}
+                                  selectedKeys={uiSelectedNode?.id ? [`case-${uiSelectedNode.id}`] : []}
+                                  onSelect={(selectedKeys) => {
+                                    const node = uiDrawerNodeMap.get(selectedKeys?.[0]);
+                                    if (node) {
+                                      handlePreviewUiDsl(node);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <UiEmpty description={uiNodeKeyword ? '暂无匹配的 UI 自动化用例' : '当前文件暂无 UI 用例节点'} />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </Col>
+                    <Col xs={24} xl={16}>
+                      <div className="functional-ui-dsl-preview">
+                        <InsetCard title="DSL 结构" compact icon={<CodeOutlined />}>
+                          <DslCodeBlock data={uiDslPreview.dsl || uiDslPreview} />
+                        </InsetCard>
+                      </div>
+                    </Col>
+                  </Row>
+                ) : (
+                  <UiEmpty description="从用例列表中选择一个用例查看 DSL" />
+                )}
+              </div>
+            )}
+          </div>
+        </Spin>
+      </Drawer>
+
+      <Modal
+        open={uiTrialModal.open}
+        title="选择试运行环境"
+        okText="开始调试"
+        cancelText="取消"
+        confirmLoading={(uiTrialModal.nodes || [uiTrialModal.node]).some((item) => uiTrialLoading[item?.id])}
+        onCancel={() => {
+          setUiTrialModal({ open: false, node: null, nodes: [], envId: undefined, addressId: undefined });
+          setUiAddressOptions([]);
+        }}
+        onOk={() => {
+          const trialNodes = uiTrialModal.nodes || (uiTrialModal.node ? [uiTrialModal.node] : []);
+          if (trialNodes.length === 0) {
+            message.warning('请选择要调试的用例');
+            return;
+          }
+          if (!uiTrialModal.envId) {
+            message.warning('请选择执行环境');
+            return;
+          }
+          if (uiAddressOptions.length > 1 && !uiTrialModal.addressId) {
+            message.warning('当前环境存在多个地址前缀，请先选择一个');
+            return;
+          }
+          submitUiTrialRun({
+            nodes: trialNodes,
+            envId: uiTrialModal.envId,
+            addressId: uiTrialModal.addressId,
+          });
+          setUiTrialModal({ open: false, node: null, nodes: [], envId: undefined, addressId: undefined });
+          setUiAddressOptions([]);
+        }}
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={`本次将调试 ${(uiTrialModal.nodes || [uiTrialModal.node]).filter((item) => item?.id).length} 个 UI 自动化用例`}
+          />
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>执行环境</div>
+            <Select
+              value={uiTrialModal.envId}
+              style={{ width: '100%' }}
+              placeholder="选择执行环境"
+              options={uiEnvOptions.map((item) => ({ label: item.name, value: item.id }))}
+              onChange={async (value) => {
+                const list = await fetchUiAddresses(value);
+                setUiTrialModal((prev) => ({
+                  ...prev,
+                  envId: value,
+                  addressId: list.length === 1 ? list[0].id : undefined,
+                }));
+              }}
+            />
+          </div>
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>地址前缀</div>
+            <Select
+              allowClear
+              value={uiTrialModal.addressId}
+              style={{ width: '100%' }}
+              placeholder={uiTrialModal.envId ? '选择地址前缀（可选）' : '请先选择执行环境'}
+              disabled={!uiTrialModal.envId}
+              options={uiAddressOptions.map((item) => ({
+                label: `${item.name} (${resolveUiAddressPreview(item) || item.gateway || '-'})`,
+                value: item.id,
+              }))}
+              onChange={(value) => setUiTrialModal((prev) => ({ ...prev, addressId: value }))}
+            />
+          </div>
+        </Space>
+      </Modal>
+
+      <Modal
+        open={uiImagePreview.open}
+        title={uiImagePreview.title || '步骤截图'}
+        footer={null}
+        width={980}
+        onCancel={() => setUiImagePreview({ open: false, title: '', src: '' })}
+      >
+        {uiImagePreview.src ? (
+          <div style={{ textAlign: 'center' }}>
+            <Image
+              src={uiImagePreview.src}
+              alt={uiImagePreview.title || '步骤截图'}
+              style={{ maxWidth: '100%', maxHeight: 640, borderRadius: 8, border: '1px solid #e5e7eb' }}
+            />
+          </div>
+        ) : null}
       </Modal>
 
       <Modal

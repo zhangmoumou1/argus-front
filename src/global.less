@@ -34,6 +34,7 @@ body,
 
 .ant-layout {
   min-height: 100vh;
+  min-width: 0;
 }
 
 .ant-pro-sider.ant-layout-sider.ant-pro-sider-fixed {
@@ -495,6 +496,7 @@ body,
 .ant-pro-layout .ant-pro-layout-content {
   display: flex;
   flex: 1;
+  min-width: 0;
   padding: 0;
   background: #f5f6f8;
 }
@@ -627,7 +629,7 @@ body,
   background: var(--argus-shell-panel) !important;
   border-right: 1px solid var(--argus-shell-line) !important;
   box-shadow: none !important;
-  transition: width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease, flex-basis 0.3s ease;
+  transition: width 0.15s ease, min-width 0.15s ease, max-width 0.15s ease, flex-basis 0.15s ease;
 }
 
 .ant-layout-sider-collapsed.ant-pro-sider,

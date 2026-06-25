@@ -993,7 +993,7 @@ const GlobalPageShell = ({
 
     };
 
-    const syncMobileSiderState = () => {
+    const syncMobileSiderState = (isMobile: boolean) => {
 
       const sider = document.querySelector('.ant-pro-sider') as HTMLElement | null;
 
@@ -1003,21 +1003,13 @@ const GlobalPageShell = ({
 
       const siderPlaceholders = getMobileSiderSpacers();
 
-      if (window.innerWidth < 992) {
+      if (isMobile) {
 
         document.body.classList.add('argus-sider-collapsed');
 
         if (sider) {
 
           sider.classList.add('ant-layout-sider-collapsed', 'ant-pro-sider-collapsed');
-
-          sider.style.setProperty('width', '290px');
-
-          sider.style.setProperty('min-width', '290px');
-
-          sider.style.setProperty('max-width', '290px');
-
-          sider.style.setProperty('flex', '0 0 290px');
 
         }
 
@@ -1029,20 +1021,6 @@ const GlobalPageShell = ({
 
           siderPlaceholder.style.setProperty('display', 'none');
 
-          siderPlaceholder.style.setProperty('width', '0');
-
-          siderPlaceholder.style.setProperty('min-width', '0');
-
-          siderPlaceholder.style.setProperty('max-width', '0');
-
-          siderPlaceholder.style.setProperty('flex', '0 0 0');
-
-          siderPlaceholder.style.setProperty('margin', '0');
-
-          siderPlaceholder.style.setProperty('padding', '0');
-
-          siderPlaceholder.style.setProperty('overflow', 'hidden');
-
         });
 
       } else {
@@ -1052,14 +1030,6 @@ const GlobalPageShell = ({
         if (sider) {
 
           sider.classList.remove('ant-layout-sider-collapsed', 'ant-pro-sider-collapsed');
-
-          sider.style.removeProperty('width');
-
-          sider.style.removeProperty('min-width');
-
-          sider.style.removeProperty('max-width');
-
-          sider.style.removeProperty('flex');
 
         }
 
@@ -1071,31 +1041,21 @@ const GlobalPageShell = ({
 
           siderPlaceholder.style.removeProperty('display');
 
-          siderPlaceholder.style.removeProperty('width');
-
-          siderPlaceholder.style.removeProperty('min-width');
-
-          siderPlaceholder.style.removeProperty('max-width');
-
-          siderPlaceholder.style.removeProperty('flex');
-
-          siderPlaceholder.style.removeProperty('margin');
-
-          siderPlaceholder.style.removeProperty('padding');
-
-          siderPlaceholder.style.removeProperty('overflow');
-
         });
 
       }
 
     };
 
-    syncMobileSiderState();
+    const mql = window.matchMedia('(max-width: 991px)');
 
-    window.addEventListener('resize', syncMobileSiderState);
+    const handleMqlChange = (e: MediaQueryListEvent | MediaQueryList) => syncMobileSiderState(e.matches);
 
-    return () => window.removeEventListener('resize', syncMobileSiderState);
+    handleMqlChange(mql);
+
+    mql.addEventListener('change', handleMqlChange);
+
+    return () => mql.removeEventListener('change', handleMqlChange);
 
   }, []);
 

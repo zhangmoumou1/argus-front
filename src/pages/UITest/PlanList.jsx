@@ -17,6 +17,7 @@ import {
   Switch,
   Table,
   Tag,
+  TreeSelect,
   Tooltip,
   message,
 } from 'antd';
@@ -83,6 +84,68 @@ const defaultForm = {
   capture_screenshot: true,
   notification_config_id: undefined,
   pass_rate: undefined,
+};
+
+const buildUiCaseTreeChildren = (nodes = [], rootTitle = '') => {
+  const treeMap = new Map();
+
+  nodes.forEach((item) => {
+    const rawPath = String(item.node_path || item.node_title || '').trim();
+    const pathParts = rawPath
+      .split('/')
+      .map((part) => String(part || '').trim())
+      .filter(Boolean);
+    const normalizedParts =
+      rootTitle && pathParts[0] === rootTitle ? pathParts.slice(1) : pathParts.slice();
+    const leafParts = normalizedParts.length
+      ? normalizedParts
+      : [String(item.node_title || '未命名用例').trim()];
+
+    let currentMap = treeMap;
+    const currentPath = [];
+
+    leafParts.forEach((part, index) => {
+      currentPath.push(part);
+      const mapKey = currentPath.join('__');
+      const isLeaf = index === leafParts.length - 1;
+
+      if (!currentMap.has(mapKey)) {
+        currentMap.set(mapKey, {
+          title: isLeaf ? `${part} (${item.step_count || 0}步)` : part,
+          value: isLeaf ? item.id : `branch_${mapKey}`,
+          key: isLeaf ? `case_${item.id}` : `branch_${mapKey}`,
+          selectable: isLeaf,
+          disabled: !isLeaf,
+          childrenMap: new Map(),
+        });
+      }
+
+      const target = currentMap.get(mapKey);
+      if (isLeaf) {
+        target.title = `${part} (${item.step_count || 0}步)`;
+        target.value = item.id;
+        target.key = `case_${item.id}`;
+        target.selectable = true;
+        target.disabled = false;
+      }
+      currentMap = target.childrenMap;
+    });
+  });
+
+  const toTreeNodes = (map) =>
+    Array.from(map.values()).map((entry) => {
+      const children = toTreeNodes(entry.childrenMap);
+      return {
+        title: entry.title,
+        value: entry.value,
+        key: entry.key,
+        selectable: entry.selectable,
+        disabled: entry.disabled,
+        children: children.length ? children : undefined,
+      };
+    });
+
+  return toTreeNodes(treeMap);
 };
 
 const wizardSteps = [
@@ -401,14 +464,15 @@ const PlanList = () => {
 
   const filteredPlans = useMemo(() => plans, [plans]);
 
-  const candidateOptions = useMemo(
+  const candidateTreeData = useMemo(
     () =>
       candidateGroups.map((group) => ({
-        label: `${group.file_title} (${group.ui_case_count || (group.nodes || []).length})`,
-        options: (group.nodes || []).map((item) => ({
-          label: `${item.node_path} (${item.step_count || 0}步)`,
-          value: item.id,
-        })),
+        title: `${group.file_title} (${group.ui_case_count || (group.nodes || []).length})`,
+        value: `group_${group.file_id}`,
+        key: `group_${group.file_id}`,
+        selectable: false,
+        disabled: true,
+        children: buildUiCaseTreeChildren(group.nodes || [], group.file_title),
       })),
     [candidateGroups],
   );
@@ -805,16 +869,19 @@ const PlanList = () => {
                 label={`可选用例 (${totalCandidates})`}
                 rules={[{ required: true, message: '请至少选择一个用例' }]}
               >
-                <Select
-                  mode="multiple"
+                <TreeSelect
                   loading={candidateLoading}
-                  options={candidateOptions}
-                  placeholder={selectedPlanProjectId ? '按功能用例文件分组选择节点' : '请先在上一步选择项目'}
+                  treeData={candidateTreeData}
+                  treeCheckable
+                  showCheckedStrategy={TreeSelect.SHOW_CHILD}
+                  treeDefaultExpandAll
+                  placeholder={selectedPlanProjectId ? '按层级选择 UI 用例' : '请先在上一步选择项目'}
                   style={{ width: '100%' }}
                   maxTagCount="responsive"
-                  optionFilterProp="label"
+                  treeNodeFilterProp="title"
                   disabled={!selectedPlanProjectId}
                   showSearch
+                  dropdownStyle={{ maxHeight: 420, overflow: 'auto' }}
                 />
               </Form.Item>
               {editingPlan && detail?.cases?.length > 0 && (
