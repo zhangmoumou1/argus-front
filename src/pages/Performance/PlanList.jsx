@@ -26,6 +26,9 @@ import {
   TreeSelect,
 } from 'antd';
 import {
+  ApiOutlined,
+  BranchesOutlined,
+  CodeOutlined,
   DeleteOutlined,
   LineChartOutlined,
   PlusOutlined,
@@ -70,6 +73,29 @@ const SOURCE_TYPE = {
   SINGLE: 'single',
   LINK: 'link',
 };
+const SOURCE_OPTIONS = [
+  {
+    value: SOURCE_TYPE.API_ASSET,
+    icon: <ApiOutlined />,
+    title: '接口资产',
+    subtitle: '从已维护的接口服务和版本生成请求快照',
+    tags: ['适合单接口', '资产复用', '可追溯'],
+  },
+  {
+    value: SOURCE_TYPE.API_SCENARIO,
+    icon: <BranchesOutlined />,
+    title: '接口用例',
+    subtitle: '按接口用例链路顺序执行，复用变量提取和断言',
+    tags: ['适合业务链路', '变量串联', '场景压测'],
+  },
+  {
+    value: SOURCE_TYPE.MANUAL,
+    icon: <CodeOutlined />,
+    title: '自定义接口',
+    subtitle: '临时填写 URL、Header、Query 和 Body',
+    tags: ['快速验证', '临时接口', '轻量配置'],
+  },
+];
 const LOAD_MODE = {
   CONCURRENCY: 'concurrency',
   QPS: 'qps',
@@ -235,6 +261,60 @@ const toCaseIdString = (caseList) => (caseList || [])
   .map((item) => String(item).replace('testcase_', ''))
   .join(',');
 
+const normalizeSelectableCaseTree = (nodes = []) => nodes.map((node) => {
+  const children = normalizeSelectableCaseTree(node.children || []);
+  const next = { ...node, children };
+  if (!String(next.value || next.key || '').startsWith('testcase_')) {
+    next.disabled = false;
+  }
+  return next;
+});
+
+const collectCaseLeafValues = (nodes = []) => {
+  const values = [];
+  nodes.forEach((node) => {
+    const nodeValue = String(node?.value ?? node?.key ?? '');
+    if (nodeValue.startsWith('testcase_')) {
+      values.push(nodeValue);
+    }
+    if (Array.isArray(node?.children) && node.children.length) {
+      values.push(...collectCaseLeafValues(node.children));
+    }
+  });
+  return values;
+};
+
+const buildDirectoryCaseMap = (nodes = []) => {
+  const map = new Map();
+  const walk = (items = []) => {
+    items.forEach((node) => {
+      const nodeValue = String(node?.value ?? node?.key ?? '');
+      const children = Array.isArray(node?.children) ? node.children : [];
+      if (!nodeValue.startsWith('testcase_')) {
+        map.set(nodeValue, collectCaseLeafValues(children));
+      }
+      walk(children);
+    });
+  };
+  walk(nodes);
+  return map;
+};
+
+const expandSelectedCaseValues = (values = [], directoryCaseMap = new Map()) => {
+  const ordered = [];
+  const seen = new Set();
+  values.forEach((item) => {
+    const key = String(item);
+    const expanded = directoryCaseMap.get(key) || [key];
+    expanded.forEach((value) => {
+      if (!String(value).startsWith('testcase_') || seen.has(value)) return;
+      seen.add(value);
+      ordered.push(value);
+    });
+  });
+  return ordered;
+};
+
 const formatSourceType = (value) => {
   if (value === SOURCE_TYPE.API_SCENARIO || value === SOURCE_TYPE.LINK) return '接口场景';
   if (value === SOURCE_TYPE.MANUAL) return '手动接口';
@@ -270,6 +350,70 @@ const StepWorkspaceHeader = ({ eyebrow, title, description, extra }) => (
     </div>
   </div>
 );
+
+const SourceOptionCard = ({ item, active }) => (
+  <div
+    style={{
+      height: '100%',
+      padding: 18,
+      borderRadius: 14,
+      border: active ? '1px solid #06b6d4' : '1px solid #dbe6f3',
+      background: active ? 'linear-gradient(180deg, #ecfeff 0%, #f8fbff 100%)' : '#fff',
+      boxShadow: active ? '0 10px 22px rgba(6, 182, 212, 0.12)' : '0 6px 16px rgba(15, 23, 42, 0.04)',
+      cursor: 'pointer',
+      transition: 'all 160ms ease',
+    }}
+  >
+    <Space direction="vertical" size={10} style={{ width: '100%' }}>
+      <Space align="center" size={10}>
+        <span
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: active ? '#06b6d4' : '#eff6ff',
+            color: active ? '#fff' : '#2563eb',
+            fontSize: 18,
+          }}
+        >
+          {item.icon}
+        </span>
+        <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.title}</span>
+      </Space>
+      <span style={{ minHeight: 44, color: '#475569', lineHeight: 1.6 }}>{item.subtitle}</span>
+      <Space wrap size={[6, 6]}>
+        {item.tags.map((tag) => (
+          <Tag key={tag} color={active ? 'cyan' : 'blue'} style={{ marginInlineEnd: 0 }}>
+            {tag}
+          </Tag>
+        ))}
+      </Space>
+    </Space>
+  </div>
+);
+
+const executionGuardrailStyle = {
+  border: '1px solid #bfdbfe',
+  borderRadius: 16,
+  background: 'linear-gradient(135deg, #eff6ff 0%, #f8fbff 55%, #ecfeff 100%)',
+};
+
+const previewCodeStyle = {
+  margin: 0,
+  padding: 12,
+  borderRadius: 12,
+  background: '#0f172a',
+  color: '#e2e8f0',
+  fontSize: 12,
+  lineHeight: 1.6,
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-all',
+  maxHeight: 220,
+  overflow: 'auto',
+};
 
 const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
   const [filterForm] = Form.useForm();
@@ -315,6 +459,8 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
 
   const pageLoading = loading.effects['project/listProject'] || loading.effects['gconfig/fetchEnvList'];
   const selectedCaseCount = selectedCases.filter((item) => String(item).startsWith('testcase_')).length;
+  const selectableCaseTree = normalizeSelectableCaseTree(caseTree || []);
+  const directoryCaseMap = buildDirectoryCaseMap(selectableCaseTree);
   const selectedServiceName = serviceOptions.find((item) => item.id === editForm.getFieldValue('service_id'))?.name;
   const selectedEndpointName = endpointOptions.find((item) => item.id === editForm.getFieldValue('endpoint_id'))?.name;
   const selectedVersionName = versionOptions.find((item) => item.id === editForm.getFieldValue('api_version_id'))?.version_no
@@ -375,7 +521,7 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     }
     const res = await listTestPlanCaseTree({ project_id: value });
     if (auth.response(res)) {
-      setCaseTree(res.data?.tree || []);
+      setCaseTree(normalizeSelectableCaseTree(res.data?.tree || []));
     }
   };
 
@@ -425,7 +571,61 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     }
     const res = await queryPerformanceCasePreview({ case_ids: caseIds });
     if (auth.response(res)) {
-      setCasePreview(res.data || []);
+      const previewList = res.data || [];
+      setCasePreview(previewList);
+      const firstCase = previewList[0];
+      if (firstCase) {
+        editForm.setFieldsValue({
+          request_method: firstCase.method || 'GET',
+          request_url: firstCase.url || '',
+          request_headers: prettyJson(firstCase.headers),
+          request_query: prettyJson(firstCase.query),
+          request_body: prettyJson(firstCase.body, ''),
+          assertions_config: (firstCase.assertions || [])
+            .map((item, index) => {
+              const rawType = String(item?.type || '').trim();
+              const rawPath = String(item?.path || '').trim();
+              const name = item?.name || `断言${index + 1}`;
+              const expected = item?.expected ?? '';
+              if (rawPath === '${status_code}' || rawPath === 'status_code') {
+                return {
+                  type: 'status_code',
+                  name,
+                  operator: '=',
+                  expected,
+                };
+              }
+              if (rawPath === '${response}') {
+                return {
+                  type: 'body_contains',
+                  name,
+                  operator: 'contains',
+                  expected,
+                };
+              }
+              if (rawPath.startsWith('$.') || rawPath === '$') {
+                return {
+                  type: 'json_path',
+                  name,
+                  operator: rawType === 'contain' ? 'contains' : '=',
+                  path: rawPath,
+                  expected,
+                };
+              }
+              if (/header/i.test(rawPath)) {
+                return {
+                  type: 'header_contains',
+                  name,
+                  operator: 'contains',
+                  path: rawPath.replace(/^header[:.\s]*/i, ''),
+                  expected,
+                };
+              }
+              return null;
+            })
+            .filter(Boolean),
+        });
+      }
     }
   };
 
@@ -466,11 +666,34 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     }
   };
 
+  const formatPreviewText = (value, fallback = '-') => {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+      const text = value.trim();
+      if (!text) return fallback;
+      try {
+        return JSON.stringify(JSON.parse(text), null, 2);
+      } catch (e) {
+        return text;
+      }
+    }
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (e) {
+      return String(value);
+    }
+  };
+
   const resetSourceOptions = () => {
     setServiceOptions([]);
     setEndpointOptions([]);
     setVersionOptions([]);
     setCaseTree([]);
+  };
+
+  const applyExpandedCaseSelection = (fieldName, values = []) => {
+    const expandedValues = expandSelectedCaseValues(values, directoryCaseMap);
+    editForm.setFieldValue(fieldName, expandedValues);
   };
 
   const hydrateEditForm = (values) => {
@@ -649,9 +872,11 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
 
   const nextStep = async () => {
     await editForm.validateFields(stepFields[currentStep] || []);
-    if (currentStep === 1 && sourceType === SOURCE_TYPE.API_SCENARIO) {
-      setCurrentStep(3);
-      return;
+    if (currentStep === 1 && sourceType === SOURCE_TYPE.API_ASSET) {
+      const apiVersionId = editForm.getFieldValue('api_version_id');
+      if (apiVersionId) {
+        await fillSourceByVersion(apiVersionId);
+      }
     }
     if (currentStep === 3) {
       const formValues = editForm.getFieldsValue(true);
@@ -676,10 +901,6 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
   };
 
   const previousStep = () => {
-    if (currentStep === 3 && sourceType === SOURCE_TYPE.API_SCENARIO) {
-      setCurrentStep(1);
-      return;
-    }
     setCurrentStep((prev) => prev - 1);
   };
 
@@ -1006,30 +1227,35 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
                   <Space direction="vertical" size={16} style={{ width: '100%' }}>
                     <StepWorkspaceHeader
                       eyebrow="Step 2"
-                      title="压测对象"
-                      description="决定这次压测针对接口资产、接口场景链路，还是一个临时手动接口。"
+                      title="选择压测目标"
+                      description="先决定这次压力打到哪里：复用接口资产、串联接口用例，或者临时构造一个自定义请求。"
                     />
                     <Card bordered={false} style={workspaceCardStyle}>
-                    <Form.Item name="source_type" label="压测来源" rules={[{ required: true, message: '请选择压测来源' }]}>
-                      <Radio.Group
-                        optionType="button"
-                        buttonStyle="solid"
-                        onChange={() => {
-                          editForm.setFieldsValue({
-                            case_list: [],
-                            request_method: 'GET',
-                            request_url: '',
-                            service_id: undefined,
-                            endpoint_id: undefined,
-                            api_version_id: undefined,
-                          });
-                        }}
-                      >
-                        <Radio.Button value={SOURCE_TYPE.API_ASSET}>接口资产</Radio.Button>
-                        <Radio.Button value={SOURCE_TYPE.API_SCENARIO}>接口场景</Radio.Button>
-                        <Radio.Button value={SOURCE_TYPE.MANUAL}>手动接口</Radio.Button>
-                      </Radio.Group>
-                    </Form.Item>
+                      <Form.Item name="source_type" rules={[{ required: true, message: '请选择压测来源' }]} style={{ marginBottom: 0 }}>
+                        <Radio.Group
+                          style={{ width: '100%' }}
+                          onChange={() => {
+                            editForm.setFieldsValue({
+                              case_list: [],
+                              request_method: 'GET',
+                              request_url: '',
+                              service_id: undefined,
+                              endpoint_id: undefined,
+                              api_version_id: undefined,
+                            });
+                          }}
+                        >
+                          <Row gutter={16}>
+                            {SOURCE_OPTIONS.map((item) => (
+                              <Col span={8} key={item.value}>
+                                <Radio value={item.value} style={{ display: 'block', width: '100%' }}>
+                                  <SourceOptionCard item={item} active={sourceType === item.value} />
+                                </Radio>
+                              </Col>
+                            ))}
+                          </Row>
+                        </Radio.Group>
+                      </Form.Item>
                     </Card>
 
                     {sourceType === SOURCE_TYPE.API_ASSET ? (
@@ -1079,12 +1305,13 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
                         <Alert type="info" showIcon style={{ marginBottom: 16 }} message="链路压测会按你勾选的接口用例顺序执行，适合登录-下单-支付这类业务链路。" />
                         <Form.Item name="case_list" label="接口场景" rules={[{ required: true, message: '请选择接口用例链路' }]}>
                           <TreeSelect
-                            treeData={caseTree}
+                            treeData={selectableCaseTree}
                             treeCheckable
                             showCheckedStrategy={TreeSelect.SHOW_CHILD}
                             placeholder="从接口用例目录选择链路"
                             style={{ width: '100%' }}
                             dropdownStyle={{ maxHeight: 420, overflow: 'auto' }}
+                            onChange={(values) => applyExpandedCaseSelection('case_list', values)}
                           />
                         </Form.Item>
                         <Tag color="geekblue">当前已选择 {selectedCaseCount} 个接口用例</Tag>
@@ -1121,17 +1348,54 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
                       description="这里决定请求快照、超时时间和断言策略。链路模式会直接复用接口用例的请求与断言。"
                     />
                     {sourceType === SOURCE_TYPE.API_SCENARIO ? (
-                      <Card bordered={false} style={workspaceMutedCardStyle}>
-                        <Alert type="success" showIcon style={{ marginBottom: 16 }} message="接口场景模式会复用接口用例里的请求配置、变量提取和断言，这里以链路快照形式确认执行对象。" />
-                        <Descriptions column={1}>
-                          <Descriptions.Item label="链路用例数">
-                            {selectedCases.filter((item) => String(item).startsWith('testcase_')).length} 个
-                          </Descriptions.Item>
-                          <Descriptions.Item label="链路说明">
-                            运行时按已选接口用例顺序串行执行，单个虚拟用户会复用前一步产出的变量。
-                          </Descriptions.Item>
-                        </Descriptions>
-                      </Card>
+                      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                        <Card bordered={false} style={workspaceMutedCardStyle}>
+                          <Alert type="success" showIcon style={{ marginBottom: 16 }} message="接口场景模式会复用接口用例里的请求配置、变量提取和断言，这里展示即将进入压测链路的请求快照。" />
+                          <Descriptions column={1}>
+                            <Descriptions.Item label="链路用例数">
+                              {selectedCases.filter((item) => String(item).startsWith('testcase_')).length} 个
+                            </Descriptions.Item>
+                            <Descriptions.Item label="链路说明">
+                              运行时按已选接口用例顺序串行执行，单个虚拟用户会复用前一步产出的变量。
+                            </Descriptions.Item>
+                          </Descriptions>
+                        </Card>
+                        <Card title="链路请求快照" bordered={false} style={workspaceCardStyle}>
+                          {casePreview.length ? (
+                            <List
+                              itemLayout="vertical"
+                              dataSource={casePreview}
+                              renderItem={(item) => (
+                                <List.Item key={item.case_id}>
+                                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                                    <Space wrap>
+                                      <Tag color="blue">Step {item.step_order}</Tag>
+                                      <Tag color="geekblue">{item.method || '-'}</Tag>
+                                      <span style={{ fontWeight: 600, color: '#0f172a' }}>{item.name}</span>
+                                    </Space>
+                                    <Descriptions column={1} size="small">
+                                      <Descriptions.Item label="请求地址">{item.url || '-'}</Descriptions.Item>
+                                      <Descriptions.Item label="请求头">
+                                        <pre style={previewCodeStyle}>{formatPreviewText(item.headers)}</pre>
+                                      </Descriptions.Item>
+                                      <Descriptions.Item label="请求体">
+                                        <pre style={previewCodeStyle}>{formatPreviewText(item.body)}</pre>
+                                      </Descriptions.Item>
+                                      <Descriptions.Item label="提取变量">
+                                        {(item.extractors || []).length
+                                          ? (item.extractors || []).map((extractor) => extractor.name).join('、')
+                                          : '无'}
+                                      </Descriptions.Item>
+                                    </Descriptions>
+                                  </Space>
+                                </List.Item>
+                              )}
+                            />
+                          ) : (
+                            <Alert type="warning" showIcon message="当前未拿到接口用例链路快照，请先确认已选择有效用例。" />
+                          )}
+                        </Card>
+                      </Space>
                     ) : (
                       <Space direction="vertical" size={16} style={{ width: '100%' }}>
                         <Card bordered={false} style={workspaceCardStyle}>
@@ -1259,12 +1523,13 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
                           rules={setupConfig?.enabled ? [{ required: true, message: '请选择预置接口链' }] : []}
                         >
                           <TreeSelect
-                            treeData={caseTree}
+                            treeData={selectableCaseTree}
                             treeCheckable
                             showCheckedStrategy={TreeSelect.SHOW_CHILD}
                             placeholder="选择登录 -> 鉴权 -> 初始化等预置接口，按顺序执行"
                             allowClear
                             multiple
+                            onChange={(values) => applyExpandedCaseSelection(['parameter_config', 'setup_config', 'case_list'], values)}
                           />
                         </Form.Item>
                         <Alert
@@ -1617,6 +1882,13 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
                       eyebrow="Step 7"
                       title="确认执行"
                       description="最后确认计划快照、阈值、链路和负载模型，确保这次执行结果是可复现、可追溯的。"
+                    />
+                    <Alert
+                      showIcon
+                      type="info"
+                      style={executionGuardrailStyle}
+                      message="执行保护"
+                      description="保存并执行后会创建后台任务并立即返回，性能任务在独立队列中按服务端并发门闩执行。调度、报告列表和平台其他页面不会等待压测主循环结束。"
                     />
                   <Card bordered={false} style={workspaceMutedCardStyle}>
                     <Descriptions column={2} title="执行确认">

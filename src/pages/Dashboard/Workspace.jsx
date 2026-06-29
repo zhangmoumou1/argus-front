@@ -810,12 +810,18 @@ const PlanCard = ({ item }) => {
   const latest = item.report?.[0];
   const planHref = resolvePlanHref(item);
   const planTypeLabel = resolvePlanTypeLabel(item);
+  const planType = String(item?.plan_type || 'api').toLowerCase();
   const sparkData = useMemo(
-    () =>
-      [...(item.report || [])]
+    () => {
+      const points = [...(item.report || [])]
         .reverse()
-        .map((report) => Math.round(calculatePercent(report) * 100)),
-    [item.report],
+        .map((report) => Math.round(calculatePercent(report) * 100));
+      if (planType === 'performance' && points.length === 1) {
+        return [points[0], points[0]];
+      }
+      return points;
+    },
+    [item.report, planType],
   );
 
   return (

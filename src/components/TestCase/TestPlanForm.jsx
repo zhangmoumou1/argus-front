@@ -13,7 +13,63 @@ import {listAllNotificationConfigs} from "@/services/notificationConfig";
 const {Step} = Steps;
 const {Option} = Select;
 
+const normalizeSelectableCaseTree = (nodes = []) => nodes.map((node) => {
+  const children = normalizeSelectableCaseTree(node.children || []);
+  const next = {...node, children};
+  if (!String(next.value || next.key || '').startsWith('testcase_')) {
+    next.disabled = false;
+  }
+  return next;
+});
+
+const collectCaseLeafValues = (nodes = []) => {
+  const values = [];
+  nodes.forEach((node) => {
+    const nodeValue = String(node?.value ?? node?.key ?? '');
+    if (nodeValue.startsWith('testcase_')) {
+      values.push(nodeValue);
+    }
+    if (Array.isArray(node?.children) && node.children.length) {
+      values.push(...collectCaseLeafValues(node.children));
+    }
+  });
+  return values;
+};
+
+const buildDirectoryCaseMap = (nodes = []) => {
+  const map = new Map();
+  const walk = (items = []) => {
+    items.forEach((node) => {
+      const nodeValue = String(node?.value ?? node?.key ?? '');
+      const children = Array.isArray(node?.children) ? node.children : [];
+      if (!nodeValue.startsWith('testcase_')) {
+        map.set(nodeValue, collectCaseLeafValues(children));
+      }
+      walk(children);
+    });
+  };
+  walk(nodes);
+  return map;
+};
+
+const expandSelectedCaseValues = (values = [], directoryCaseMap = new Map()) => {
+  const ordered = [];
+  const seen = new Set();
+  values.forEach((item) => {
+    const key = String(item);
+    const expanded = directoryCaseMap.get(key) || [key];
+    expanded.forEach((value) => {
+      if (!String(value).startsWith('testcase_') || seen.has(value)) return;
+      seen.add(value);
+      ordered.push(value);
+    });
+  });
+  return ordered;
+};
+
 const CaseList = ({dispatch, form, loading, caseMap, treeData, planRecord, onSave, selectedCaseData, pendingMap}) => {
+  const selectableTreeData = normalizeSelectableCaseTree(treeData || []);
+  const directoryCaseMap = buildDirectoryCaseMap(selectableTreeData);
   const columns = [
     {
       title: '用例id',
@@ -60,10 +116,12 @@ const CaseList = ({dispatch, form, loading, caseMap, treeData, planRecord, onSav
         <Form.Item label="用例树" name="case_list" rules={
           [{required: true, message: '请至少选择一个case'}]
         } {...CONFIG.SQL_LAYOUT}>
-          <TreeSelect treeData={treeData} treeCheckable style={{width: '100%'}} showSearch allowClear
-                      maxTagCount={5} onChange={(a, b) => {
+          <TreeSelect treeData={selectableTreeData} treeCheckable style={{width: '100%'}} showSearch allowClear
+                      maxTagCount={5} onChange={(a) => {
+            const expandedValues = expandSelectedCaseValues(a, directoryCaseMap);
+            form.setFieldsValue({case_list: expandedValues});
             onSave({
-              selectedCaseData: b.map((item, idx) => ({name: item, case_id: a[idx], index: idx}))
+              selectedCaseData: expandedValues.map((item, idx) => ({name: caseMap[item.split("_")[1]], case_id: item, index: idx}))
             })
           }} loading={loading.effects['testplan/listTestCaseTreeWithProjectId']}/>
         </Form.Item>
