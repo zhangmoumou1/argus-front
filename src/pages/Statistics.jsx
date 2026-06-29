@@ -5,7 +5,7 @@ import { DatePicker } from 'antd';
 import {
   ApiOutlined,
   BarChartOutlined,
-  CheckCircleOutlined,
+  DesktopOutlined,
   FunctionOutlined,
   LineChartOutlined,
   QuestionCircleOutlined,
@@ -105,6 +105,7 @@ const buildFilledTrend = (range = {}, trend = []) => {
       date,
       api_case_count: Number(current?.api_case_count || 0),
       functional_case_count: Number(current?.functional_case_count || 0),
+      ui_case_count: Number(current?.ui_case_count || 0),
     });
     cursor = cursor.add(1, 'day');
   }
@@ -200,12 +201,13 @@ const Statistics = ({ user, dispatch }) => {
   const [trendVisibility, setTrendVisibility] = useState({
     api: true,
     functional: true,
+    ui: true,
   });
   const [statistics, setStatistics] = useState({
     range: {},
     overview: {},
     trend: [],
-    ranking: { api_case: [], functional_case: [] },
+    ranking: { api_case: [], functional_case: [], ui_case: [] },
   });
 
   const fetchStatistics = async (nextPeriod, nextRange) => {
@@ -247,6 +249,10 @@ const Statistics = ({ user, dispatch }) => {
     () => buildSparkline(filledTrend, 'functional_case_count'),
     [filledTrend],
   );
+  const sparkUi = useMemo(
+    () => buildSparkline(filledTrend, 'ui_case_count'),
+    [filledTrend],
+  );
   const sparkCoverage = useMemo(
     () => {
       const values = filledTrend.map((item) => {
@@ -272,26 +278,9 @@ const Statistics = ({ user, dispatch }) => {
     },
     [filledTrend, overview.api_coverage_rate],
   );
-  const sparkPass = useMemo(
-    () =>
-      filledTrend.map((item) => {
-        const apiCount = Number(item?.api_case_count || 0);
-        const functionalCount = Number(item?.functional_case_count || 0);
-        return apiCount > 0
-          ? Number(
-              (
-                (Math.min(functionalCount, apiCount) / apiCount) *
-                100
-              ).toFixed(2),
-            )
-          : 0;
-      }),
-    [filledTrend],
-  );
-
   const trendOptions = {
     legend: { show: false },
-    colors: ['#465FFF', '#12b76a'],
+    colors: ['#465FFF', '#12b76a', '#f79009'],
     chart: {
       fontFamily: 'Outfit, sans-serif',
       type: 'area',
@@ -300,7 +289,7 @@ const Statistics = ({ user, dispatch }) => {
     },
     stroke: {
       curve: 'smooth',
-      width: [2, 2],
+      width: [2, 2, 2],
       lineCap: 'round',
     },
     fill: {
@@ -351,6 +340,9 @@ const Statistics = ({ user, dispatch }) => {
     trendVisibility.functional
       ? { name: '功能用例', data: sparkFunctional }
       : null,
+    trendVisibility.ui
+      ? { name: 'UI用例', data: sparkUi }
+      : null,
   ].filter(Boolean);
 
   const handlePresetClick = (nextPeriod) => {
@@ -369,7 +361,9 @@ const Statistics = ({ user, dispatch }) => {
   const rankingRows =
     rankingTab === 'api'
       ? statistics.ranking?.api_case
-      : statistics.ranking?.functional_case;
+      : rankingTab === 'functional'
+        ? statistics.ranking?.functional_case
+        : statistics.ranking?.ui_case;
   const currentRangeText =
     Array.isArray(range) && range.length === 2
       ? `${range[0]?.format?.('YYYY-MM-DD') || '-'} 至 ${range[1]?.format?.('YYYY-MM-DD') || '-'}`
@@ -450,20 +444,20 @@ const Statistics = ({ user, dispatch }) => {
             changeMeta={overviewChange.functional_case_total}
           />
           <StatCard
+            icon={<DesktopOutlined />}
+            label="UI用例总数"
+            value={overview.ui_case_total || 0}
+            sparkData={sparkUi}
+            color="#f79009"
+            changeMeta={overviewChange.ui_case_total}
+          />
+          <StatCard
             icon={<BarChartOutlined />}
             label="接口覆盖率"
             value={formatPercent(overview.api_coverage_rate)}
             sparkData={sparkCoverage}
             color="#465fff"
             changeMeta={overviewChange.api_coverage_rate}
-          />
-          <StatCard
-            icon={<CheckCircleOutlined />}
-            label="接口通过率"
-            value={formatPercent(overview.api_pass_rate)}
-            sparkData={sparkPass}
-            color="#f79009"
-            changeMeta={overviewChange.api_pass_rate}
           />
         </div>
 
@@ -476,7 +470,7 @@ const Statistics = ({ user, dispatch }) => {
                 <h3 className="text-[16px] font-semibold text-gray-800">
                   用例数趋势
                 </h3>
-                <Tooltip title="按当前区间展示接口用例与功能用例的每日变化">
+                <Tooltip title="按当前区间展示接口、功能与 UI 用例的每日变化">
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 text-[11px] text-gray-400">
                     <QuestionCircleOutlined />
                   </span>
@@ -524,6 +518,27 @@ const Statistics = ({ user, dispatch }) => {
                     style={{ backgroundColor: trendVisibility.functional ? '#12b76a' : '#D0D5DD' }}
                   />
                   <span>功能用例</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendVisibility((prev) => ({ ...prev, ui: !prev.ui }))}
+                  className={`flex items-center gap-2 border-0 bg-transparent p-0 shadow-none appearance-none transition outline-none focus:outline-none focus-visible:outline-none ${
+                    trendVisibility.ui ? 'text-gray-600' : 'text-gray-300'
+                  }`}
+                  style={{
+                    appearance: 'none',
+                    backgroundColor: 'transparent',
+                    border: 0,
+                    padding: 0,
+                    boxShadow: 'none',
+                    borderRadius: 0,
+                  }}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: trendVisibility.ui ? '#f79009' : '#D0D5DD' }}
+                  />
+                  <span>UI用例</span>
                 </button>
               </div>
             </div>
@@ -578,6 +593,17 @@ const Statistics = ({ user, dispatch }) => {
               >
                 功能用例数
               </button>
+              <button
+                type="button"
+                onClick={() => setRankingTab('ui')}
+                className={`w-full appearance-none rounded-md border-0 px-3 py-2 text-theme-sm font-medium outline-none transition focus:outline-none ${
+                  rankingTab === 'ui'
+                    ? 'bg-white text-gray-900 shadow-theme-xs'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                UI用例数
+              </button>
             </div>
             <div className="mt-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
               <RankingTable
@@ -586,7 +612,9 @@ const Statistics = ({ user, dispatch }) => {
                 emptyText={
                   rankingTab === 'api'
                     ? '暂无接口用例排行数据'
-                    : '暂无功能用例排行数据'
+                    : rankingTab === 'functional'
+                      ? '暂无功能用例排行数据'
+                      : '暂无UI用例排行数据'
                 }
               />
             </div>

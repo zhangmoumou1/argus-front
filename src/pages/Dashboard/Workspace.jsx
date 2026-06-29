@@ -170,6 +170,7 @@ const SplitMetricCard = ({
   total,
   apiValue,
   functionalValue,
+  uiValue,
 }) => (
   <Card className="h-full" padding="p-4 md:p-4 pb-0">
     <div className="flex h-full flex-col">
@@ -188,6 +189,9 @@ const SplitMetricCard = ({
           <span className="mx-3 text-gray-300">|</span>
           <span className="text-gray-500">功能：</span>
           <span className="ml-1 text-[13px] font-normal text-gray-800">{functionalValue}</span>
+          <span className="mx-3 text-gray-300">|</span>
+          <span className="text-gray-500">UI：</span>
+          <span className="ml-1 text-[13px] font-normal text-gray-800">{uiValue}</span>
         </div>
       </div>
     </div>
@@ -636,6 +640,7 @@ const WeeklyCaseChart = ({ weekCase = [] }) => {
   const [visibleSeries, setVisibleSeries] = useState({
     api: true,
     functional: true,
+    ui: true,
   });
   const categories = weekCase.map((item) => item?.date || '');
   const apiData = weekCase.map((item) =>
@@ -644,8 +649,11 @@ const WeeklyCaseChart = ({ weekCase = [] }) => {
   const functionalData = weekCase.map((item) =>
     Number(item?.functional_case_count || item?.functional_count || 0),
   );
+  const uiData = weekCase.map((item) =>
+    Number(item?.ui_case_count || item?.ui_count || 0),
+  );
   const options = {
-    colors: ['#7592ff', '#7cd4fd'],
+    colors: ['#7592ff', '#7cd4fd', '#f79009'],
     chart: {
       fontFamily: 'Outfit, sans-serif',
       type: 'bar',
@@ -702,6 +710,13 @@ const WeeklyCaseChart = ({ weekCase = [] }) => {
       color: '#7cd4fd',
     });
   }
+  if (visibleSeries.ui) {
+    chartSeries.push({
+      name: 'UI用例',
+      data: uiData,
+      color: '#f79009',
+    });
+  }
 
   const toggleSeries = (key) => {
     setVisibleSeries((prev) => ({
@@ -750,6 +765,19 @@ const WeeklyCaseChart = ({ weekCase = [] }) => {
               style={{ backgroundColor: visibleSeries.functional ? '#7cd4fd' : '#D0D5DD' }}
             />
             功能用例
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleSeries('ui')}
+            className={`inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 transition-all duration-200 hover:opacity-90 ${
+              visibleSeries.ui ? 'text-gray-700' : 'text-gray-400'
+            }`}
+          >
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: visibleSeries.ui ? '#f79009' : '#D0D5DD' }}
+            />
+            UI用例
           </button>
         </div>
         <div className="mt-1 -mb-2 overflow-hidden">
@@ -934,10 +962,21 @@ const CaseDistributionCard = ({
           >
             功能用例
           </button>
+          <button
+            type="button"
+            onClick={() => onChange('ui')}
+            className={`appearance-none border-0 rounded-full px-3 py-1.5 text-[12px] font-medium transition focus:outline-none focus:ring-0 ${
+              activeKey === 'ui'
+                ? 'bg-white text-brand-700 shadow-sm ring-1 ring-brand-100'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            UI用例
+          </button>
         </div>
       </div>
       <div className="mt-6 px-1 text-[13px] text-gray-500">
-        以项目维度统计接口与功能用例分布
+        以项目维度统计接口、功能与 UI 用例分布
       </div>
 
       <div className="mt-8 grid flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
@@ -958,14 +997,17 @@ const Workspace = ({ user, dispatch }) => {
     case_count,
     api_case_count,
     functional_case_count,
+    ui_case_count,
     weekly_new_api_case,
     weekly_new_functional_case,
+    weekly_new_ui_case,
     user_rank,
     total_user,
     weekly_case,
     month_case,
     api_case_distribution,
     functional_case_distribution,
+    ui_case_distribution,
     followPlan = [],
   } = user;
 
@@ -987,18 +1029,25 @@ const Workspace = ({ user, dispatch }) => {
 
   const weeklyApi = Number(weekly_new_api_case || 0);
   const weeklyFunctional = Number(weekly_new_functional_case || 0);
-  const weeklyTotal = weeklyApi + weeklyFunctional;
+  const weeklyUi = Number(weekly_new_ui_case || 0);
+  const weeklyTotal = weeklyApi + weeklyFunctional + weeklyUi;
 
   const distributionItems =
     distributionKey === 'api'
       ? api_case_distribution || []
-      : functional_case_distribution || [];
+      : distributionKey === 'functional'
+        ? functional_case_distribution || []
+        : ui_case_distribution || [];
   const distributionTotal = distributionItems.reduce(
     (sum, item) => sum + Number(item?.value || 0),
     0,
   );
   const distributionMoreUrl =
-    distributionKey === 'api' ? '/scenario/testcase' : '/scenario/functionalCase';
+    distributionKey === 'api'
+      ? '/scenario/testcase'
+      : distributionKey === 'functional'
+        ? '/scenario/functionalCase'
+        : '/ui-test/cases';
 
   return (
     <PageContainer title={false} breadcrumb={null}>
@@ -1021,17 +1070,19 @@ const Workspace = ({ user, dispatch }) => {
           />
           <SplitMetricCard
             icon={<FileDoneOutlined />}
-            label="用例数量（接口/功能）"
+            label="用例数量（接口/功能/UI）"
             total={Number(case_count || 0)}
             apiValue={Number(api_case_count || 0)}
             functionalValue={Number(functional_case_count || 0)}
+            uiValue={Number(ui_case_count || 0)}
           />
           <SplitMetricCard
             icon={<EditOutlined />}
-            label="最近7天新增（接口/功能）"
+            label="最近7天新增（接口/功能/UI）"
             total={weeklyTotal}
             apiValue={weeklyApi}
             functionalValue={weeklyFunctional}
+            uiValue={weeklyUi}
           />
         </div>
 
