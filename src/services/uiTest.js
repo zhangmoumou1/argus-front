@@ -220,6 +220,22 @@ export async function deleteUiTestPlan(params) {
   });
 }
 
+export async function followUiTestPlan(params) {
+  return request(`${CONFIG.URL}/ui-test/plan/follow`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
+export async function unFollowUiTestPlan(params) {
+  return request(`${CONFIG.URL}/ui-test/plan/unfollow`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
 export async function listUiTestRuns(params) {
   return request(`${CONFIG.URL}/ui-test/run/list`, {
     method: 'GET',

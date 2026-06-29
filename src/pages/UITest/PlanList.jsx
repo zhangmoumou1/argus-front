@@ -40,12 +40,14 @@ import { getAiModelConfig, listEnvironment, listGateway } from '@/services/confi
 import auth from '@/utils/auth';
 import {
   deleteUiTestPlan,
+  followUiTestPlan,
   getUiTestPlanDetail,
   listUiTestPlanCandidates,
   listUiTestPlans,
   runUiTestPlan,
   saveUiTestPlan,
   switchUiTestPlan,
+  unFollowUiTestPlan,
 } from '@/services/uiTest';
 import { listAllNotificationConfigs } from '@/services/notificationConfig';
 import {
@@ -183,6 +185,7 @@ const PlanList = () => {
   const [plans, setPlans] = useState([]);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [followFilter, setFollowFilter] = useState();
   const [candidateGroups, setCandidateGroups] = useState([]);
   const [aiModelOptions, setAiModelOptions] = useState([]);
   const [envOptions, setEnvOptions] = useState([]);
@@ -299,6 +302,7 @@ const PlanList = () => {
       project_id: pid,
       keyword,
       status: statusFilter,
+      follow: followFilter,
       page,
       size,
       paged: true,
@@ -418,6 +422,15 @@ const PlanList = () => {
     }
   };
 
+  const handleFollow = async (record, checked) => {
+    const res = checked
+      ? await followUiTestPlan({ id: record.id })
+      : await unFollowUiTestPlan({ id: record.id });
+    if (auth.response(res, true)) {
+      fetchPlans(projectId, pagination.current, pagination.pageSize);
+    }
+  };
+
   const nextStep = async () => {
     try {
       if (currentStep === 0) {
@@ -447,6 +460,10 @@ const PlanList = () => {
   useEffect(() => {
     if (projectId) fetchPlans(projectId, 1, pagination.pageSize);
   }, [statusFilter]);
+
+  useEffect(() => {
+    if (projectId) fetchPlans(projectId, 1, pagination.pageSize);
+  }, [followFilter]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -557,6 +574,23 @@ const PlanList = () => {
           />
           {uiStatusTag(value)}
         </div>
+      ),
+    },
+    {
+      title: (
+        <span>
+          是否关注 <Tooltip title="关注后会展示在 Dashboard 工作台的关注测试计划中"><QuestionCircleOutlined /></Tooltip>
+        </span>
+      ),
+      dataIndex: 'follow',
+      key: 'follow',
+      width: 120,
+      render: (value, record) => (
+        <Switch
+          checked={!!value}
+          onChange={(checked) => handleFollow(record, checked)}
+          size="small"
+        />
       ),
     },
     {
@@ -700,7 +734,20 @@ const PlanList = () => {
               allowClear
             />
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={3}>
+            <Select
+              value={followFilter}
+              onChange={(value) => setFollowFilter(value)}
+              placeholder="是否关注"
+              allowClear
+              style={{ width: '100%' }}
+              options={[
+                { label: '已关注', value: true },
+                { label: '未关注', value: false },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={3}>
             <Space>
               <PillButton type="primary" icon={<PlusOutlined />} onClick={openCreate}>
                 新建计划

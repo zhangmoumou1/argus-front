@@ -42,6 +42,22 @@ export async function executePerformancePlan(params) {
   });
 }
 
+export async function followPerformancePlan(params) {
+  return request(`${CONFIG.URL}/performance/plan/follow`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
+export async function unFollowPerformancePlan(params) {
+  return request(`${CONFIG.URL}/performance/plan/unfollow`, {
+    method: 'GET',
+    params,
+    headers: auth.headers(),
+  });
+}
+
 export async function listPerformanceReport(params) {
   return request(`${CONFIG.URL}/performance/report/list`, {
     method: 'GET',

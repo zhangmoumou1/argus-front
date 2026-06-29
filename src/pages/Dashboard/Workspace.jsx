@@ -141,6 +141,20 @@ const calculatePercent = (report) =>
       (report?.error_count || 0),
   );
 
+const resolvePlanHref = (item) => {
+  const type = String(item?.plan_type || 'api').toLowerCase();
+  if (type === 'ui') return '/#/uiTest/plan';
+  if (type === 'performance') return '/#/performance/plan';
+  return '/#/apiTest/testplan';
+};
+
+const resolvePlanTypeLabel = (item) => {
+  const type = String(item?.plan_type || 'api').toLowerCase();
+  if (type === 'ui') return 'UI测试';
+  if (type === 'performance') return '性能测试';
+  return '接口测试';
+};
+
 const MetricCard = ({ icon, label, value, suffix }) => (
   <Card className="h-full" padding="p-4 md:p-4 pb-0">
     <div className="flex h-full flex-col">
@@ -794,6 +808,8 @@ const WeeklyCaseChart = ({ weekCase = [] }) => {
 
 const PlanCard = ({ item }) => {
   const latest = item.report?.[0];
+  const planHref = resolvePlanHref(item);
+  const planTypeLabel = resolvePlanTypeLabel(item);
   const sparkData = useMemo(
     () =>
       [...(item.report || [])]
@@ -806,14 +822,19 @@ const PlanCard = ({ item }) => {
     <Card className="h-full" padding="p-5 md:p-6">
       <div className="flex items-center justify-between">
         <a
-          href="/#/apiTest/testplan"
+          href={planHref}
           className="text-base font-semibold text-gray-800 hover:text-brand-500"
         >
           {item.plan?.name || '未命名计划'}
         </a>
-        <Badge size="sm" color={latest ? 'success' : 'light'}>
-          {latest ? '已有报告' : '待执行'}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge size="sm" color="primary">
+            {planTypeLabel}
+          </Badge>
+          <Badge size="sm" color={latest ? 'success' : 'light'}>
+            {latest ? '已有报告' : '待执行'}
+          </Badge>
+        </div>
       </div>
 
       {!latest ? (
@@ -1116,9 +1137,9 @@ const Workspace = ({ user, dispatch }) => {
                   href="/#/apiTest/testplan"
                   className="font-medium text-brand-500"
                 >
-                  关注
+                  接口测试计划
                 </a>{' '}
-                一个吧！
+                、UI 测试计划或性能测试计划吧！
               </div>
             </Card>
           ) : (

@@ -35,12 +35,14 @@ import {
 import {
   deletePerformancePlan,
   executePerformancePlan,
+  followPerformancePlan,
   insertPerformancePlan,
   listPerformanceParameterFiles,
   listPerformancePlan,
   previewPerformanceParameterFile,
   queryPerformancePlanSource,
   queryPerformanceCasePreview,
+  unFollowPerformancePlan,
   updatePerformancePlan,
   validatePerformancePlanParameters,
 } from '@/services/performance';
@@ -284,6 +286,7 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
   const [parameterPreview, setParameterPreview] = useState(null);
   const [parameterValidation, setParameterValidation] = useState(null);
   const [dataSource, setDataSource] = useState([]);
+  const [followFilter, setFollowFilter] = useState();
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -322,6 +325,7 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     const values = filterForm.getFieldsValue();
     const res = await listPerformancePlan({
       ...values,
+      follow: followFilter,
       page,
       size: pagination.pageSize,
     });
@@ -541,6 +545,15 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     }
   };
 
+  const onFollow = async (record, checked) => {
+    const res = checked
+      ? await followPerformancePlan({ id: record.id })
+      : await unFollowPerformancePlan({ id: record.id });
+    if (auth.response(res, true)) {
+      fetchPlans(pagination.current);
+    }
+  };
+
   function buildSubmitPayload(values) {
     const payload = {
       ...values,
@@ -681,6 +694,10 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     loadCasePreview(selectedCases);
   }, [JSON.stringify(selectedCases)]);
 
+  useEffect(() => {
+    fetchPlans(1);
+  }, [followFilter]);
+
   const columns = useMemo(() => [
     {
       title: '计划名称',
@@ -754,6 +771,14 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
       render: (value) => (value ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>),
     },
     {
+      title: '是否关注',
+      dataIndex: 'follow',
+      key: 'follow',
+      render: (value, record) => (
+        <Switch checked={!!value} onChange={(checked) => onFollow(record, checked)} />
+      ),
+    },
+    {
       title: '操作',
       key: 'operation',
         render: (_, record) => (
@@ -812,6 +837,19 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
               <Col span={10}>
                 <Form.Item label="名称" name="name" style={{ marginBottom: 0 }}>
                   <Input placeholder="输入计划名称" />
+                </Form.Item>
+              </Col>
+              <Col span={7}>
+                <Form.Item label="关注" style={{ marginBottom: 0 }}>
+                  <Select
+                    allowClear
+                    placeholder="是否关注"
+                    value={followFilter}
+                    onChange={(value) => setFollowFilter(value)}
+                  >
+                    <Option value>已关注</Option>
+                    <Option value={false}>未关注</Option>
+                  </Select>
                 </Form.Item>
               </Col>
             </Row>
