@@ -33,6 +33,7 @@ import {
   LineChartOutlined,
   PlusOutlined,
   ReloadOutlined,
+  SearchOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import {
@@ -430,7 +431,6 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
   const [parameterPreview, setParameterPreview] = useState(null);
   const [parameterValidation, setParameterValidation] = useState(null);
   const [dataSource, setDataSource] = useState([]);
-  const [followFilter, setFollowFilter] = useState();
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -471,7 +471,6 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     const values = filterForm.getFieldsValue();
     const res = await listPerformancePlan({
       ...values,
-      follow: followFilter,
       page,
       size: pagination.pageSize,
     });
@@ -915,11 +914,13 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     loadCasePreview(selectedCases);
   }, [JSON.stringify(selectedCases)]);
 
-  useEffect(() => {
-    fetchPlans(1);
-  }, [followFilter]);
-
   const columns = useMemo(() => [
+    {
+      title: '项目',
+      dataIndex: 'project_id',
+      key: 'project_id',
+      render: (value) => projectsMap[value] || `项目#${value}`,
+    },
     {
       title: '计划名称',
       dataIndex: 'name',
@@ -936,25 +937,10 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
       ),
     },
     {
-      title: '项目',
-      dataIndex: 'project_id',
-      key: 'project_id',
-      render: (value) => projectsMap[value] || `项目#${value}`,
-    },
-    {
-      title: '环境',
+      title: '执行环境',
       dataIndex: 'env',
       key: 'env',
       render: (value) => envMap[value] || `环境#${value}`,
-    },
-    {
-      title: '是否关注',
-      dataIndex: 'follow',
-      key: 'follow',
-      width: 110,
-      render: (value, record) => (
-        <Switch checked={!!value} onChange={(checked) => onFollow(record, checked)} />
-      ),
     },
     {
       title: '来源',
@@ -1024,55 +1010,37 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
   return (
     <PageContainer title={false} breadcrumb={null}>
       <div style={{ padding: '8px 0 24px', background: performancePalette.page, minHeight: 'calc(100vh - 120px)' }}>
-        <PerformanceToolbar
-          extra={(
-            <Space size={10}>
-              <Button onClick={() => fetchPlans(1)} style={{ borderRadius: 999 }}><ReloadOutlined /> 刷新列表</Button>
-              <Button type="primary" style={{ borderRadius: 999 }} onClick={openCreate}>
-                <PlusOutlined /> 新建性能计划
-              </Button>
-            </Space>
-          )}
-        >
-          <Form form={filterForm} onValuesChange={() => fetchPlans(1)}>
-            <Row gutter={[14, 12]}>
-              <Col span={7}>
-                <Form.Item label="项目" name="project_id" style={{ marginBottom: 0 }}>
-                  <Select allowClear placeholder="选择项目">
-                    {projects.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={7}>
-                <Form.Item label="环境" name="env" style={{ marginBottom: 0 }}>
-                  <Select allowClear placeholder="选择环境">
-                    {envList.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={10}>
-                <Form.Item label="名称" name="name" style={{ marginBottom: 0 }}>
-                  <Input placeholder="输入计划名称" />
-                </Form.Item>
-              </Col>
-              <Col span={7}>
-                <Form.Item label="关注" style={{ marginBottom: 0 }}>
-                  <Select
-                    allowClear
-                    placeholder="是否关注"
-                    value={followFilter}
-                    onChange={(value) => setFollowFilter(value)}
-                  >
-                    <Option value>已关注</Option>
-                    <Option value={false}>未关注</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
+        <PerformanceToolbar>
+          <Form form={filterForm}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <Form.Item label="项目" name="project_id" style={{ marginBottom: 0 }}>
+                <Select allowClear placeholder="选择项目" style={{ width: 220 }}>
+                  {projects.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}
+                </Select>
+              </Form.Item>
+              <Form.Item label="名称" name="name" style={{ marginBottom: 0 }}>
+                <Input placeholder="输入计划名称" style={{ width: 220 }} />
+              </Form.Item>
+              <Form.Item label="创建人" name="create_user" style={{ marginBottom: 0 }}>
+                <Select allowClear placeholder="选择创建人" style={{ width: 220 }}>
+                  {Object.values(userMap).filter(Boolean).map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}
+                </Select>
+              </Form.Item>
+              <Button type="primary" icon={<SearchOutlined />} style={{ borderRadius: 999, flexShrink: 0 }} onClick={() => fetchPlans(1)}>查询</Button>
+              <Button icon={<ReloadOutlined />} style={{ borderRadius: 999, flexShrink: 0 }} onClick={() => {
+                filterForm.resetFields();
+                setTimeout(() => fetchPlans(1), 0);
+              }}>重置</Button>
+            </div>
           </Form>
         </PerformanceToolbar>
 
         <PerformanceDataTableCard>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 16, marginBottom: 12 }}>
+            <Button type="primary" onClick={openCreate}>
+              <PlusOutlined /> 添加计划
+            </Button>
+          </div>
           <Table
             rowKey="id"
             columns={columns}

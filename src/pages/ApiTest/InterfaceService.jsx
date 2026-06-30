@@ -30,7 +30,9 @@ import {
   LinkOutlined,
   MoreOutlined,
   NodeIndexOutlined,
+  ReloadOutlined,
   RocketOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import {
   deleteApiService,
@@ -345,7 +347,12 @@ const InterfaceService = ({ project, user, dispatch }) => {
                 placeholder="服务名称模糊查询"
                 style={{ width: 220 }}
               />
-              <Button onClick={fetchServices}>查询</Button>
+              <Button type="primary" icon={<SearchOutlined />} onClick={fetchServices}>查询</Button>
+              <Button icon={<ReloadOutlined />} onClick={() => {
+                setQueryProjectId(undefined);
+                setKeyword('');
+                setTimeout(fetchServices, 0);
+              }}>重置</Button>
             </Space>
           </Col>
           <Col>

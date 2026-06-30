@@ -333,7 +333,7 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
           <div style={{ paddingTop: 12 }}>
             <Form form={form}>
               <Row gutter={[12, 12]} align="bottom">
-                <Col xs={24} sm={12} lg={3}>
+                <Col xs={24} sm={12} lg={4}>
                   <Form.Item label="执行人" name="executor" style={{ marginBottom: 0 }}>
                     <Select placeholder="选择执行人" allowClear>
                       <Option value={0}>
@@ -350,7 +350,7 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
                   </Form.Item>
                 </Col>
                 {!isReportView ? (
-                  <Col xs={24} sm={12} lg={3}>
+                  <Col xs={24} sm={12} lg={4}>
                     <Form.Item label="状态" name="status" style={{ marginBottom: 0 }}>
                       <Select placeholder="选择状态" allowClear>
                         <Option value={0}>准备中</Option>
@@ -361,7 +361,7 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
                     </Form.Item>
                   </Col>
                 ) : null}
-                <Col xs={24} lg={5}>
+                <Col xs={24} lg={6}>
                   <Form.Item
                     label="执行时间"
                     name="date"
@@ -383,7 +383,7 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
                     />
                   </Form.Item>
                 </Col>
-                <Col xs={24} lg={3} style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <Col xs={24} lg={4} style={{ display: 'flex', alignItems: 'flex-end' }}>
                   <Space>
                     <PillButton type="primary" onClick={() => fetchList(1)}>
                       <SearchOutlined /> 查询
@@ -405,8 +405,8 @@ const ActivityHub = ({ dispatch, user, defaultTab }) => {
         </SectionCard>
 
         <SectionCard
-          title={isReportView ? '测试报告' : '执行记录列表'}
-          extra={<span style={{ color: uiPalette.subtle, fontSize: 13 }}>共 {pagination.total || dataSource.length} 条记录</span>}
+          title={isReportView ? '测试报告' : undefined}
+          extra={isReportView ? <span style={{ color: uiPalette.subtle, fontSize: 13 }}>共 {pagination.total || dataSource.length} 条记录</span> : undefined}
         >
           <Table
             rowKey="id"

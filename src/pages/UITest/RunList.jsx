@@ -44,7 +44,6 @@ import {
   getUiTestProjectSelectValue,
   normalizeApiList,
   normalizeApiPage,
-  pickUiTestProjectId,
   uiPalette,
   uiStatusTag,
   useUiTestProject,
@@ -90,12 +89,7 @@ const RunList = () => {
   const fetchProjects = async () => {
     const res = await listProject({ page: 1, size: 1000 });
     if (auth.response(res)) {
-      const list = normalizeApiList(res);
-      setProjects(list);
-      const nextProjectId = pickUiTestProjectId(list, projectId);
-      if (nextProjectId !== undefined && String(nextProjectId) !== String(projectId)) {
-        setProjectId(nextProjectId);
-      }
+      setProjects(normalizeApiList(res));
     }
   };
 
@@ -126,7 +120,6 @@ const RunList = () => {
     size = pagination.pageSize,
     filters = {},
   ) => {
-    if (!pid) return;
     const currentExecutorId = Object.prototype.hasOwnProperty.call(filters, 'executorId') ? filters.executorId : executorId;
     const currentEnvName = Object.prototype.hasOwnProperty.call(filters, 'envName') ? filters.envName : envName;
     const currentStatusFilter = Object.prototype.hasOwnProperty.call(filters, 'statusFilter') ? filters.statusFilter : statusFilter;
@@ -191,13 +184,11 @@ const RunList = () => {
   }, []);
 
   useEffect(() => {
-    if (projectId) {
-      fetchRuns(projectId, 1, pagination.pageSize);
-    }
+    fetchRuns(projectId, 1, pagination.pageSize);
   }, [projectId, statusFilter, activeTab]);
 
   useEffect(() => {
-    if (!autoRefresh || !projectId) return undefined;
+    if (!autoRefresh) return undefined;
     const timer = window.setInterval(() => {
       fetchRuns(projectId, pagination.current, pagination.pageSize);
     }, 30000);

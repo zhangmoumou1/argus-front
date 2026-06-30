@@ -5506,7 +5506,7 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
         </Tooltip>
         <div className="functional-panel functional-tree-panel">
           <div className="functional-panel-header">
-            <strong>{caseTreeLabel}</strong>
+            <strong style={{display: 'flex', alignItems: 'center'}}>{caseTreeLabel}{uiOnly && <span style={{fontSize: 12, fontWeight: 400, color: '#94a3b8', marginLeft: 4}}>· 基于功能用例</span>}</strong>
             <Tooltip title={`收起${caseTreeLabel}`}>
               <Button
                 size="small"

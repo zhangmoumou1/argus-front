@@ -51,54 +51,12 @@ const panelBorder = `1px solid ${uiPalette.border}`;
 const softShadow = '0 8px 22px rgba(15, 23, 42, 0.06)';
 const radius = 8;
 
-const UI_TEST_PROJECT_STORAGE_KEY = 'argus.ui_test.project_id';
-const UI_TEST_PROJECT_EVENT = 'argus:ui-test-project-change';
-
 export const normalizeUiTestProjectId = (value) => {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value === 'number') return value;
   const text = String(value);
   const numeric = Number(text);
   return Number.isFinite(numeric) && String(numeric) === text ? numeric : value;
-};
-
-export const readUiTestProjectId = () => {
-  if (typeof window === 'undefined') return undefined;
-  try {
-    return normalizeUiTestProjectId(window.localStorage.getItem(UI_TEST_PROJECT_STORAGE_KEY));
-  } catch {
-    return undefined;
-  }
-};
-
-export const writeUiTestProjectId = (value) => {
-  const nextProjectId = normalizeUiTestProjectId(value);
-  if (typeof window !== 'undefined') {
-    try {
-      if (nextProjectId === undefined) {
-        window.localStorage.removeItem(UI_TEST_PROJECT_STORAGE_KEY);
-      } else {
-        window.localStorage.setItem(UI_TEST_PROJECT_STORAGE_KEY, String(nextProjectId));
-      }
-      window.dispatchEvent(new CustomEvent(UI_TEST_PROJECT_EVENT, { detail: nextProjectId }));
-    } catch {
-      // localStorage may be blocked; keep React state usable.
-    }
-  }
-  return nextProjectId;
-};
-
-export const pickUiTestProjectId = (projects = [], currentProjectId) => {
-  if (!projects.length) return undefined;
-  const current = normalizeUiTestProjectId(currentProjectId);
-  if (current !== undefined && projects.some((item) => String(item.id) === String(current))) {
-    return current;
-  }
-  const persisted = readUiTestProjectId();
-  if (persisted !== undefined && projects.some((item) => String(item.id) === String(persisted))) {
-    return persisted;
-  }
-  return projects[0].id;
 };
 
 export const getUiTestProjectSelectValue = (projects = [], projectId) => {
@@ -110,30 +68,10 @@ export const getUiTestProjectSelectValue = (projects = [], projectId) => {
 };
 
 export const useUiTestProject = () => {
-  const [projectId, setProjectIdState] = React.useState(() => readUiTestProjectId());
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleProjectChange = (event) => {
-      setProjectIdState(normalizeUiTestProjectId(event.detail));
-    };
-    const handleStorageChange = (event) => {
-      if (event.key === UI_TEST_PROJECT_STORAGE_KEY) {
-        setProjectIdState(normalizeUiTestProjectId(event.newValue));
-      }
-    };
-    window.addEventListener(UI_TEST_PROJECT_EVENT, handleProjectChange);
-    window.addEventListener('storage', handleStorageChange);
-    return () => {
-      window.removeEventListener(UI_TEST_PROJECT_EVENT, handleProjectChange);
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
-
+  const [projectId, setProjectIdState] = React.useState(undefined);
   const setProjectId = React.useCallback((value) => {
-    setProjectIdState(writeUiTestProjectId(value));
+    setProjectIdState(normalizeUiTestProjectId(value));
   }, []);
-
   return [projectId, setProjectId];
 };
 

@@ -6,6 +6,8 @@ import {
   DiffOutlined,
   FileSearchOutlined,
   LinkOutlined,
+  ReloadOutlined,
+  SearchOutlined,
   StopOutlined,
 } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -1178,8 +1180,8 @@ const InterfaceEndpoint = () => {
                   options={[{ label: '可用', value: 'available' }, { label: '废弃', value: 'deprecated' }]}
                   onChange={(value) => setStatus(value || '')}
                 />
-                <Button type="primary" onClick={fetchList}>查询</Button>
-                <Button onClick={onReset}>重置</Button>
+                <Button type="primary" icon={<SearchOutlined />} onClick={fetchList}>查询</Button>
+                <Button icon={<ReloadOutlined />} onClick={onReset}>重置</Button>
               </Space>
             </div>
             <Table

@@ -5,16 +5,13 @@ import { Button, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, T
 import { PageContainer } from '@ant-design/pro-components';
 
 import {
-
   deleteFunctionalCaseSkillDoc,
-
   insertFunctionalCaseSkillDoc,
-
   listFunctionalCaseSkillDocs,
-
   updateFunctionalCaseSkillDoc,
-
 } from '@/services/functionalCase';
+import { Card } from 'antd';
+import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 
 
@@ -430,35 +427,28 @@ const FunctionalSkill = () => {
 
       <div style={{ background: '#fff', padding: 16, borderRadius: 8 }}>
 
-        <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
-
-          <Space wrap>
-
-            <Input
-
-              value={keyword}
-
-              onChange={(event) => setKeyword(event.target.value)}
-
-              placeholder="按文档名称搜索"
-
-              style={{ width: 260 }}
-
-              allowClear
-
-            />
-
-            <Button onClick={() => loadDocs(keyword)}>搜索</Button>
-
-          </Space>
-
-          <Button type="primary" onClick={openCreateModal}>
-
-            新增文档
-
-          </Button>
-
-        </Space>
+        <Card bordered={false} style={{ marginBottom: 16, borderRadius: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="按文档名称搜索"
+                style={{ width: 260 }}
+                allowClear
+                onPressEnter={() => loadDocs(keyword)}
+              />
+              <Button type="primary" icon={<SearchOutlined />} onClick={() => loadDocs(keyword)}>查询</Button>
+              <Button icon={<ReloadOutlined />} onClick={() => {
+                setKeyword('');
+                setTimeout(() => loadDocs(''), 0);
+              }}>重置</Button>
+            </div>
+            <Button type="primary" onClick={openCreateModal}>
+              新增文档
+            </Button>
+          </div>
+        </Card>
 
         <Table rowKey="id" loading={loading} columns={columns} dataSource={docs} pagination={{ pageSize: 10 }} />
 

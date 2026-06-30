@@ -174,7 +174,7 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
 
   const onSubmit = async () => {
 
-    const values = form.getFieldsValue(["name", "env", "priority", "cron", "ordered", "enabled", "case_list", "project_id", "retry_minutes", "notification_config_id", "pass_rate"])
+    const values = form.getFieldsValue(["name", "env", "cron", "ordered", "enabled", "case_list", "project_id", "retry_minutes", "notification_config_id", "pass_rate"])
     let res;
     if (planRecord.id) {
       res = await dispatch({
@@ -230,15 +230,6 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
           } name="env">
             <Select placeholder="请选择要运行的环境" allowClear mode="multiple">
               {envList.map(v => <Option key={v.id} value={v.id}>{v.name}</Option>)}
-            </Select>
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item label="优先级" rules={
-            [{required: true, message: '请选择测试计划优先级'}]
-          } name="priority">
-            <Select placeholder="选择优先级" allowClear>
-              {CONFIG.PRIORITY.map(v => <Option key={v} value={v}>{v}</Option>)}
             </Select>
           </Form.Item>
         </Col>

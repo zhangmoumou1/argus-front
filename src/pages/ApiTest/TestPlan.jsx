@@ -3,7 +3,7 @@ import {connect} from '@umijs/max';
 import {Alert, Badge, Button, Card, Col, Divider, Form, Input, Row, Select, Space, Switch, Table, Tag, Tooltip} from "antd";
 import React, {useEffect} from "react";
 import CONFIG from "@/consts/config";
-import {PlusOutlined, QuestionCircleOutlined, ThunderboltOutlined} from "@ant-design/icons";
+import {PlusOutlined, QuestionCircleOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined} from "@ant-design/icons";
 import TestPlanForm from "@/components/TestCase/TestPlanForm";
 import UserLink from "@/components/Button/UserLink";
 import UserSelect from "@/components/User/UserSelect";
@@ -15,6 +15,7 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
   const {planData} = testplan;
   const {userList, userMap} = user;
   const {projectsMap, projects} = project;
+  const {envMap} = gconfig;
   // form查询条件
   const [form] = Form.useForm();
 
@@ -107,16 +108,16 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
       render: projectId => <a href={`/#/project/${projectId}`} rel="noreferrer">{projectsMap[projectId] || 'loading'}</a>
     },
     {
-      title: '测试计划',
+      title: '计划名称',
       key: 'name',
       dataIndex: 'name',
       render: (name, record) => <span>{name}{record.pending_review ? <Tag color="red" style={{marginLeft: 8}}>变更</Tag> : null}</span>,
     },
     {
-      title: '优先级',
-      key: 'priority',
-      dataIndex: 'priority',
-      render: priority => <Tag color={CONFIG.CASE_TAG[priority]}>{priority}</Tag>
+      title: '执行环境',
+      key: 'env',
+      dataIndex: 'env',
+      render: (value) => (value || '').split(',').filter(Boolean).map(id => envMap[Number(id)] || `环境#${id}`).join(', '),
     },
     {
       title: '顺序执行',
@@ -271,46 +272,50 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
       <PageContainer title={false} breadcrumb={null}>
         <Alert message="执行测试计划前，记得修改测试计划接收人, 这样就能收到邮件通知啦😈~"
                style={{marginBottom: 16}} type="info" banner closable/>
-        <Card>
+        <div style={{ borderRadius: 8, border: '1px solid rgba(148, 163, 184, 0.22)', boxShadow: '0 8px 22px rgba(15, 23, 42, 0.06)', background: '#fff', padding: 16, marginBottom: 16 }}>
           <TestPlanForm fetchTestPlan={fetchTestPlan}/>
-          <Form form={form} {...CONFIG.LAYOUT} onValuesChange={() => {
-            fetchTestPlan();
-          }}>
-            <Row gutter={[12, 12]}>
+          <Form form={form}>
+            <Row gutter={[12, 12]} align="middle">
               <Col span={5}>
-                <Form.Item label="项目" name="project_id">
-                  <Select allowClear showSearch placeholder="选择项目">
-                    {projects.map(item => <Option value={item.id} key={item.id}>{item.name}</Option>)}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={5}>
-                <Form.Item label="名称" name="name">
-                  <Input placeholder="输入测试计划名称"/>
-                </Form.Item>
-              </Col>
-              <Col span={4}>
-                <Form.Item label="优先级" name="priority">
-                  <Select placeholder="选择优先级" allowClear>
-                    {CONFIG.PRIORITY.map(v => <Option key={v} value={v}>{v}</Option>)}
-                  </Select>
-                </Form.Item>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>项目：</span>
+                  <Form.Item name="project_id" style={{ marginBottom: 0, flex: 1 }}>
+                    <Select allowClear showSearch placeholder="选择项目">
+                      {projects.map(item => <Option value={item.id} key={item.id}>{item.name}</Option>)}
+                    </Select>
+                  </Form.Item>
+                </div>
               </Col>
               <Col span={5}>
-                <Form.Item label="关注" name="follow">
-                  <Select placeholder="选择是否关注" allowClear>
-                    <Option value="true">是</Option>
-                    <Option value="false">否</Option>
-                  </Select>
-                </Form.Item>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>名称：</span>
+                  <Form.Item name="name" style={{ marginBottom: 0, flex: 1 }}>
+                    <Input placeholder="输入测试计划名称"/>
+                  </Form.Item>
+                </div>
               </Col>
               <Col span={5}>
-                <Form.Item label="创建人" name="create_user">
-                  <UserSelect users={userList}/>
-                </Form.Item>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>创建人：</span>
+                  <Form.Item name="create_user" style={{ marginBottom: 0, flex: 1 }}>
+                    <UserSelect users={userList}/>
+                  </Form.Item>
+                </div>
               </Col>
+              <Col span={5}>
+                <Space>
+                  <Button type="primary" icon={<SearchOutlined />} onClick={fetchTestPlan}>查询</Button>
+                  <Button icon={<ReloadOutlined />} onClick={() => {
+                    form.resetFields();
+                    fetchTestPlan();
+                  }}>重置</Button>
+                </Space>
+              </Col>
+              <Col span={4} />
             </Row>
           </Form>
+        </div>
+        <Card style={{ borderRadius: 8 }}>
           <Row style={{marginBottom: 12}}>
             <Button type="primary" onClick={() => {
               onSave({visible: true, title: '新增测试计划', planRecord: {enabled: true}, currentStep: 0,})

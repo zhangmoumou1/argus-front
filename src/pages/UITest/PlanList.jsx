@@ -28,7 +28,6 @@ import {
   PlayCircleOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
-  SearchOutlined,
   SettingOutlined,
   SyncOutlined,
   ThunderboltOutlined,
@@ -37,6 +36,7 @@ import {
 } from '@ant-design/icons';
 import { listProject } from '@/services/project';
 import { getAiModelConfig, listEnvironment, listGateway } from '@/services/configure';
+import { listUsers } from '@/services/user';
 import auth from '@/utils/auth';
 import {
   deleteUiTestPlan,
@@ -59,7 +59,6 @@ import {
   getUiTestProjectSelectValue,
   normalizeApiList,
   normalizeApiPage,
-  pickUiTestProjectId,
   uiPalette,
   uiStatusTag,
   useUiTestProject,
@@ -156,11 +155,6 @@ const wizardSteps = [
   { title: '执行配置', icon: <SettingOutlined /> },
 ];
 
-const planStatusFilters = [
-  { label: '启用', value: 'enabled' },
-  { label: '停用', value: 'disabled' },
-];
-
 const cardSectionStyle = {
   borderRadius: 14,
   border: `1px solid ${uiPalette.border}`,
@@ -183,9 +177,9 @@ const PlanList = () => {
   const [projectId, setProjectId] = useUiTestProject();
   const [projects, setProjects] = useState([]);
   const [plans, setPlans] = useState([]);
-  const [keyword, setKeyword] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [followFilter, setFollowFilter] = useState();
+  const [nameKeyword, setNameKeyword] = useState('');
+  const [users, setUsers] = useState([]);
+  const [creatorId, setCreatorId] = useState(undefined);
   const [candidateGroups, setCandidateGroups] = useState([]);
   const [aiModelOptions, setAiModelOptions] = useState([]);
   const [envOptions, setEnvOptions] = useState([]);
@@ -222,12 +216,7 @@ const PlanList = () => {
   const fetchProjects = async () => {
     const res = await listProject({ page: 1, size: 1000 });
     if (auth.response(res)) {
-      const list = normalizeApiList(res);
-      setProjects(list);
-      const nextProjectId = pickUiTestProjectId(list, projectId);
-      if (nextProjectId !== undefined && String(nextProjectId) !== String(projectId)) {
-        setProjectId(nextProjectId);
-      }
+      setProjects(normalizeApiList(res));
     }
   };
 
@@ -291,18 +280,22 @@ const PlanList = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    const res = await listUsers({ page: 1, size: 1000 });
+    const list = normalizeApiList(res);
+    setUsers(list);
+  };
+
   const fetchPlans = async (
     pid = projectId,
     page = pagination.current,
     size = pagination.pageSize,
   ) => {
-    if (!pid) return;
     setLoading(true);
     const planRes = await listUiTestPlans({
       project_id: pid,
-      keyword,
-      status: statusFilter,
-      follow: followFilter,
+      keyword: nameKeyword,
+      create_user: creatorId,
       page,
       size,
       paged: true,
@@ -451,19 +444,13 @@ const PlanList = () => {
     fetchAiModels();
     fetchEnvironments();
     fetchNotificationConfigs();
+    fetchUsers();
   }, []);
 
   useEffect(() => {
-    if (projectId) fetchPlans(projectId, 1, pagination.pageSize);
+    fetchPlans(projectId, 1, pagination.pageSize);
   }, [projectId]);
 
-  useEffect(() => {
-    if (projectId) fetchPlans(projectId, 1, pagination.pageSize);
-  }, [statusFilter]);
-
-  useEffect(() => {
-    if (projectId) fetchPlans(projectId, 1, pagination.pageSize);
-  }, [followFilter]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -513,7 +500,7 @@ const PlanList = () => {
       title: '项目',
       dataIndex: 'project_id',
       key: 'project_id',
-      width: 120,
+      width: 160,
       render: (value) => projects.find((item) => String(item.id) === String(value))?.name || `项目#${value}`,
     },
     {
@@ -563,10 +550,17 @@ const PlanList = () => {
           <Tag style={{ borderRadius: 999, border: 'none', background: '#fce7f3', color: '#be185d' }}>
             重试 {record.retry_times || 0}
           </Tag>
-          <Tag icon={<ThunderboltOutlined />} style={{ borderRadius: 999, border: 'none', background: '#dbeafe', color: '#1d4ed8' }}>
-            {record.case_count || 0} 用例
-          </Tag>
         </Space>
+      ),
+    },
+    {
+      title: '用例/步骤',
+      key: 'case_step',
+      width: 130,
+      render: (_, record) => (
+        <Tag style={{ borderRadius: 999, border: 'none', background: '#f0f9ff', color: '#0369a1', fontWeight: 600 }}>
+          {record.case_count ?? 0}用例/{record.total_steps ?? 0}步
+        </Tag>
       ),
     },
     {
@@ -719,64 +713,63 @@ const PlanList = () => {
       showModuleNav={false}
       toolbar={
         <Row gutter={[12, 12]} align="middle">
-          <Col xs={24} md={6}>
-            <Select
-              value={getUiTestProjectSelectValue(projects, projectId)}
-              style={{ width: '100%' }}
-              placeholder={projects.length ? '选择项目' : '加载项目...'}
-              loading={!projects.length}
-              onChange={setProjectId}
-              options={projects.map((item) => ({ label: item.name, value: item.id }))}
-            />
+          <Col xs={24} md={5}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>项目：</span>
+              <Select
+                value={getUiTestProjectSelectValue(projects, projectId)}
+                style={{ flex: 1, minWidth: 0 }}
+                placeholder="选择项目"
+                loading={!projects.length}
+                onChange={setProjectId}
+                options={projects.map((item) => ({ label: item.name, value: item.id }))}
+              />
+            </div>
           </Col>
-          <Col xs={24} md={6}>
-            <Select
-              value={statusFilter || undefined}
-              onChange={(value) => setStatusFilter(value || '')}
-              options={planStatusFilters}
-              placeholder="选择状态"
-              allowClear
-              style={{ width: '100%' }}
-            />
+          <Col xs={24} md={5}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>名称：</span>
+              <Input
+                value={nameKeyword}
+                placeholder="输入计划名称"
+                onChange={(e) => setNameKeyword(e.target.value)}
+                onPressEnter={() => fetchPlans(projectId, 1, pagination.pageSize)}
+                allowClear
+                style={{ flex: 1, minWidth: 0 }}
+              />
+            </div>
           </Col>
-          <Col xs={24} md={6}>
-            <Input
-              value={keyword}
-              placeholder="搜索计划 / 浏览器 / Cron"
-              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-              onChange={(e) => setKeyword(e.target.value)}
-              onPressEnter={() => fetchPlans(projectId, 1, pagination.pageSize)}
-              allowClear
-            />
+          <Col xs={24} md={5}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>创建人：</span>
+              <Select
+                value={creatorId}
+                onChange={setCreatorId}
+                placeholder="选择创建人"
+                allowClear
+                style={{ flex: 1, minWidth: 0 }}
+                options={users.map((item) => ({ label: item.name, value: item.id }))}
+              />
+            </div>
           </Col>
-          <Col xs={24} md={3}>
-            <Select
-              value={followFilter}
-              onChange={(value) => setFollowFilter(value)}
-              placeholder="是否关注"
-              allowClear
-              style={{ width: '100%' }}
-              options={[
-                { label: '已关注', value: true },
-                { label: '未关注', value: false },
-              ]}
-            />
-          </Col>
-          <Col xs={24} md={3}>
+          <Col xs={24} md={9}>
             <Space>
-              <PillButton type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                新建计划
-              </PillButton>
+              <PillButton type="primary" onClick={() => fetchPlans(projectId, 1, pagination.pageSize)}>查询</PillButton>
+              <PillButton onClick={() => {
+                setProjectId(undefined);
+                setNameKeyword('');
+                setCreatorId(undefined);
+                setTimeout(() => fetchPlans(undefined, 1, pagination.pageSize), 0);
+              }}>重置</PillButton>
             </Space>
           </Col>
         </Row>
       }
     >
-      <SectionCard
-        title="计划列表"
-        description="运行策略、调度状态和用例覆盖"
-        extra={<span style={{ color: uiPalette.subtle, fontSize: 13 }}>共 {pagination.total || filteredPlans.length} 个计划</span>}
-      >
+      <SectionCard>
+        <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 16, marginBottom: 12 }}>
+          <PillButton type="primary" icon={<PlusOutlined />} onClick={openCreate}>添加计划</PillButton>
+        </div>
         <Table
           rowKey="id"
           loading={loading}
