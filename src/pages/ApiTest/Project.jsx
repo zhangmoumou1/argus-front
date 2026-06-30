@@ -8,9 +8,11 @@ import {
 
   AliwangwangOutlined,
 
+  ClockCircleOutlined,
   DeleteTwoTone,
 
   ExclamationCircleOutlined,
+  UserOutlined,
 
   QuestionCircleOutlined,
 
@@ -38,6 +40,7 @@ import UserSelect from "@/components/User/UserSelect";
 import {IconFont} from "@/components/Icon/IconFont";
 
 import ProjectAvatar from "@/components/Project/ProjectAvatar";
+
 
 
 
@@ -311,43 +314,25 @@ const Project = ({dispatch, project, loading}) => {
 
 
 
-  const CardTitle = ({item}) => (
+  const renderCardMenu = item => {
 
-    <div style={{fontSize: 16, fontWeight: 'bold', color: 'rgb(65, 74, 105)'}}>
+    const isOwner = Number(item?.owner) === Number(currentUser?.id);
 
-      {item.name}
+    const allowOps = isSuperAdmin || isLeader || isOwner;
 
-      {(() => {
+    if (!allowOps) return null;
 
-        const isOwner = Number(item?.owner) === Number(currentUser?.id);
+    return (
 
-        const allowOps = isSuperAdmin || isLeader || isOwner;
+      <Dropdown overlay={menu(item)} onClick={e => { e.stopPropagation(); }}>
 
-        if (!allowOps) return null;
+        <IconFont type="icon-more1" style={{cursor: 'pointer', fontSize: 20, color: '#94a3b8'}}/>
 
-        return (
+      </Dropdown>
 
-          <span style={{float: 'right', lineHeight: '24px', fontSize: 24, marginRight: 4}}>
+    );
 
-            <Dropdown overlay={menu(item)} onClick={e => {
-
-              e.stopPropagation();
-
-            }}>
-
-              <IconFont type="icon-more1" style={{cursor: 'pointer'}}/>
-
-            </Dropdown>
-
-          </span>
-
-        );
-
-      })()}
-
-    </div>
-
-  )
+  };
 
 
 
@@ -379,9 +364,9 @@ const Project = ({dispatch, project, loading}) => {
 
       <Spin spinning={spinning}>
 
-        <Card style={{marginBottom: 12}}>
+        <Card className={styles.toolbarCard}>
 
-          <Row gutter={8}>
+          <Row gutter={8} align="middle">
 
             <Col span={18}>
 
@@ -421,75 +406,44 @@ const Project = ({dispatch, project, loading}) => {
 
         </Card>
 
-        <Row gutter={24}>
-
+        <Row gutter={[24, 24]}>
           {data.length === 0 ? (
-
-            <Col span={24} style={{textAlign: 'center', marginBottom: 12}}>
-
-              <Card>
-
+            <Col span={24}>
+              <Card className={styles.emptyCard}>
                 <Empty description="暂无项目，点击「创建项目」创建一个吧!" />
-
               </Card>
-
             </Col>
-
           ) : (
-
             data.map((item) => (
-
-              <Col key={item.id} span={6} style={{marginBottom: 24}}>
-
-                <Card hoverable className={styles.card}>
-
-                  <Card.Meta
-
-                    avatar={<ProjectAvatar data={item} width={35}/>}
-
-                    title={<CardTitle item={item}/>}
-
-                    description={<div>
-
-                      <p className={styles.description}>{item.description || '无'}</p>
-
-                      <p>负责人 {<UserLink user={userMap[item.owner]}/>}</p>
-
-                      <p>更新时间 {item.updated_at}</p>
-
-                    </div>}
-
-                    onClick={() => {
-
-                      history.push(`/project/${item.id}`);
-
-                    }}
-
-                  />
-
+              <Col key={item.id} xs={24} sm={12} lg={8} xl={6}>
+                <Card hoverable className={styles.card} onClick={() => history.push(`/project/${item.id}`)}>
+                  <div className={styles.cardMeta}>
+                    <div className={styles.cardTitle}>
+                      <span style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                        <ProjectAvatar data={item} width={32}/>
+                        {item.name}
+                      </span>
+                      {renderCardMenu(item)}
+                    </div>
+                    <p className={styles.cardDesc}>{item.description || '暂无描述'}</p>
+                    <div className={styles.cardMetaRow}>
+                      <UserOutlined />
+                      <UserLink user={userMap[item.owner]}/>
+                    </div>
+                    <div className={styles.cardMetaRow}>
+                      <ClockCircleOutlined />
+                      {item.updated_at}
+                    </div>
+                  </div>
                 </Card>
-
               </Col>
-
             ))
-
           )}
-
         </Row>
 
-        <Row gutter={8}>
-
-          <Col span={24}>
-
-            <Pagination {...pagination} style={{float: 'right'}} position="bottomRight" onChange={pg => {
-
-              fetchData(pg)
-
-            }}/>
-
-          </Col>
-
-        </Row>
+        <div className={styles.paginationWrap}>
+          <Pagination {...pagination} onChange={pg => { fetchData(pg) }}/>
+        </div>
 
       </Spin>
 
@@ -504,4 +458,3 @@ const Project = ({dispatch, project, loading}) => {
 
 
 export default connect(({loading, project}) => ({loading, project}))(memo(Project));
-

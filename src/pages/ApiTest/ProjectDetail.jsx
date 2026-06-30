@@ -61,7 +61,7 @@ export default () => {
       <ProjectAvatar data={projectData} size={32}/> {projectData.name}</span>}
       />
     }>
-      <Card bodyStyle={{padding: '8px 18px'}}>
+      <Card className={styles.projectDetailCard} bodyStyle={{padding: '8px 20px'}}>
         <Tabs defaultActiveKey='1'>
           <TabPane tab='成员列表' key='1'>
             <ProjectRole users={users} project={projectData} roles={roles} fetchData={fetchData}/>

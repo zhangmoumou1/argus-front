@@ -1,14 +1,122 @@
 .card {
-  max-height: 200px;
-  border-radius: 12px;
+  border-radius: 14px;
+  border: 1px solid #eef2f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    border-color: #d1d9e6;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+    transform: translateY(-3px);
+  }
+
+  :global {
+    .ant-card-body {
+      padding: 20px;
+    }
+
+    .ant-card-meta-avatar {
+      padding-right: 12px;
+    }
+
+    .ant-card-meta-title {
+      margin-bottom: 0;
+    }
+  }
 }
 
-.sitePageHeader {
-  padding: 0 8px;
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.description {
+.cardTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  line-height: 24px;
+}
+
+.cardDesc {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 22px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin: 0;
+}
+
+.cardMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 20px;
+  margin: 0;
+
+  svg {
+    font-size: 14px;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+}
+
+/* ===== Toolbar ===== */
+.toolbarCard {
+  border-radius: 14px;
+  border: 1px solid #eef2f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+  margin-bottom: 16px;
+
+  :global(.ant-card-body) {
+    padding: 16px 20px;
+  }
+}
+
+/* ===== Project Detail Page ===== */
+.sitePageHeader {
+  padding: 0 8px;
+
+  :global {
+    .ant-page-header-heading-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+  }
+}
+
+.projectDetailCard {
+  border-radius: 14px;
+  border: 1px solid #eef2f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+
+  :global(.ant-card-body) {
+    padding: 8px 20px;
+  }
+}
+
+.paginationWrap {
+  margin-top: 16px;
+  padding: 0 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.emptyCard {
+  border-radius: 14px;
+  border: 1px solid #eef2f6;
+
+  :global(.ant-card-body) {
+    padding: 40px 20px;
+  }
 }

@@ -3946,40 +3946,6 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
     }
   };
 
-  const handleDrop = async ({ dragNode, node }) => {
-    if (!projectId) return;
-    const targetDirectoryId = node.nodeType === 'case' ? node.directory_id : node.id;
-    if (!targetDirectoryId) return;
-    if (dragNode.nodeType === 'directory') {
-      if (dragNode.id === targetDirectoryId) return;
-      const res = await moveFunctionalCaseDirectory({
-        id: dragNode.id,
-        project_id: projectId,
-        parent: targetDirectoryId,
-        sort_index: dragNode.sort_index || 0,
-      });
-      if (res?.code === 0) {
-        message.success('目录已移动');
-        await refreshTree();
-      } else {
-        message.error(res?.msg || '移动目录失败');
-      }
-      return;
-    }
-    const res = await moveFunctionalCaseFile({
-      id: dragNode.id,
-      project_id: projectId,
-      directory_id: targetDirectoryId,
-      sort_index: dragNode.sort_index || 0,
-    });
-    if (res?.code === 0) {
-      message.success('用例已移动');
-      await refreshTree();
-    } else {
-      message.error(res?.msg || '移动用例失败');
-    }
-  };
-
   const applyTheme = (value) => {
     const preset = THEME_PRESETS.find((item) => item.value === value);
     if (!preset || !mindRef.current) return;
@@ -5630,8 +5596,7 @@ const FunctionalCase = ({ project, gconfig, dispatch, uiOnly = false, uiRootName
                   selectedKeys={selectedKeys}
                   defaultExpandAll
                   titleRender={titleRender}
-                  draggable={!uiOnly}
-                  onDrop={uiOnly ? undefined : handleDrop}
+                  draggable={false}
                   onSelect={(_, { node }) => {
                     if (node.nodeType === 'case') {
                       setCurrentDirectory(node.directory_id);
