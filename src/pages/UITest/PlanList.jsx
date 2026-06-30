@@ -510,9 +510,17 @@ const PlanList = () => {
 
   const columns = [
     {
+      title: '项目',
+      dataIndex: 'project_id',
+      key: 'project_id',
+      width: 120,
+      render: (value) => projects.find((item) => String(item.id) === String(value))?.name || `项目#${value}`,
+    },
+    {
       title: '计划名称',
       dataIndex: 'name',
       key: 'name',
+      width: 280,
       render: (value, record) => (
         <div>
           <a onClick={() => openEdit(record)} style={{ fontWeight: 600 }}>{value}</a>
@@ -540,6 +548,7 @@ const PlanList = () => {
     {
       title: '执行配置',
       key: 'config',
+      width: 360,
       render: (_, record) => (
         <Space wrap size={[6, 4]}>
           <Tag style={{ borderRadius: 999, border: 'none', background: '#ede9fe', color: '#7c3aed' }}>
@@ -561,43 +570,25 @@ const PlanList = () => {
       ),
     },
     {
-      title: '状态',
+      title: '是否开启',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
+      width: 110,
       render: (value, record) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Space size={10}>
           <Switch
+            size="large"
             checked={record.status === 'enabled'}
             onChange={(checked) => handleSwitch(record, checked)}
-            size="small"
           />
-          {uiStatusTag(value)}
-        </div>
-      ),
-    },
-    {
-      title: (
-        <span>
-          是否关注 <Tooltip title="关注后会展示在 Dashboard 工作台的关注测试计划中"><QuestionCircleOutlined /></Tooltip>
-        </span>
-      ),
-      dataIndex: 'follow',
-      key: 'follow',
-      width: 120,
-      render: (value, record) => (
-        <Switch
-          checked={!!value}
-          onChange={(checked) => handleFollow(record, checked)}
-          size="small"
-        />
+        </Space>
       ),
     },
     {
       title: '调度',
       dataIndex: 'cron',
       key: 'cron',
-      width: 240,
+      width: 180,
       render: (value, record) => {
         if (!value) {
           return <span style={{ color: '#cbd5e1' }}>手动执行</span>;
@@ -645,6 +636,30 @@ const PlanList = () => {
           </Tag>
         );
       },
+    },
+    {
+      title: (
+        <span>
+          是否关注 <Tooltip title="关注后会展示在 Dashboard 工作台的关注测试计划中"><QuestionCircleOutlined /></Tooltip>
+        </span>
+      ),
+      dataIndex: 'follow',
+      key: 'follow',
+      width: 110,
+      render: (value, record) => (
+        <Switch
+          size="large"
+          checked={!!value}
+          onChange={(checked) => handleFollow(record, checked)}
+        />
+      ),
+    },
+    {
+      title: '创建人',
+      dataIndex: 'create_user',
+      key: 'create_user',
+      width: 140,
+      render: (value, record) => record.create_user_name || record.create_user_username || record.creator_name || `用户#${value}`,
     },
     {
       title: '操作',
@@ -996,12 +1011,10 @@ const PlanList = () => {
                     label="cron表达式"
                     extra={<div>{cronPreview}</div>}
                     rules={[
+                      { required: true, message: '请输入cron表达式' },
                       () => ({
                         validator(_, value) {
                           const cronValue = String(value || '').trim();
-                          if (!cronValue) {
-                            return Promise.resolve();
-                          }
                           try {
                             parser.parseExpression(cronValue);
                             return Promise.resolve();

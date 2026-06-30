@@ -1,6 +1,6 @@
 import {connect} from '@umijs/max';
-import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Steps, Switch, Tag, Tooltip, TreeSelect} from "antd";
-import {ApiOutlined, NotificationOutlined, QuestionCircleOutlined, SaveOutlined, TeamOutlined} from "@ant-design/icons";
+import {Avatar, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Steps, Switch, Tag, Tooltip, TreeSelect} from "antd";
+import {ApiOutlined, ExperimentOutlined, NotificationOutlined, QuestionCircleOutlined, SaveOutlined, TeamOutlined} from "@ant-design/icons";
 import React, {useEffect, useState} from 'react';
 import CONFIG from "@/consts/config";
 import {IconFont} from "@/components/Icon/IconFont";
@@ -326,34 +326,66 @@ const TestPlanForm = ({user, loading, project, testplan, dispatch, gconfig, fetc
     }
   }
 
-  return <Modal width={700} open={visible} title={title} style={{marginTop: -40}} footer={null} onCancel={() => {
+  return <Modal width={920} open={visible} title={
+    <Space>
+      <ExperimentOutlined style={{ color: '#1677ff' }} />
+      <span>{title}</span>
+    </Space>
+  } style={{marginTop: -20}} footer={null} destroyOnClose onCancel={() => {
     onSave({visible: false})
   }
-  }>
+  } styles={{
+    content: {
+      borderRadius: 20,
+      padding: 0,
+      overflow: 'hidden',
+      boxShadow: '0 24px 60px rgba(15, 23, 42, 0.16)',
+    },
+    header: {
+      padding: '20px 24px 16px',
+      borderBottom: '1px solid #e5e7eb',
+      marginBottom: 0,
+      background: '#ffffff',
+    },
+    body: {
+      padding: '20px 24px',
+      background: 'linear-gradient(180deg, #fafbfd 0%, #f5f8fc 100%)',
+      minHeight: 520,
+    },
+  }}>
     <Form form={form} {...CONFIG.SUB_LAYOUT} initialValues={planRecord}>
-      <Steps current={currentStep} size="small">
-        <Step title="基础信息" icon={<TeamOutlined/>}/>
-        <Step title="选择用例" icon={<ApiOutlined/>}/>
-        <Step title="通知设置" icon={<NotificationOutlined/>}/>
-      </Steps>
-      <Row gutter={[8, 8]} style={{marginTop: 24}}>
-        {getStep()}
-        <div style={{margin: '24px auto'}}>
-          {currentStep === 0 ? null :
-            <Button style={{marginRight: 8}} onClick={() => {
-              onSave({currentStep: currentStep - 1})
-            }}><IconFont type="icon-shangyibu1"/> 上一步</Button>
-          }
-          {
-            currentStep < 2 ? <Button type="primary" onClick={() => {
-                form.validateFields().then(() => {
-                  onSave({currentStep: currentStep + 1})
-                })
-              }}><IconFont type="icon--xiayibu"/> 下一步</Button> :
-              <Button type="primary" onClick={onSubmit}><SaveOutlined/> 保存</Button>
-          }
-        </div>
-      </Row>
+      <div style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: 18,
+        background: '#ffffff',
+        padding: '20px 24px',
+        minHeight: 440,
+        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.06)',
+      }}>
+        <Steps current={currentStep} size="small" style={{marginBottom: 24}}>
+          <Step title="基础信息" icon={<TeamOutlined/>}/>
+          <Step title="选择用例" icon={<ApiOutlined/>}/>
+          <Step title="通知设置" icon={<NotificationOutlined/>}/>
+        </Steps>
+        <Row gutter={[12, 12]} style={{marginTop: 8}}>
+          {getStep()}
+        </Row>
+      </div>
+      <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: 16}}>
+        {currentStep === 0 ? null :
+          <Button style={{marginRight: 8, borderRadius: 999}} onClick={() => {
+            onSave({currentStep: currentStep - 1})
+          }}><IconFont type="icon-shangyibu1"/> 上一步</Button>
+        }
+        {
+          currentStep < 2 ? <Button type="primary" style={{borderRadius: 999}} onClick={() => {
+              form.validateFields().then(() => {
+                onSave({currentStep: currentStep + 1})
+              })
+            }}><IconFont type="icon--xiayibu"/> 下一步</Button> :
+            <Button type="primary" style={{borderRadius: 999}} onClick={onSubmit}><SaveOutlined/> 保存</Button>
+        }
+      </div>
     </Form>
   </Modal>
 }

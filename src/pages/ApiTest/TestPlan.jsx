@@ -1,9 +1,9 @@
 import {PageContainer} from "@ant-design/pro-components";
 import {connect} from '@umijs/max';
-import {Alert, Badge, Button, Card, Col, Divider, Form, Input, Row, Select, Switch, Table, Tag, Tooltip} from "antd";
+import {Alert, Badge, Button, Card, Col, Divider, Form, Input, Row, Select, Space, Switch, Table, Tag, Tooltip} from "antd";
 import React, {useEffect} from "react";
 import CONFIG from "@/consts/config";
-import {PlusOutlined, QuestionCircleOutlined} from "@ant-design/icons";
+import {PlusOutlined, QuestionCircleOutlined, ThunderboltOutlined} from "@ant-design/icons";
 import TestPlanForm from "@/components/TestCase/TestPlanForm";
 import UserLink from "@/components/Button/UserLink";
 import UserSelect from "@/components/User/UserSelect";
@@ -17,21 +17,6 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
   const {projectsMap, projects} = project;
   // form查询条件
   const [form] = Form.useForm();
-
-  const getStatus = record => {
-    if (record.state === 2) {
-      return <Tooltip title="定时任务可能添加失败, 请尝试重新添加"><Badge status="error" text="出错"/></Tooltip>
-    }
-    if (record.state === 3) {
-      return <Tooltip title="任务已暂停"><Badge status="warning" text="已暂停"/></Tooltip>
-    }
-    if (record.state === 1) {
-      return <Tooltip title="任务正在执行中"><Badge status="processing" text="执行中"/></Tooltip>
-    }
-    return <Tooltip title={`下次运行时间: ${record.next_run}`}>
-      <Badge status="success" text="等待中"/>
-    </Tooltip>
-  }
 
   const onSave = data => {
     dispatch({
@@ -134,11 +119,6 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
       render: priority => <Tag color={CONFIG.CASE_TAG[priority]}>{priority}</Tag>
     },
     {
-      title: 'cron表达式',
-      key: 'cron',
-      dataIndex: 'cron',
-    },
-    {
       title: '顺序执行',
       key: 'ordered',
       dataIndex: 'ordered',
@@ -151,12 +131,6 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
       render: caseList => caseList.split(",").length,
     },
     {
-      title: '状态',
-      key: 'next_run',
-      dataIndex: 'next_run',
-      render: (_, record) => getStatus(record)
-    },
-    {
       title: <span>
           是否开启 <Tooltip title="关闭后该计划不会按定时触发"><QuestionCircleOutlined/></Tooltip>
         </span>,
@@ -165,6 +139,58 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
       render: (enabled, record) => <Switch checked={!!enabled} onChange={value => {
         onSwitchTestPlan(record.id, value)
       }}/>
+    },
+    {
+      title: '调度',
+      key: 'cron',
+      dataIndex: 'cron',
+      render: (value, record) => {
+        if (!value) {
+          return <span style={{ color: '#cbd5e1' }}>手动执行</span>;
+        }
+        const state = record.state;
+        if (state === 2) {
+          return (
+            <Tooltip title="定时任务可能添加失败, 请尝试重新添加">
+              <Space size={4}>
+                <Badge status="error" />
+                <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+                  {value}
+                </Tag>
+              </Space>
+            </Tooltip>
+          );
+        }
+        if (state === 3) {
+          return (
+            <Tooltip title="任务已暂停">
+              <Space size={4}>
+                <Badge status="warning" />
+                <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+                  {value}
+                </Tag>
+              </Space>
+            </Tooltip>
+          );
+        }
+        if (state === 1 && record.next_run) {
+          return (
+            <Tooltip title={`下次运行时间: ${record.next_run}`}>
+              <Space size={4}>
+                <Badge status="success" />
+                <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+                  {value}
+                </Tag>
+              </Space>
+            </Tooltip>
+          );
+        }
+        return (
+          <Tag icon={<ThunderboltOutlined />} color="purple" style={{ borderRadius: 999, border: 'none' }}>
+            {value}
+          </Tag>
+        );
+      },
     },
     {
       title: <span>

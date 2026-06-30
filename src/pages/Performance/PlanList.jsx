@@ -948,6 +948,15 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
       render: (value) => envMap[value] || `环境#${value}`,
     },
     {
+      title: '是否关注',
+      dataIndex: 'follow',
+      key: 'follow',
+      width: 110,
+      render: (value, record) => (
+        <Switch checked={!!value} onChange={(checked) => onFollow(record, checked)} />
+      ),
+    },
+    {
       title: '来源',
       dataIndex: 'source_type',
       key: 'source_type',
@@ -984,20 +993,6 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
       dataIndex: 'create_user',
       key: 'create_user',
       render: (value) => <UserLink user={userMap[value]} />,
-    },
-    {
-      title: '状态',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      render: (value) => (value ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>),
-    },
-    {
-      title: '是否关注',
-      dataIndex: 'follow',
-      key: 'follow',
-      render: (value, record) => (
-        <Switch checked={!!value} onChange={(checked) => onFollow(record, checked)} />
-      ),
     },
     {
       title: '操作',
