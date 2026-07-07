@@ -510,7 +510,7 @@ const PlanList = () => {
       width: 280,
       render: (value, record) => (
         <div>
-          <a onClick={() => openEdit(record)} style={{ fontWeight: 600 }}>{value}</a>
+          <span style={{ color: '#0f172a' }}>{value}</span>
           {record.description && (
             <div style={{ color: uiPalette.subtle, fontSize: 12, marginTop: 2, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {record.description}

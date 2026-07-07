@@ -1,9 +1,9 @@
 import {PageContainer} from "@ant-design/pro-components";
 import {connect} from '@umijs/max';
-import {Alert, Badge, Button, Card, Col, Divider, Form, Input, Row, Select, Space, Switch, Table, Tag, Tooltip} from "antd";
+import {Alert, Badge, Button, Card, Col, Form, Input, Popconfirm, Row, Select, Space, Switch, Table, Tag, Tooltip} from "antd";
 import React, {useEffect} from "react";
 import CONFIG from "@/consts/config";
-import {PlusOutlined, QuestionCircleOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined} from "@ant-design/icons";
+import {DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, QuestionCircleOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined} from "@ant-design/icons";
 import TestPlanForm from "@/components/TestCase/TestPlanForm";
 import UserLink from "@/components/Button/UserLink";
 import UserSelect from "@/components/User/UserSelect";
@@ -105,7 +105,7 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
       title: '项目',
       key: 'project_id',
       dataIndex: 'project_id',
-      render: projectId => <a href={`/#/project/${projectId}`} rel="noreferrer">{projectsMap[projectId] || 'loading'}</a>
+      render: projectId => <span>{projectsMap[projectId] || 'loading'}</span>
     },
     {
       title: '计划名称',
@@ -212,19 +212,21 @@ const TestPlan = ({testplan, dispatch, loading, gconfig, user, project}) => {
     {
       title: '操作',
       key: 'ops',
-      render: (_, record) => <>
-        <a onClick={() => {
-          onEdit(record)
-        }}>编辑</a>
-        <Divider type="vertical"/>
-        <a onClick={async () => {
-          await onExecute(record.id)
-        }}>运行</a>
-        <Divider type="vertical"/>
-        <a onClick={async () => {
-          await onDelete(record.id)
-        }}>删除</a>
-      </>
+      render: (_, record) => (
+        <Space split={<span style={{ color: '#e2e8f0' }}>|</span>}>
+          <a onClick={() => onEdit(record)}>
+            <Space size={4}><EditOutlined /> 编辑</Space>
+          </a>
+          <a onClick={async () => await onExecute(record.id)} style={{ color: '#10b981' }}>
+            <Space size={4}><PlayCircleOutlined /> 执行</Space>
+          </a>
+          <Popconfirm title="确认删除该计划？" onConfirm={async () => await onDelete(record.id)} okText="确认" cancelText="取消">
+            <a style={{ color: '#ef4444' }}>
+              <Space size={4}><DeleteOutlined /></Space>
+            </a>
+          </Popconfirm>
+        </Space>
+      ),
     },
 
 

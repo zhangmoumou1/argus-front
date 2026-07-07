@@ -7,7 +7,6 @@ import {
   Row,
   Select,
   Space,
-  Switch,
   Table,
   Tag,
   Tabs,
@@ -17,7 +16,7 @@ import {
   CheckCircleTwoTone,
   CloseCircleTwoTone,
   EyeOutlined,
-  RedoOutlined,
+  ReloadOutlined,
   SearchOutlined,
   StopOutlined,
   SyncOutlined,
@@ -25,14 +24,12 @@ import {
 import { history } from '@umijs/max';
 import dayjs from 'dayjs';
 import { listProject } from '@/services/project';
-import { listEnvironment } from '@/services/configure';
 import UserLink from '@/components/Button/UserLink';
 import { IconFont } from '@/components/Icon/IconFont';
 import auth from '@/utils/auth';
 import { listUsers } from '@/services/user';
 import {
   listUiTestRuns,
-  retryUiTestRun,
   stopUiTestRun,
 } from '@/services/uiTest';
 import {
@@ -74,15 +71,10 @@ const RunList = () => {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [keyword, setKeyword] = useState('');
-  const [executorId, setExecutorId] = useState();
-  const [envName, setEnvName] = useState();
-  const [environments, setEnvironments] = useState([]);
   const [users, setUsers] = useState([]);
   const [userMap, setUserMap] = useState({});
-  const [startedRange, setStartedRange] = useState([dayjs().startOf('month'), dayjs().endOf('day')]);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [startedRange, setStartedRange] = useState([dayjs().subtract(7, 'day').startOf('day'), dayjs().endOf('day')]);
   const [activeTab, setActiveTab] = useState('formal');
-  const [retryLoading, setRetryLoading] = useState({});
   const [stopLoading, setStopLoading] = useState({});
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
 
@@ -90,14 +82,6 @@ const RunList = () => {
     const res = await listProject({ page: 1, size: 1000 });
     if (auth.response(res)) {
       setProjects(normalizeApiList(res));
-    }
-  };
-
-  const fetchEnvironments = async () => {
-    const res = await listEnvironment({ page: 1, size: 1000, exactly: true });
-    if (auth.response(res)) {
-      const list = normalizeApiList(res);
-      setEnvironments(list);
     }
   };
 
@@ -120,8 +104,6 @@ const RunList = () => {
     size = pagination.pageSize,
     filters = {},
   ) => {
-    const currentExecutorId = Object.prototype.hasOwnProperty.call(filters, 'executorId') ? filters.executorId : executorId;
-    const currentEnvName = Object.prototype.hasOwnProperty.call(filters, 'envName') ? filters.envName : envName;
     const currentStatusFilter = Object.prototype.hasOwnProperty.call(filters, 'statusFilter') ? filters.statusFilter : statusFilter;
     const currentKeyword = Object.prototype.hasOwnProperty.call(filters, 'keyword') ? filters.keyword : keyword;
     const currentActiveTab = Object.prototype.hasOwnProperty.call(filters, 'activeTab') ? filters.activeTab : activeTab;
@@ -130,8 +112,6 @@ const RunList = () => {
     setLoading(true);
     const res = await listUiTestRuns({
       project_id: pid,
-      executor_id: currentExecutorId,
-      env_name: currentEnvName,
       scope: 'report',
       status: currentStatusFilter,
       keyword: currentKeyword,
@@ -158,15 +138,6 @@ const RunList = () => {
     history.push(`/ui-test/runs/${id}`);
   };
 
-  const handleRetry = async (id) => {
-    setRetryLoading((prev) => ({ ...prev, [id]: true }));
-    const res = await retryUiTestRun({ id });
-    setRetryLoading((prev) => ({ ...prev, [id]: false }));
-    if (auth.response(res, true)) {
-      fetchRuns(projectId, pagination.current, pagination.pageSize);
-    }
-  };
-
   const handleStop = async (id) => {
     setStopLoading((prev) => ({ ...prev, [id]: true }));
     const res = await stopUiTestRun({ id });
@@ -179,21 +150,12 @@ const RunList = () => {
 
   useEffect(() => {
     fetchProjects();
-    fetchEnvironments();
     fetchUsers();
   }, []);
 
   useEffect(() => {
     fetchRuns(projectId, 1, pagination.pageSize);
   }, [projectId, statusFilter, activeTab]);
-
-  useEffect(() => {
-    if (!autoRefresh) return undefined;
-    const timer = window.setInterval(() => {
-      fetchRuns(projectId, pagination.current, pagination.pageSize);
-    }, 30000);
-    return () => window.clearInterval(timer);
-  }, [autoRefresh, projectId, pagination.current, pagination.pageSize, statusFilter, keyword, executorId, envName, startedRange, activeTab]);
 
   const filteredRuns = useMemo(() => runs, [runs]);
 
@@ -243,6 +205,29 @@ const RunList = () => {
       ),
     },
     {
+      title: '项目',
+      key: 'project',
+      width: 180,
+      render: (_, record) => {
+        const project = projects.find(p => p.id === record.project_id);
+        return project ? <span style={{ color: '#334155', fontWeight: 500 }}>{project.name}</span>
+          : <span style={{ color: '#cbd5e1' }}>-</span>;
+      },
+    },
+    {
+      title: '执行环境',
+      key: 'env_name',
+      dataIndex: 'env_name',
+      width: 140,
+      render: (value) => (
+        value ? (
+          <Tag style={{ borderRadius: 999, border: 'none', background: '#eef2ff', color: '#4338ca' }}>
+            {value}
+          </Tag>
+        ) : <span style={{ color: '#cbd5e1' }}>-</span>
+      ),
+    },
+    {
       title: '来源',
       key: 'source',
       width: 420,
@@ -257,19 +242,6 @@ const RunList = () => {
             </div>
           )}
         </div>
-      ),
-    },
-    {
-      title: '执行环境',
-      dataIndex: 'env_name',
-      key: 'env_name',
-      width: 140,
-      render: (value) => (
-        value ? (
-          <Tag style={{ borderRadius: 999, border: 'none', background: '#eef2ff', color: '#4338ca' }}>
-            {value}
-          </Tag>
-        ) : <span style={{ color: '#cbd5e1' }}>-</span>
       ),
     },
     {
@@ -346,14 +318,6 @@ const RunList = () => {
           <a onClick={() => openDetail(record.id)}>
             <Space size={4}><EyeOutlined /> 详情</Space>
           </a>
-          {record.status === 'failed' && (
-            <a onClick={() => handleRetry(record.id)} style={{ color: uiPalette.warning }}>
-              <Space size={4}>
-                {retryLoading[record.id] ? <SyncOutlined spin /> : <RedoOutlined />}
-                重试
-              </Space>
-            </a>
-          )}
           {activeRunStatuses.includes(record.status) && (
             <Popconfirm
               title="确认停止该执行？"
@@ -379,106 +343,84 @@ const RunList = () => {
     <UiTestPage
       showModuleNav={false}
       toolbar={
-        <Row gutter={[12, 12]} align="middle">
-          <Col xs={24} md={3}>
-            <Select
-              value={getUiTestProjectSelectValue(projects, projectId)}
-              style={{ width: '100%' }}
-              placeholder={projects.length ? '选择项目' : '加载项目...'}
-              loading={!projects.length}
-              onChange={setProjectId}
-              options={projects.map((item) => ({ label: item.name, value: item.id }))}
-            />
-          </Col>
-          <Col xs={24} md={4}>
-            <Input
-              value={keyword}
-              placeholder="搜索报告ID / 名称 / 用例"
-              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-              onChange={(e) => setKeyword(e.target.value)}
-              onPressEnter={() => fetchRuns(projectId, 1, pagination.pageSize)}
-              allowClear
-            />
-          </Col>
-          <Col xs={24} md={3}>
-            <Select
-              value={executorId}
-              onChange={setExecutorId}
-              placeholder="选择执行人"
-              allowClear
-              style={{ width: '100%' }}
-              options={users.map((item) => ({
-                label: item.name,
-                value: item.id,
-              }))}
-            />
-          </Col>
-          <Col xs={24} md={3}>
-            <Select
-              value={envName}
-              onChange={setEnvName}
-              placeholder="选择执行环境"
-              allowClear
-              style={{ width: '100%' }}
-              options={environments.map((item) => ({
-                label: item.name,
-                value: item.name,
-              }))}
-            />
-          </Col>
-          <Col xs={24} md={3}>
-            <Select
-              value={statusFilter || undefined}
-              onChange={(value) => setStatusFilter(value || '')}
-              options={statusFilters}
-              placeholder="选择状态"
-              allowClear
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} md={5}>
-            <RangePicker
-              value={startedRange}
-              onChange={(value) => setStartedRange(value || [])}
-              allowClear
-              style={{ width: '100%' }}
-              showTime
-              format="YYYY-MM-DD HH:mm:ss"
-            />
-          </Col>
-          <Col xs={24} md={3}>
-            <Space>
-              <PillButton type="primary" onClick={() => fetchRuns(projectId, 1, pagination.pageSize)} loading={loading}>
-                查询
-              </PillButton>
-              <PillButton
-                onClick={() => {
-                  const nextStartedRange = [dayjs().startOf('month'), dayjs().endOf('day')];
-                  setExecutorId(undefined);
-                  setEnvName(undefined);
-                  setStatusFilter('');
-                  setKeyword('');
-                  setStartedRange(nextStartedRange);
-                  fetchRuns(projectId, 1, pagination.pageSize, {
-                    executorId: undefined,
-                    envName: undefined,
-                    statusFilter: '',
-                    keyword: '',
-                    startedRange: nextStartedRange,
-                  });
-                }}
-              >
-                重置
-              </PillButton>
-              <Switch
-                checked={autoRefresh}
-                onChange={setAutoRefresh}
-                checkedChildren="30s"
-                unCheckedChildren="手动"
-              />
-            </Space>
-          </Col>
-        </Row>
+        <div>
+          <Row gutter={[12, 12]} align="middle">
+            <Col xs={24} md={5}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>项目：</span>
+                <Select
+                  value={getUiTestProjectSelectValue(projects, projectId)}
+                  style={{ flex: 1, minWidth: 0 }}
+                  placeholder={projects.length ? '选择项目' : '加载项目...'}
+                  loading={!projects.length}
+                  onChange={setProjectId}
+                  options={projects.map((item) => ({ label: item.name, value: item.id }))}
+                />
+              </div>
+            </Col>
+            <Col xs={24} md={5}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>名称：</span>
+                <Input
+                  value={keyword}
+                  placeholder="计划名称/用例名称模糊查询"
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onPressEnter={() => fetchRuns(projectId, 1, pagination.pageSize)}
+                  allowClear
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+              </div>
+            </Col>
+            <Col xs={24} md={4}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>状态：</span>
+                <Select
+                  value={statusFilter || undefined}
+                  onChange={(value) => setStatusFilter(value || '')}
+                  options={statusFilters}
+                  placeholder="选择状态"
+                  allowClear
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+              </div>
+            </Col>
+            <Col xs={24} md={6}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 500, whiteSpace: 'nowrap', color: '#0f172a' }}>开始时间：</span>
+                <RangePicker
+                  value={startedRange}
+                  onChange={(value) => setStartedRange(value || [])}
+                  allowClear
+                  style={{ flex: 1, minWidth: 0 }}
+                  showTime
+                  format="YYYY-MM-DD HH:mm:ss"
+                />
+              </div>
+            </Col>
+            <Col xs={24} md={4} style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <Space>
+                <PillButton type="primary" onClick={() => fetchRuns(projectId, 1, pagination.pageSize)} loading={loading}>
+                  <SearchOutlined /> 查询
+                </PillButton>
+                <PillButton
+                  onClick={() => {
+                    const nextStartedRange = [dayjs().subtract(7, 'day').startOf('day'), dayjs().endOf('day')];
+                    setStatusFilter('');
+                    setKeyword('');
+                    setStartedRange(nextStartedRange);
+                    fetchRuns(projectId, 1, pagination.pageSize, {
+                      statusFilter: '',
+                      keyword: '',
+                      startedRange: nextStartedRange,
+                    });
+                  }}
+                >
+                  <ReloadOutlined /> 重置
+                </PillButton>
+              </Space>
+            </Col>
+          </Row>
+        </div>
       }
     >
       <SectionCard

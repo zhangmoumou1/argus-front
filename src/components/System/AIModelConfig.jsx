@@ -25,8 +25,8 @@ const localProviderFallbacks = [
     provider_type: "deepseek",
     provider_name: "DeepSeek",
     base_url: "https://api.deepseek.com",
-    model: "deepseek-v4-pro",
-    model_options: ["deepseek-v4-pro", "deepseek-v4-flash"],
+    model: "deepseek-chat",
+    model_options: ["deepseek-chat", "deepseek-reasoner"],
     builtin: true,
   },
   {
@@ -485,9 +485,3 @@ export default ({dispatch, aiModelConfig, aiModelProviders, loading}) => {
     </>
   );
 };
-
-
-
-
-
-

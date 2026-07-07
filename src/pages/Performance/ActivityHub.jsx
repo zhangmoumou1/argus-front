@@ -161,13 +161,11 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     render: (_, record) => {
       const summary = parseSummary(record.summary_json);
       return (
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{record.plan_name}</div>
-          <Space size={6} wrap>
-            {getSourceTag(summary.source_type)}
-            <Tag color="purple">{summary.load_mode === 'qps' ? 'QPS 模式' : (summary.load_mode ? '并发模式' : '待生成')}</Tag>
-          </Space>
-        </div>
+        <Space>
+          <span style={{ fontWeight: 600 }}>{record.plan_name}</span>
+          {getSourceTag(summary.source_type)}
+          {summary.load_mode ? <Tag color="purple">{summary.load_mode === 'qps' ? 'QPS 模式' : '并发模式'}</Tag> : null}
+        </Space>
       );
     },
   },
@@ -186,7 +184,7 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
     title: '核心指标',
     key: 'metrics',
     render: (_, record) => (
-      <Space wrap>
+      <Space>
         <Tag color="blue">总请求 {record.total_requests || 0}</Tag>
         <Tag>Avg {record.avg_rt_ms || 0}ms</Tag>
         <Tag color="purple">P95 {record.p95_rt_ms || 0}ms</Tag>
@@ -242,6 +240,7 @@ const reportColumnsFactory = ({ userMap, monitorUrl }) => [
   {
     title: '操作',
     key: 'operation',
+    width: 180,
     render: (_, record) => (
       <Space split={actionSplit}>
         <a href={`/#/performance/report/${record.id}`}>查看报告</a>

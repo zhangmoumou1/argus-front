@@ -30,7 +30,9 @@ import {
   BranchesOutlined,
   CodeOutlined,
   DeleteOutlined,
+  EditOutlined,
   LineChartOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -983,12 +985,19 @@ const PlanList = ({ dispatch, project, gconfig, user, loading }) => {
     {
       title: '操作',
       key: 'operation',
+      width: 180,
         render: (_, record) => (
-          <Space split={<span style={{ color: '#d1d5db' }}>|</span>}>
-            <a onClick={() => openEdit(record)}>编辑</a>
-            <a onClick={() => onExecute(record.id)}>执行</a>
-            <Popconfirm title="确认删除这个压测计划？" onConfirm={() => onDelete(record.id)}>
-              <a>删除</a>
+          <Space split={<span style={{ color: '#e2e8f0' }}>|</span>}>
+            <a onClick={() => openEdit(record)}>
+              <Space size={4}><EditOutlined /> 编辑</Space>
+            </a>
+            <a onClick={() => onExecute(record.id)} style={{ color: '#10b981' }}>
+              <Space size={4}><PlayCircleOutlined /> 执行</Space>
+            </a>
+            <Popconfirm title="确认删除该计划？" onConfirm={() => onDelete(record.id)} okText="确认" cancelText="取消">
+              <a style={{ color: '#ef4444' }}>
+                <Space size={4}><DeleteOutlined /></Space>
+              </a>
             </Popconfirm>
           </Space>
       ),
