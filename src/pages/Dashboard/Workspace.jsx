@@ -237,58 +237,10 @@ const WelcomeBanner = ({ currentUser, primaryColor = '#465fff' }) => {
 
     const updateWeather = async () => {
       try {
-        let latitude = null;
-        let longitude = null;
-        let city = '杭州市';
-        const resolveByIp = async () => {
-          const providers = [
-            async () => {
-              const resp = await fetch('https://ipwho.is/');
-              const data = await resp.json();
-              if (!data?.success) return null;
-              return {
-                latitude: data?.latitude,
-                longitude: data?.longitude,
-                city: data?.city,
-              };
-            },
-            async () => {
-              const resp = await fetch('https://ipapi.co/json/');
-              const data = await resp.json();
-              return {
-                latitude: data?.latitude,
-                longitude: data?.longitude,
-                city: data?.city,
-              };
-            },
-          ];
-          for (const getLocation of providers) {
-            try {
-              const location = await getLocation();
-              if (
-                location &&
-                Number.isFinite(Number(location.latitude)) &&
-                Number.isFinite(Number(location.longitude))
-              ) {
-                return location;
-              }
-            } catch (e) {
-              // ignore and try next provider
-            }
-          }
-          return null;
-        };
-        const ipLocation = await resolveByIp();
-        if (ipLocation) {
-          latitude = ipLocation.latitude;
-          longitude = ipLocation.longitude;
-          city = normalizeCityName(ipLocation.city);
-        }
-        if (!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
-          latitude = 30.2741;
-          longitude = 120.1551;
-          city = '杭州市';
-        }
+        // Avoid noisy third-party IP geolocation failures in the console.
+        const latitude = 30.2741;
+        const longitude = 120.1551;
+        const city = '杭州市';
         const weatherResp = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=8&timezone=Asia%2FShanghai`,
         );
@@ -1150,8 +1102,8 @@ const Workspace = ({ user, dispatch }) => {
             </Card>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-2">
-              {followPlan.map((item) => (
-                <PlanCard key={item.plan?.id || item.id} item={item} />
+              {followPlan.map((item, index) => (
+                <PlanCard key={`${item.plan?.id || item.id || ''}-${index}`} item={item} />
               ))}
             </div>
           )}

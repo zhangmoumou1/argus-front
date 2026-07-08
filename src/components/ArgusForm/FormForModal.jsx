@@ -38,7 +38,7 @@ const FormForModal = ({
     wrapperCol: {span: right},
   }
   return (
-    <Modal style={{marginTop: offset}}
+    <Modal forceRender style={{marginTop: offset}}
            confirmLoading={loading}
            footer={Footer !== undefined ? <Footer onOk={onOk} onCancel={onCancel} onTest={() => {
              form.validateFields().then((values) => {

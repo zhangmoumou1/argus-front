@@ -260,46 +260,44 @@ const InterfaceService = ({ project, user, dispatch }) => {
     }
   };
 
-  const buildCardMenu = (item) => (
-    <Menu
-      className="interface-service-card__menu"
-      onClick={({ key, domEvent }) => {
-        domEvent.stopPropagation();
-        if (key === 'edit') {
-          setEditing(item);
-          form.setFieldsValue({
-            ...item,
-            source_config: parseSourceConfig(item.source_config),
-            sync_enabled: Number(item.sync_enabled) === 1,
-            tester: parseTesterValue(item.tester),
-          });
-          setCronDate(null);
-          setModalOpen(true);
-          return;
-        }
-        if (key === 'sync') {
-          if (item.source_type !== 'manual') onSync(item.id);
-          return;
-        }
-        if (key === 'delete') {
-          Modal.confirm({
-            title: '确认删除该服务吗？',
-            okType: 'danger',
-            okText: '删除',
-            cancelText: '取消',
-            onOk: async () => {
-              await onDeleteService(item.id);
-            },
-          });
-        }
-      }}
-      items={[
-        { key: 'edit', label: '编辑' },
-        { key: 'sync', label: '同步', disabled: item.source_type === 'manual' },
-        { key: 'delete', label: '删除', danger: true },
-      ]}
-    />
-  );
+  const buildCardMenu = (item) => ({
+    className: 'interface-service-card__menu',
+    onClick: ({ key, domEvent }) => {
+      domEvent?.stopPropagation?.();
+      if (key === 'edit') {
+        setEditing(item);
+        form.setFieldsValue({
+          ...item,
+          source_config: parseSourceConfig(item.source_config),
+          sync_enabled: Number(item.sync_enabled) === 1,
+          tester: parseTesterValue(item.tester),
+        });
+        setCronDate(null);
+        setModalOpen(true);
+        return;
+      }
+      if (key === 'sync') {
+        if (item.source_type !== 'manual') onSync(item.id);
+        return;
+      }
+      if (key === 'delete') {
+        Modal.confirm({
+          title: '确认删除该服务吗？',
+          okType: 'danger',
+          okText: '删除',
+          cancelText: '取消',
+          onOk: async () => {
+            await onDeleteService(item.id);
+          },
+        });
+      }
+    },
+    items: [
+      { key: 'edit', label: '编辑' },
+      { key: 'sync', label: '同步', disabled: item.source_type === 'manual' },
+      { key: 'delete', label: '删除', danger: true },
+    ],
+  });
 
   const pendingColumns = [
     {
@@ -366,13 +364,15 @@ const InterfaceService = ({ project, user, dispatch }) => {
                   overflowCount={99}
                   color="red"
                   offset={[10, -6]}
-                  countStyle={{
-                    minWidth: 17,
-                    height: 17,
-                    lineHeight: '17px',
-                    padding: '0 1px',
-                    fontSize: 8,
-                    borderRadius: 8,
+                  styles={{
+                    indicator: {
+                      minWidth: 17,
+                      height: 17,
+                      lineHeight: '17px',
+                      padding: '0 1px',
+                      fontSize: 8,
+                      borderRadius: 8,
+                    },
                   }}
                 >
                   变更资产
@@ -438,7 +438,7 @@ const InterfaceService = ({ project, user, dispatch }) => {
                     <Tag color={item.source_type === 'manual' ? 'default' : 'blue'}>
                       {sourceLabelMap[item.source_type] || sourceLabelMap.manual}
                     </Tag>
-                    <Dropdown trigger={['click']} overlay={buildCardMenu(item)}>
+                    <Dropdown trigger={['click']} menu={buildCardMenu(item)}>
                       <Button
                         className="interface-service-card__more"
                         size="small"

@@ -141,6 +141,7 @@ const RankingTable = ({ rows = [], userMap = {}, emptyText }) => {
     <div className="max-w-full overflow-x-auto">
       <Table>
         <TableHeader className="border-y border-gray-100">
+          <TableRow>
           <TableCell
             isHeader
             className="py-3 font-medium text-gray-500 text-start text-theme-xs"
@@ -159,6 +160,7 @@ const RankingTable = ({ rows = [], userMap = {}, emptyText }) => {
           >
             新增用例数
           </TableCell>
+          </TableRow>
         </TableHeader>
         <TableBody className="divide-y divide-gray-100">
           {rows.map((record) => {

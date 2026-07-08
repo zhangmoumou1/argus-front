@@ -1,4 +1,6 @@
 import {message, notification} from 'antd';
+
+let messageApi: any = message;
 import type {ArgusResponse} from '@/services/user';
 import {NotificationPlacement} from "antd/es/notification/interface";
 import {listUsers} from "@/services/user";
@@ -10,6 +12,10 @@ interface headers {
 }
 
 const auth = {
+  setMessageApi: (api?: any) => {
+    messageApi = api || message;
+  },
+  getMessageApi: () => messageApi,
   isReadonlyReplicaError: (msg?: string) => {
     return typeof msg === 'string' && msg.toLowerCase().includes('read only replica');
   },
@@ -44,7 +50,7 @@ const auth = {
         return false;
       }
       // 说明用户未认证
-      // message.info(res.msg);
+      // messageApi.info(res.msg);
       localStorage.removeItem('argusToken');
       localStorage.removeItem('argusUser');
       const href = window.location.href;
@@ -64,22 +70,22 @@ const auth = {
   },
   response: (res: ArgusResponse, info = false) => {
     if (!res || res.code === undefined) {
-      message.error("网络开小差了，请稍后重试")
+      messageApi.error("网络开小差了，请稍后重试")
       return false;
     }
     if (res.code === 0) {
       if (info) {
-        message.success(res.msg);
+        messageApi.success(res.msg);
       }
       return true;
     }
     if (res.code === 401) {
       if (auth.isReadonlyReplicaError(res.msg)) {
-        message.error(res.msg);
+        messageApi.error(res.msg);
         return false;
       }
       // 说明用户未认证
-      // message.info(res.msg);
+      // messageApi.info(res.msg);
       localStorage.removeItem('argusToken');
       localStorage.removeItem('argusUser');
       const href = window.location.href;
@@ -88,10 +94,10 @@ const auth = {
         window.location.href = `/#/user/login?redirect=${uri[uri.length - 1]}`
         // window.open(`/#/user/login?redirect=${href}`)
       }
-      message.info(res.msg);
+      messageApi.info(res.msg);
       return false;
     }
-    message.error(res.msg);
+    messageApi.error(res.msg);
     return false;
   },
   getUserMap: async () => {

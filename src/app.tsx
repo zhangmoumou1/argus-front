@@ -1,6 +1,6 @@
 import Footer from '@/components/Footer';
 import RightContent from '@/components/RightContent';
-import { PageLoading, Settings as LayoutSettings } from '@ant-design/pro-components';
+import { Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
 import type { RunTimeLayoutConfig } from '@umijs/max';
 import { history } from '@umijs/max';
@@ -8,11 +8,12 @@ import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 import { currentUser as queryCurrentUser, LoginUser } from './services/auth';
 import { queryFunctionalCaseGenerateTask } from './services/functionalCase';
+import auth from '@/utils/auth';
 import React, { useEffect, useRef } from 'react';
 import NoTableData from '@/assets/NoSearch.svg';
 import routesConfig from '../config/routes';
 
-import { Breadcrumb, Button, ConfigProvider, Empty, message, notification, Spin } from 'antd';
+import { App, Breadcrumb, Button, ConfigProvider, Empty, message, notification, Spin } from 'antd';
 import {
 
   BankOutlined,
@@ -38,6 +39,26 @@ import { Loading } from '@icon-park/react';
 const loginPath = '/user/login';
 
 Spin.setDefaultIndicator(<Loading spin={true} theme="outline" size="36" fill="#4a90e2" strokeLinecap="butt" />);
+const installDevConsoleWarningFilter = () => {
+  if (process.env.NODE_ENV === 'production' || typeof window === 'undefined') return;
+  const flag = '__ARGUS_CONSOLE_WARNING_FILTER__';
+  if ((window as any)[flag]) return;
+  (window as any)[flag] = true;
+  const originalError = console.error;
+  console.error = (...args: any[]) => {
+    const first = String(args[0] ?? '');
+    if (
+      first.includes('[antd: Spin] `tip` only work in nest or fullscreen pattern')
+      || first.includes('findDOMNode is deprecated and will be removed in the next major release')
+      || first.includes('[antd: message] Static function can not consume context like dynamic theme')
+    ) {
+      return;
+    }
+    originalError(...args);
+  };
+};
+
+installDevConsoleWarningFilter();
 
 
 
@@ -873,43 +894,26 @@ const PageTopBar = ({
 
         {crumbs.length > 0 && (
 
-          <Breadcrumb className="argus-topbar__breadcrumb" separator=">">
-
-            {crumbs.map((item, index) => (
-
-              <Breadcrumb.Item key={`${item.label}-${item.path || 'text'}`}>
-
-                {item.path && index > 0 ? (
-
-                  <a
-
-                    className="argus-topbar__breadcrumb-link"
-
-                    onClick={(e) => {
-
-                      e.preventDefault();
-
-                      history.push(item.path as string);
-
-                    }}
-
-                  >
-
-                    {item.label}
-
-                  </a>
-
-                ) : (
-
-                  item.label
-
-                )}
-
-              </Breadcrumb.Item>
-
-            ))}
-
-          </Breadcrumb>
+          <Breadcrumb
+            className="argus-topbar__breadcrumb"
+            separator=">"
+            items={crumbs.map((item, index) => ({
+              key: `${item.label}-${item.path || 'text'}`,
+              title: item.path && index > 0 ? (
+                <a
+                  className="argus-topbar__breadcrumb-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    history.push(item.path as string);
+                  }}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                item.label
+              ),
+            }))}
+          />
 
         )}
 
@@ -929,6 +933,16 @@ const PageTopBar = ({
 
 
 
+const AuthMessageBridge = ({ children }: { children: React.ReactNode }) => {
+  const { message: messageApi } = App.useApp();
+
+  useEffect(() => {
+    auth.setMessageApi(messageApi);
+    return () => auth.setMessageApi();
+  }, [messageApi]);
+
+  return <>{children}</>;
+};
 const GlobalPageShell = ({
 
   children,
@@ -1165,7 +1179,7 @@ export async function getInitialState(): Promise<{
 
         if (localUser) {
 
-          message.warning(`${msg.msg || '获取用户信息失败'}，已使用本地登录信息`);
+          auth.getMessageApi().warning(`${msg.msg || '获取用户信息失败'}，已使用本地登录信息`);
 
           return localUser;
 
@@ -1398,11 +1412,11 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
     menuDataRender: (menuData) => normalizeMenuData(menuData as any[]),
 
     childrenRender: (children) => {
-      if (initialState?.loading) return <PageLoading />;
+      if (initialState?.loading) return <Spin fullscreen />;
       if (hideAppShellForKnowledge) {
         return (
           <ConfigProvider
-            renderEmpty={() => <Empty image={NoTableData} imageStyle={{ height: 160 }} description="暂无数据" />}
+            renderEmpty={() => <Empty image={NoTableData} styles={{ image: { height: 160 } }} description="暂无数据" />}
           >
             {children}
           </ConfigProvider>
@@ -1410,7 +1424,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState, setInitialState }) =
       }
       return (
         <ConfigProvider
-          renderEmpty={() => <Empty image={NoTableData} imageStyle={{ height: 160 }} description="暂无数据" />}
+          renderEmpty={() => <Empty image={NoTableData} styles={{ image: { height: 160 } }} description="暂无数据" />}
         >
           <GlobalPageShell
             accentColor={initialState?.settings?.colorPrimary}
@@ -1479,7 +1493,9 @@ export function rootContainer(container: React.ReactNode) {
   return (
     <>
       <FunctionalCaseTaskWatcher />
-      {container}
+      <App>
+        <AuthMessageBridge>{container}</AuthMessageBridge>
+      </App>
     </>
   );
 }

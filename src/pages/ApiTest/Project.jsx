@@ -2,7 +2,7 @@ import React, {memo, useEffect, useState} from 'react';
 
 import {PageContainer} from '@ant-design/pro-components';
 
-import {Button, Card, Col, Dropdown, Empty, Input, Menu, Modal, Pagination, Row, Spin, Tooltip,} from 'antd';
+import {Button, Card, Col, Dropdown, Empty, Input, Modal, Pagination, Row, Spin, Tooltip,} from 'antd';
 
 import {
 
@@ -262,55 +262,35 @@ const Project = ({dispatch, project, loading}) => {
 
 
 
-  const menu = item => <Menu>
-
-    <Menu.Item icon={<AliwangwangOutlined/>}>
-
-      <a>
-
-        申请权限
-
-      </a>
-
-    </Menu.Item>
-
-    <Menu.Item icon={<DeleteTwoTone twoToneColor="red"/>}>
-
-      <a onClick={e => {
-
-        e.stopPropagation();
-
-        Modal.confirm({
-
-          title: '你确定要删除此项目吗?',
-
-          icon: <ExclamationCircleOutlined/>,
-
-          content: '删除后不可恢复，请谨慎~',
-
-          okText: '确定',
-
-          okType: 'danger',
-
-          cancelText: '点错了',
-
-          onOk: async () => {
-
-            await onDeleteProject(item.id);
-
-          },
-
-        });
-
-      }}>
-
-        删除项目
-
-      </a>
-
-    </Menu.Item>
-
-  </Menu>;
+  const menu = item => ({
+    items: [
+      {
+        key: 'apply',
+        icon: <AliwangwangOutlined/>,
+        label: '申请权限',
+      },
+      {
+        key: 'delete',
+        icon: <DeleteTwoTone twoToneColor="red"/>,
+        label: '删除项目',
+      },
+    ],
+    onClick: async ({key, domEvent}) => {
+      domEvent?.stopPropagation?.();
+      if (key !== 'delete') return;
+      Modal.confirm({
+        title: '你确定要删除此项目吗?',
+        icon: <ExclamationCircleOutlined/>,
+        content: '删除后不可恢复，请谨慎~',
+        okText: '确定',
+        okType: 'danger',
+        cancelText: '点错了',
+        onOk: async () => {
+          await onDeleteProject(item.id);
+        },
+      });
+    },
+  });
 
 
 
@@ -324,7 +304,7 @@ const Project = ({dispatch, project, loading}) => {
 
     return (
 
-      <Dropdown overlay={menu(item)} onClick={e => { e.stopPropagation(); }}>
+      <Dropdown menu={menu(item)} trigger={['click']} onClick={e => { e.stopPropagation(); }}>
 
         <IconFont type="icon-more1" style={{cursor: 'pointer', fontSize: 20, color: '#94a3b8'}}/>
 

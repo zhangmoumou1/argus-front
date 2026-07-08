@@ -12,26 +12,26 @@ interface ScrollCardProps {
   hideOverflowX?: boolean;
 }
 
-const ScrollCard: React.FC<PropsWithChildren<ScrollCardProps>> = (props: ScrollCardProps & Props) => {
-  return <Card {...props} bodyStyle={{height: '100%', overflowX: 'hidden'}}>
+const ScrollCard: React.FC<PropsWithChildren<ScrollCardProps>> = ({children, hideOverflowX, bodyPadding, ...cardProps}) => {
+  return <Card {...cardProps} bodyStyle={{height: '100%', overflowX: 'hidden', padding: bodyPadding}}>
     {
-      props.hideOverflowX ?
+      hideOverflowX ?
         <Scrollbars autoHide
                     autoHideTimeout={1000}
-                    renderTrackHorizontal={(props: any) => <div {...props}
-                                                         style={{display: props.hideOverflowX ? 'hidden' : 'block'}}
+                    renderTrackHorizontal={(trackProps: any) => <div {...trackProps}
+                                                         style={{display: 'none'}}
                                                          className="track-horizontal"/>}
                     autoHideDuration={200} style={{
           width: '100%', height: 'inherit',
         }}>
-          {props.children}
+          {children}
         </Scrollbars> :
         <Scrollbars autoHide={true}
                     autoHideTimeout={1000}
                     autoHideDuration={200} style={{
           width: '100%', height: 'inherit',
         }}>
-          {props.children}
+          {children}
         </Scrollbars>
     }
   </Card>

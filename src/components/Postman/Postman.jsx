@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Button, Card, Col, Dropdown, Input, Menu, notification, Radio, Row, Select, Table, Tabs,} from 'antd';
+import {Button, Card, Col, Dropdown, Input, notification, Radio, Row, Select, Space, Table, Tabs,} from 'antd';
 import {DeleteTwoTone, DownOutlined, EditTwoTone} from '@ant-design/icons';
 import EditableTable from '@/components/Table/EditableTable';
 import {httpRequest} from '@/services/request';
@@ -11,7 +11,6 @@ import JSONAceEditor from "@/components/CodeEditor/AceEditor/JSONAceEditor";
 import {PageContainer} from "@ant-design/pro-components";
 
 const {Option} = Select;
-const {TabPane} = Tabs;
 
 const STATUS = {
   200: {color: '#67C23A', text: 'OK'},
@@ -185,55 +184,16 @@ const Postman = ({loading: gloading, gconfig, dispatch}) => {
     }
   };
 
-  const menu = (
-    <Menu>
-      <Menu.Item key="Text">
-        <a
-          onClick={() => {
-            onClickMenu('Text');
-          }}
-        >
-          Text
-        </a>
-      </Menu.Item>
-      <Menu.Item key="JavaScript">
-        <a
-          onClick={() => {
-            onClickMenu('JavaScript');
-          }}
-        >
-          JavaScript
-        </a>
-      </Menu.Item>
-      <Menu.Item key="JSON">
-        <a
-          onClick={() => {
-            onClickMenu('JSON');
-          }}
-        >
-          JSON
-        </a>
-      </Menu.Item>
-      <Menu.Item key="HTML">
-        <a
-          onClick={() => {
-            onClickMenu('HTML');
-          }}
-        >
-          HTML
-        </a>
-      </Menu.Item>
-      <Menu.Item key="XML">
-        <a
-          onClick={() => {
-            onClickMenu('XML');
-          }}
-        >
-          XML
-        </a>
-      </Menu.Item>
-    </Menu>
-  );
+  const rawTypeMenu = {
+    items: [
+      { key: 'Text', label: 'Text' },
+      { key: 'JavaScript', label: 'JavaScript' },
+      { key: 'JSON', label: 'JSON' },
+      { key: 'HTML', label: 'HTML' },
+      { key: 'XML', label: 'XML' },
+    ],
+    onClick: ({ key }) => onClickMenu(key),
+  };
 
   const columns = (columnType) => {
     return [
@@ -301,16 +261,17 @@ const Postman = ({loading: gloading, gconfig, dispatch}) => {
       <Card>
         <Row gutter={[8, 8]}>
           <Col span={18}>
-            <Input
-              size="large"
-              value={url}
-              addonBefore={selectBefore}
-              placeholder="请输入要请求的url"
-              onChange={(e) => {
-                setUrl(e.target.value);
-                splitUrl(e.target.value);
-              }}
-            />
+            <Space.Compact size="large" style={{ width: '100%' }}>
+              {selectBefore}
+              <Input
+                value={url}
+                placeholder="请输入要请求的url"
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  splitUrl(e.target.value);
+                }}
+              />
+            </Space.Compact>
           </Col>
           <Col span={6}>
             <Button
@@ -326,91 +287,125 @@ const Postman = ({loading: gloading, gconfig, dispatch}) => {
           </Col>
         </Row>
         <Row style={{marginTop: 8}}>
-          <Tabs defaultActiveKey="1" style={{width: '100%'}}>
-            <TabPane tab="Params" key="1">
-              <EditableTable
-                columns={columns('params')}
-                title="Query Params"
-                dataSource={paramsData}
-                setDataSource={setParamsData}
-                extra={joinUrl}
-                editableKeys={editableKeys}
-                setEditableRowKeys={setEditableRowKeys}
-              />
-            </TabPane>
-            <TabPane tab="Headers" key="2">
-              <EditableTable
-                columns={columns('headers')}
-                title="Headers"
-                dataSource={headers}
-                setDataSource={setHeaders}
-                editableKeys={headersKeys}
-                setEditableRowKeys={setHeadersKeys}
-              />
-            </TabPane>
-            <TabPane tab="Body" key="3">
-              <Row>
-                <Radio.Group
-                  defaultValue={0}
-                  value={bodyType}
-                  onChange={(e) => {
-                    setBodyType(e.target.value)
-                    if (e.target.value === 2) {
-                      // 获取oss文件
-                      dispatch({
-                        type: 'gconfig/listOssFile'
-                      })
-                    }
-                  }}
-                >
-                  <Radio value={0}>none</Radio>
-                  <Radio value={2}>form-data</Radio>
-                  <Radio value={3}>x-www-form-urlencoded</Radio>
-                  <Radio value={1}>raw</Radio>
-                  <Radio value={4}>binary</Radio>
-                  <Radio value={5}>GraphQL</Radio>
-                </Radio.Group>
-                {bodyType === 1 ? (
-                  <Dropdown style={{marginLeft: 8}} overlay={menu} trigger={['click']}>
-                    <a onClick={(e) => e.preventDefault()}>
-                      {rawType} <DownOutlined/>
-                    </a>
-                  </Dropdown>
-                ) : null}
-              </Row>
-              {getBody(bodyType)}
-            </TabPane>
-          </Tabs>
+          <Tabs
+            defaultActiveKey="1"
+            style={{width: '100%'}}
+            items={[
+              {
+                key: '1',
+                label: 'Params',
+                children: (
+                  <EditableTable
+                    columns={columns('params')}
+                    title="Query Params"
+                    dataSource={paramsData}
+                    setDataSource={setParamsData}
+                    extra={joinUrl}
+                    editableKeys={editableKeys}
+                    setEditableRowKeys={setEditableRowKeys}
+                  />
+                ),
+              },
+              {
+                key: '2',
+                label: 'Headers',
+                children: (
+                  <EditableTable
+                    columns={columns('headers')}
+                    title="Headers"
+                    dataSource={headers}
+                    setDataSource={setHeaders}
+                    editableKeys={headersKeys}
+                    setEditableRowKeys={setHeadersKeys}
+                  />
+                ),
+              },
+              {
+                key: '3',
+                label: 'Body',
+                children: (
+                  <>
+                    <Row>
+                      <Radio.Group
+                        defaultValue={0}
+                        value={bodyType}
+                        onChange={(e) => {
+                          setBodyType(e.target.value)
+                          if (e.target.value === 2) {
+                            // 获取oss文件
+                            dispatch({
+                              type: 'gconfig/listOssFile'
+                            })
+                          }
+                        }}
+                      >
+                        <Radio value={0}>none</Radio>
+                        <Radio value={2}>form-data</Radio>
+                        <Radio value={3}>x-www-form-urlencoded</Radio>
+                        <Radio value={1}>raw</Radio>
+                        <Radio value={4}>binary</Radio>
+                        <Radio value={5}>GraphQL</Radio>
+                      </Radio.Group>
+                      {bodyType === 1 ? (
+                        <Dropdown style={{marginLeft: 8}} menu={rawTypeMenu} trigger={['click']}>
+                          <a onClick={(e) => e.preventDefault()}>
+                            {rawType} <DownOutlined/>
+                          </a>
+                        </Dropdown>
+                      ) : null}
+                    </Row>
+                    {getBody(bodyType)}
+                  </>
+                ),
+              },
+            ]}
+          />
         </Row>
         <Row gutter={[8, 8]}>
           {Object.keys(response).length === 0 ? null : (
-            <Tabs style={{width: '100%'}} tabBarExtraContent={tabExtra(response)}>
-              <TabPane tab="Body" key="1">
-                <JSONAceEditor
-                  readOnly={true}
-                  setEditor={setEditor}
-                  language={response.response && response.response_headers.indexOf("json") > -1 ? 'json' : 'text'}
-                  value={response.response && typeof response.response === 'object' ? JSON.stringify(response.response, null, 2) : response.response || ''}
-                  height="30vh"
-                />
-              </TabPane>
-              <TabPane tab="Cookie" key="2">
-                <Table
-                  columns={resColumns}
-                  dataSource={toTable('cookies')}
-                  size="small"
-                  pagination={false}
-                />
-              </TabPane>
-              <TabPane tab="Headers" key="3">
-                <Table
-                  columns={resColumns}
-                  dataSource={toTable('response_headers')}
-                  size="small"
-                  pagination={false}
-                />
-              </TabPane>
-            </Tabs>
+            <Tabs
+              style={{width: '100%'}}
+              tabBarExtraContent={tabExtra(response)}
+              items={[
+                {
+                  key: '1',
+                  label: 'Body',
+                  children: (
+                    <JSONAceEditor
+                      readOnly={true}
+                      setEditor={setEditor}
+                      language={response.response && response.response_headers.indexOf("json") > -1 ? 'json' : 'text'}
+                      value={response.response && typeof response.response === 'object' ? JSON.stringify(response.response, null, 2) : response.response || ''}
+                      height="30vh"
+                    />
+                  ),
+                },
+                {
+                  key: '2',
+                  label: 'Cookie',
+                  children: (
+                    <Table
+                      columns={resColumns}
+                      dataSource={toTable('cookies')}
+                      size="small"
+                      pagination={false}
+                    />
+                  ),
+                },
+                {
+                  key: '3',
+                  label: 'Headers',
+                  children: (
+                    <Table
+                      columns={resColumns}
+                      dataSource={toTable('response_headers')}
+                      size="small"
+                      pagination={false}
+                    />
+                  ),
+                },
+              ]}
+            />
           )}
         </Row>
       </Card>
